@@ -318,3 +318,30 @@ export function rpnConcentration(risks, share = 0.8) {
   }
   return { count, open: open.length, totalRpn: total, share };
 }
+
+/** Text fields tracked in a risk's change history, with their display names. */
+const FIELD_NAMES = {
+  title: "title", category: "category", owner: "owner", hazard: "hazard", cause: "cause", effect: "effect",
+  controls: "controls", reviewDate: "review date",
+};
+
+/** Describes what changed between two versions of a risk, for the history log. */
+export function describeChanges(before, after) {
+  const changes = [];
+  let kind = "updated";
+  if (before.status !== after.status) {
+    changes.push(`status ${before.status} → ${after.status}`);
+    kind = after.status === "Closed" ? "closed" : "status";
+  }
+  const oldRpn = rpn(before.severity, before.occurrence, before.detection);
+  const newRpn = rpn(after.severity, after.occurrence, after.detection);
+  if (oldRpn !== newRpn) changes.push(`initial RPN ${oldRpn} → ${newRpn}`);
+  const oldRes = rpn(before.residualSeverity, before.residualOccurrence, before.residualDetection);
+  const newRes = rpn(after.residualSeverity, after.residualOccurrence, after.residualDetection);
+  if (oldRes !== newRes) changes.push(oldRes === null ? `residual assessed at RPN ${newRes}` : newRes === null ? "residual assessment cleared" : `residual RPN ${oldRes} → ${newRes}`);
+  const edited = Object.keys(FIELD_NAMES).filter((k) => (before[k] || "") !== (after[k] || ""));
+  if (edited.length) changes.push(`edited ${edited.map((k) => FIELD_NAMES[k]).join(", ")}`);
+  if (!changes.length) return null;
+  const text = changes.join("; ");
+  return { kind, text: text[0].toUpperCase() + text.slice(1) };
+}

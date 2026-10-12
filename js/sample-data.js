@@ -10,7 +10,12 @@ export const SAMPLE_RISKS = [
     severity: 4, occurrence: 3, detection: 3,
     controls: "In-process weight checks every 15 min; tooling inspection added to PM schedule",
     residualSeverity: 4, residualOccurrence: 2, residualDetection: 2,
-    owner: "Production", status: "Monitoring", reviewDate: "2026-12-01", createdAt: t, updatedAt: t,
+    owner: "Production", status: "Monitoring", reviewDate: "2026-12-01", createdAt: "2026-01-15T09:00:00.000Z", updatedAt: "2026-08-19T14:30:00.000Z",
+    history: [
+      { at: "2026-01-15T09:00:00.000Z", kind: "created", text: "Created at RPN 36" },
+      { at: "2026-07-02T10:12:00.000Z", kind: "updated", text: "Residual assessed at RPN 16" },
+      { at: "2026-08-19T14:30:00.000Z", kind: "status", text: "Status In mitigation → Monitoring" },
+    ],
   },
   {
     id: "QR-002", title: "Sterility assurance failure in aseptic filling", category: "Product",
@@ -20,7 +25,11 @@ export const SAMPLE_RISKS = [
     severity: 5, occurrence: 2, detection: 4,
     controls: "Glove integrity testing each shift; VHP cycle requalification; environmental monitoring trending",
     residualSeverity: null, residualOccurrence: null, residualDetection: null,
-    owner: "QA Sterility", status: "In mitigation", reviewDate: "2026-09-30", createdAt: t, updatedAt: t,
+    owner: "QA Sterility", status: "In mitigation", reviewDate: "2026-09-30", createdAt: "2026-01-15T09:00:00.000Z", updatedAt: "2026-05-06T08:45:00.000Z",
+    history: [
+      { at: "2026-01-15T09:00:00.000Z", kind: "created", text: "Created at RPN 40" },
+      { at: "2026-05-06T08:45:00.000Z", kind: "status", text: "Status Open → In mitigation" },
+    ],
   },
   {
     id: "QR-003", title: "Single-source API supplier", category: "Supplier",
@@ -40,7 +49,11 @@ export const SAMPLE_RISKS = [
     severity: 5, occurrence: 4, detection: 4,
     controls: "SOP for audit-trail review prior to release; analyst training; user role segregation",
     residualSeverity: null, residualOccurrence: null, residualDetection: null,
-    owner: "QC Lab", status: "Open", reviewDate: "2026-10-01", createdAt: t, updatedAt: t,
+    owner: "QC Lab", status: "Open", reviewDate: "2026-10-01", createdAt: "2026-03-02T11:00:00.000Z", updatedAt: "2026-10-08T15:20:00.000Z",
+    history: [
+      { at: "2026-03-02T11:00:00.000Z", kind: "created", text: "Created at RPN 80" },
+      { at: "2026-10-08T15:20:00.000Z", kind: "updated", text: "Edited controls" },
+    ],
   },
   {
     id: "QR-005", title: "Cold-chain excursion during distribution", category: "Product",
@@ -50,7 +63,12 @@ export const SAMPLE_RISKS = [
     severity: 4, occurrence: 2, detection: 2,
     controls: "Lane qualification; temperature loggers on all shipments; excursion SOP",
     residualSeverity: 4, residualOccurrence: 1, residualDetection: 1,
-    owner: "Distribution", status: "Closed", reviewDate: "2027-03-01", createdAt: t, updatedAt: t,
+    owner: "Distribution", status: "Closed", reviewDate: "2027-03-01", createdAt: "2026-01-15T09:00:00.000Z", updatedAt: "2026-09-28T16:05:00.000Z",
+    history: [
+      { at: "2026-01-15T09:00:00.000Z", kind: "created", text: "Created at RPN 16" },
+      { at: "2026-06-11T09:30:00.000Z", kind: "updated", text: "Residual assessed at RPN 4" },
+      { at: "2026-09-28T16:05:00.000Z", kind: "closed", text: "Status Monitoring → Closed" },
+    ],
   },
   {
     id: "QR-006", title: "Calibration overdue for autoclave sensors", category: "Equipment",
@@ -60,7 +78,12 @@ export const SAMPLE_RISKS = [
     severity: 5, occurrence: 2, detection: 3,
     controls: "Move calibration to CMMS with automatic lockout of overdue equipment",
     residualSeverity: 5, residualOccurrence: 1, residualDetection: 2,
-    owner: "Engineering", status: "Monitoring", reviewDate: "2027-01-10", createdAt: t, updatedAt: t,
+    owner: "Engineering", status: "Monitoring", reviewDate: "2027-01-10", createdAt: "2026-02-20T13:00:00.000Z", updatedAt: "2026-10-03T09:15:00.000Z",
+    history: [
+      { at: "2026-02-20T13:00:00.000Z", kind: "created", text: "Created at RPN 30" },
+      { at: "2026-09-10T10:00:00.000Z", kind: "updated", text: "Residual assessed at RPN 10" },
+      { at: "2026-10-03T09:15:00.000Z", kind: "status", text: "Status In mitigation → Monitoring" },
+    ],
   },
   {
     id: "QR-007", title: "Outdated batch record template", category: "Documentation",
@@ -80,6 +103,9 @@ export const SAMPLE_RISKS = [
     severity: 4, occurrence: 2, detection: 3,
     controls: "Vision system label verification; buddy system for first 4 weeks",
     residualSeverity: null, residualOccurrence: null, residualDetection: null,
-    owner: "Packaging", status: "Open", reviewDate: "2026-11-01", createdAt: t, updatedAt: t,
+    owner: "Packaging", status: "Open", reviewDate: "2026-11-01", createdAt: "2026-10-10T08:40:00.000Z", updatedAt: "2026-10-10T08:40:00.000Z",
+    history: [
+      { at: "2026-10-10T08:40:00.000Z", kind: "created", text: "Created at RPN 24" },
+    ],
   },
 ];

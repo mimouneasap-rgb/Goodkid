@@ -17,7 +17,10 @@ ICH Q9 and ISO 14971.
   - **Effect of risk controls:** initial vs residual RPN for each risk, including the share of RPN removed by controls and how few risks make up 80% of open RPN (Pareto).
   - **Risk profile:** risk levels stacked by category, owner or status.
   - **Review schedule:** overdue reviews and reviews due in each of the next six months.
-- **Dashboard.** Shows open, high/critical and overdue-review counts, average RPN, the RPN reduced by controls, and the top open risks.
+- **Overview.** A risk-posture summary that places every open risk on the 1–125 RPN scale. Below it are KPI tiles, a prioritised "Needs attention" list (overdue reviews, critical risks, high risks without verified controls, risks with no owner) and a recent-activity feed.
+- **Change history.** Every save records what changed (status, initial or residual RPN, edited fields). The history appears in the risk editor and in the activity feed.
+- **Risk editor.** Severity, occurrence and detection are picked with 1–5 rating buttons, and the RPN and level update as you choose.
+- **Light, dark or system theme**, keyboard shortcuts (<kbd>N</kbd> new risk, <kbd>/</kbd> search) and a phone layout with a bottom tab bar.
 - **CSV import/export** for backups, spreadsheets or moving data between machines.
 - Data is saved in the browser (`localStorage`). Sample risks load on first use.
 

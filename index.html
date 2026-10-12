@@ -2,246 +2,369 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Quality Risk Manager</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
   <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
-  <header class="topbar">
+<div class="shell">
+  <!-- Rail: brand, navigation, document control -->
+  <aside class="rail">
     <div class="brand">
-      <span class="logo" aria-hidden="true">◆</span>
-      <h1>Quality Risk Manager</h1>
+      <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true">
+        <rect x="2" y="2" width="28" height="28" rx="7" class="bm-frame"/>
+        <rect x="8" y="17" width="4" height="7" rx="1" class="bm-low"/>
+        <rect x="14" y="13" width="4" height="11" rx="1" class="bm-mid"/>
+        <rect x="20" y="8" width="4" height="16" rx="1" class="bm-high"/>
+      </svg>
+      <div class="brand-text">
+        <span class="brand-name">Quality Risk</span>
+        <span class="brand-sub">Manager</span>
+      </div>
     </div>
-    <nav class="tabs" role="tablist">
-      <button class="tab active" data-view="dashboard" role="tab">Dashboard</button>
-      <button class="tab" data-view="register" role="tab">Risk register</button>
-      <button class="tab" data-view="matrix" role="tab">Risk matrix</button>
-      <button class="tab" data-view="analysis" role="tab">Analysis</button>
+
+    <nav class="nav" aria-label="Main">
+      <button class="nav-item active" data-view="dashboard">
+        <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 11h5V3H3zm0 6h5v-4H3zm9 0h5V9h-5zm0-14v4h5V3z"/></svg>
+        <span>Overview</span>
+      </button>
+      <button class="nav-item" data-view="register">
+        <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 4h14v2H3zm0 5h14v2H3zm0 5h14v2H3z"/></svg>
+        <span>Register</span><span class="nav-count" id="nav-count"></span>
+      </button>
+      <button class="nav-item" data-view="matrix">
+        <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 3h4v4H3zm5 0h4v4H8zm5 0h4v4h-4zM3 8h4v4H3zm5 0h4v4H8zm5 0h4v4h-4zM3 13h4v4H3zm5 0h4v4H8zm5 0h4v4h-4z"/></svg>
+        <span>Matrix</span>
+      </button>
+      <button class="nav-item" data-view="analysis">
+        <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 17V9h3v8zm5 0V3h3v14zm5 0v-6h3v6z"/></svg>
+        <span>Analysis</span>
+      </button>
     </nav>
-    <button class="btn primary" id="add-risk">+ New risk</button>
-  </header>
 
-  <main>
-    <!-- Dashboard -->
-    <section id="view-dashboard" class="view active">
-      <div class="kpis" id="kpis"></div>
-      <div class="grid-2">
-        <div class="card">
-          <h2>Risks by level</h2>
-          <div id="level-bars" class="bars"></div>
-        </div>
-        <div class="card">
-          <h2>Risks by status</h2>
-          <div id="status-bars" class="bars"></div>
-        </div>
-      </div>
-      <div class="card">
-        <h2>Top open risks by RPN</h2>
-        <div id="top-risks"></div>
-      </div>
-    </section>
+    <div class="rail-foot">
+      <dl class="doc-control">
+        <div><dt>Document</dt><dd>QRM-REG-001</dd></div>
+        <div><dt>Method</dt><dd>FMEA · ICH Q9(R1)</dd></div>
+        <div><dt>Records</dt><dd id="doc-records">—</dd></div>
+        <div><dt>Last change</dt><dd id="doc-updated">—</dd></div>
+      </dl>
+      <button class="theme-toggle" id="theme-toggle" type="button" aria-label="Change colour theme">
+        <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 2a8 8 0 1 0 0 16zm0 2.2v11.6a5.8 5.8 0 0 1 0-11.6z"/></svg>
+        <span id="theme-label">Theme: system</span>
+      </button>
+    </div>
+  </aside>
 
-    <!-- Register -->
-    <section id="view-register" class="view">
-      <div class="toolbar">
-        <input type="search" id="f-query" placeholder="Search title, hazard, owner…" aria-label="Search">
-        <select id="f-level" aria-label="Filter by level"><option value="">All levels</option></select>
-        <select id="f-status" aria-label="Filter by status"><option value="">All statuses</option></select>
-        <select id="f-category" aria-label="Filter by category"><option value="">All categories</option></select>
-        <button class="chip" id="cell-chip" hidden title="Clear matrix cell filter"><span id="cell-chip-text"></span> ✕</button>
-        <span class="spacer"></span>
-        <button class="btn" id="export-csv">Export CSV</button>
-        <label class="btn" for="import-csv">Import CSV</label>
-        <input type="file" id="import-csv" accept=".csv,text/csv" hidden>
+  <div class="main-col">
+    <header class="page-head">
+      <div class="page-title">
+        <p class="eyebrow" id="page-eyebrow">Overview</p>
+        <h1 id="page-title">Risk posture</h1>
       </div>
-      <div class="table-wrap">
-        <table id="register">
-          <thead>
-            <tr>
-              <th data-sort="id">ID</th>
-              <th data-sort="title">Title</th>
-              <th data-sort="category">Category</th>
-              <th data-sort="severity" title="Severity">S</th>
-              <th data-sort="occurrence" title="Occurrence">O</th>
-              <th data-sort="detection" title="Detection">D</th>
-              <th data-sort="rpn">RPN</th>
-              <th data-sort="level">Level</th>
-              <th data-sort="residualRpn">Residual</th>
-              <th data-sort="owner">Owner</th>
-              <th data-sort="status">Status</th>
-              <th data-sort="reviewDate">Review</th>
-            </tr>
-          </thead>
-          <tbody></tbody>
-        </table>
-        <p class="empty" id="register-empty" hidden>No risks match the current filters.</p>
+      <div class="page-actions">
+        <span class="kbd-hint"><kbd>N</kbd> new · <kbd>/</kbd> search</span>
+        <button class="btn primary" id="add-risk">
+          <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M9 3h2v6h6v2h-6v6H9v-6H3V9h6z"/></svg>
+          New risk
+        </button>
       </div>
-    </section>
+    </header>
 
-    <!-- Matrix -->
-    <section id="view-matrix" class="view">
-      <div class="toolbar">
-        <div class="segmented" role="group" aria-label="Matrix mode">
-          <button class="seg active" data-matrix="initial">Initial risk</button>
-          <button class="seg" data-matrix="residual">Residual risk</button>
-        </div>
-        <span class="hint">Click a cell to list its risks in the register.</span>
-      </div>
-      <div class="card matrix-card">
-        <div class="matrix-wrap">
-          <div class="axis-y">Severity →</div>
-          <div id="matrix" class="matrix"></div>
-          <div class="axis-x">Occurrence →</div>
-        </div>
-        <div class="legend" id="legend"></div>
-      </div>
-    </section>
-
-    <!-- Analysis -->
-    <section id="view-analysis" class="view">
-      <div class="toolbar">
-        <label class="inline" for="a-scope">Show
-          <select id="a-scope">
-            <option value="all">All risks</option>
-            <option value="open">Open risks only</option>
-          </select>
-        </label>
-        <label class="inline" for="a-category">Category
-          <select id="a-category"><option value="">All categories</option></select>
-        </label>
-        <span class="hint" id="a-count"></span>
-      </div>
-
-      <div class="card chart-card">
-        <div class="chart-head">
-          <div>
-            <h2>Effect of risk controls</h2>
-            <p class="chart-sub" id="effect-sub"></p>
+    <main>
+      <!-- Overview -->
+      <section id="view-dashboard" class="view active" aria-label="Overview">
+        <div class="hero panel">
+          <div class="hero-copy">
+            <p class="hero-kicker" id="hero-kicker"></p>
+            <h2 class="hero-line" id="hero-line"></h2>
+            <p class="hero-sub" id="hero-sub"></p>
           </div>
-          <button type="button" class="btn small" data-table-toggle="effect">Show table</button>
+          <div class="spectrum-wrap">
+            <div class="spectrum-head">
+              <span class="label">Current RPN of open risks</span>
+              <span class="spectrum-key">
+                <span><i class="dot Critical"></i>Critical</span>
+                <span><i class="dot High"></i>High</span>
+                <span><i class="dot Medium"></i>Medium</span>
+                <span><i class="dot Low"></i>Low</span>
+              </span>
+            </div>
+            <div id="spectrum" class="spectrum"></div>
+            <p class="spectrum-note">Current RPN is the residual RPN where controls have been assessed, otherwise the initial RPN. Scale 1–125 (S × O × D).</p>
+          </div>
         </div>
-        <div class="viz-legend">
-          <span><svg width="14" height="14" aria-hidden="true"><circle class="mark-initial" cx="7" cy="7" r="5"/></svg> Initial RPN (before controls)</span>
-          <span><svg width="14" height="14" aria-hidden="true"><circle class="mark-residual" cx="7" cy="7" r="5"/></svg> Residual RPN (after controls)</span>
-        </div>
-        <div class="chart-body" id="chart-effect"></div>
-        <div class="table-wrap" id="table-effect" hidden></div>
-      </div>
 
-      <div class="grid-2 align-start">
-        <div class="card chart-card">
+        <div class="kpis" id="kpis"></div>
+
+        <div class="split">
+          <section class="panel">
+            <div class="panel-head">
+              <h2>Needs attention</h2>
+              <span class="panel-meta" id="attention-count"></span>
+            </div>
+            <ol class="attention" id="attention"></ol>
+          </section>
+          <section class="panel">
+            <div class="panel-head">
+              <h2>Recent activity</h2>
+              <span class="panel-meta">Change history</span>
+            </div>
+            <ol class="activity" id="activity"></ol>
+          </section>
+        </div>
+      </section>
+
+      <!-- Register -->
+      <section id="view-register" class="view" aria-label="Risk register">
+        <div class="toolbar">
+          <div class="search">
+            <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M8.5 3a5.5 5.5 0 0 1 4.4 8.8l4 4-1.4 1.4-4-4A5.5 5.5 0 1 1 8.5 3zm0 2a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7z"/></svg>
+            <input type="search" id="f-query" placeholder="Search title, hazard, owner…" aria-label="Search risks">
+          </div>
+          <select id="f-level" aria-label="Filter by level"><option value="">All levels</option></select>
+          <select id="f-status" aria-label="Filter by status"><option value="">All statuses</option></select>
+          <select id="f-category" aria-label="Filter by category"><option value="">All categories</option></select>
+          <button class="chip" id="cell-chip" hidden title="Clear matrix cell filter"><span id="cell-chip-text"></span> <span aria-hidden="true">✕</span></button>
+          <span class="spacer"></span>
+          <button class="btn" id="export-csv">Export CSV</button>
+          <label class="btn" for="import-csv">Import CSV</label>
+          <input type="file" id="import-csv" accept=".csv,text/csv" hidden>
+        </div>
+        <div class="panel flush">
+          <div class="table-wrap">
+            <table id="register" class="register">
+              <thead>
+                <tr>
+                  <th data-sort="id">ID</th>
+                  <th data-sort="title">Risk</th>
+                  <th data-sort="severity" title="Severity">S</th>
+                  <th data-sort="occurrence" title="Occurrence">O</th>
+                  <th data-sort="detection" title="Detection">D</th>
+                  <th data-sort="rpn">RPN</th>
+                  <th data-sort="level">Level</th>
+                  <th data-sort="residualRpn">Residual</th>
+                  <th data-sort="owner">Owner</th>
+                  <th data-sort="status">Status</th>
+                  <th data-sort="reviewDate">Review</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+          <div class="empty" id="register-empty" hidden>
+            <p><strong>No risks match these filters.</strong></p>
+            <p>Clear the search or filters, or add a new risk.</p>
+          </div>
+        </div>
+        <p class="table-foot" id="register-foot"></p>
+      </section>
+
+      <!-- Matrix -->
+      <section id="view-matrix" class="view" aria-label="Risk matrix">
+        <div class="toolbar">
+          <div class="segmented" role="group" aria-label="Matrix mode">
+            <button class="seg active" data-matrix="initial">Initial risk</button>
+            <button class="seg" data-matrix="residual">Residual risk</button>
+          </div>
+          <span class="hint">Select a cell to see its risks in the register.</span>
+        </div>
+        <div class="matrix-layout">
+          <div class="panel matrix-panel">
+            <div class="matrix-grid">
+              <div class="axis-y"><span>Severity</span></div>
+              <div id="matrix" class="matrix"></div>
+              <div class="axis-x"><span>Occurrence</span></div>
+            </div>
+          </div>
+          <aside class="panel legend-panel">
+            <h2 id="legend-title">Initial risk</h2>
+            <p class="hint" id="legend-sub"></p>
+            <div class="legend" id="legend"></div>
+          </aside>
+        </div>
+      </section>
+
+      <!-- Analysis -->
+      <section id="view-analysis" class="view" aria-label="Analysis">
+        <div class="toolbar">
+          <label class="inline" for="a-scope">Show
+            <select id="a-scope">
+              <option value="all">All risks</option>
+              <option value="open">Open risks only</option>
+            </select>
+          </label>
+          <label class="inline" for="a-category">Category
+            <select id="a-category"><option value="">All categories</option></select>
+          </label>
+          <span class="hint" id="a-count"></span>
+        </div>
+
+        <div class="panel chart-card">
           <div class="chart-head">
             <div>
-              <h2>Risk profile</h2>
-              <p class="chart-sub">Number of risks at each level</p>
+              <h2>Effect of risk controls</h2>
+              <p class="chart-sub" id="effect-sub"></p>
             </div>
-            <div class="chart-actions">
-              <select id="a-group" aria-label="Group risk profile by">
-                <option value="category">By category</option>
-                <option value="owner">By owner</option>
-                <option value="status">By status</option>
-              </select>
-              <button type="button" class="btn small" data-table-toggle="profile">Show table</button>
-            </div>
+            <button type="button" class="btn small" data-table-toggle="effect">Show table</button>
           </div>
-          <div class="viz-legend" id="profile-legend"></div>
-          <div class="chart-body" id="chart-profile"></div>
-          <div class="table-wrap" id="table-profile" hidden></div>
+          <div class="viz-legend">
+            <span><svg width="14" height="14" aria-hidden="true"><circle class="mark-initial" cx="7" cy="7" r="5"/></svg> Initial RPN (before controls)</span>
+            <span><svg width="14" height="14" aria-hidden="true"><circle class="mark-residual" cx="7" cy="7" r="5"/></svg> Residual RPN (after controls)</span>
+          </div>
+          <div class="chart-body" id="chart-effect"></div>
+          <div class="table-wrap" id="table-effect" hidden></div>
         </div>
 
-        <div class="card chart-card">
-          <div class="chart-head">
-            <div>
-              <h2>Review schedule</h2>
-              <p class="chart-sub">Next review dates of open risks</p>
+        <div class="grid-2">
+          <div class="panel chart-card">
+            <div class="chart-head">
+              <div>
+                <h2>Risk profile</h2>
+                <p class="chart-sub">Number of risks at each level</p>
+              </div>
+              <div class="chart-actions">
+                <select id="a-group" aria-label="Group risk profile by">
+                  <option value="category">By category</option>
+                  <option value="owner">By owner</option>
+                  <option value="status">By status</option>
+                </select>
+                <button type="button" class="btn small" data-table-toggle="profile">Show table</button>
+              </div>
             </div>
-            <button type="button" class="btn small" data-table-toggle="schedule">Show table</button>
+            <div class="viz-legend" id="profile-legend"></div>
+            <div class="chart-body" id="chart-profile"></div>
+            <div class="table-wrap" id="table-profile" hidden></div>
           </div>
-          <div class="chart-body" id="chart-schedule"></div>
-          <div class="table-wrap" id="table-schedule" hidden></div>
+
+          <div class="panel chart-card">
+            <div class="chart-head">
+              <div>
+                <h2>Review schedule</h2>
+                <p class="chart-sub">Next review dates of open risks</p>
+              </div>
+              <button type="button" class="btn small" data-table-toggle="schedule">Show table</button>
+            </div>
+            <div class="chart-body" id="chart-schedule"></div>
+            <div class="table-wrap" id="table-schedule" hidden></div>
+          </div>
         </div>
-      </div>
-    </section>
-  </main>
+      </section>
+    </main>
+  </div>
+</div>
 
-  <div class="viz-tip" id="viz-tip" role="tooltip" hidden></div>
+<!-- Phone tab bar -->
+<nav class="tabbar" aria-label="Main">
+  <button class="tabbar-item active" data-view="dashboard"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 11h5V3H3zm0 6h5v-4H3zm9 0h5V9h-5zm0-14v4h5V3z"/></svg>Overview</button>
+  <button class="tabbar-item" data-view="register"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 4h14v2H3zm0 5h14v2H3zm0 5h14v2H3z"/></svg>Register</button>
+  <button class="tabbar-item" data-view="matrix"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 3h4v4H3zm5 0h4v4H8zm5 0h4v4h-4zM3 8h4v4H3zm5 0h4v4H8zm5 0h4v4h-4zM3 13h4v4H3zm5 0h4v4H8zm5 0h4v4h-4z"/></svg>Matrix</button>
+  <button class="tabbar-item" data-view="analysis"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 17V9h3v8zm5 0V3h3v14zm5 0v-6h3v6z"/></svg>Analysis</button>
+</nav>
 
-  <!-- Risk editor -->
-  <dialog id="editor">
-    <form id="risk-form" method="dialog" novalidate>
-      <header class="dialog-head">
-        <h2 id="editor-title">New risk</h2>
-        <button type="button" class="icon-btn" data-close aria-label="Close">×</button>
-      </header>
-      <div class="form-body">
-        <div class="errors" id="form-errors" role="alert" hidden></div>
-        <fieldset>
-          <legend>Identification</legend>
-          <label class="wide">Title<input name="title" required></label>
-          <label>Category<select name="category"></select></label>
-          <label>Owner<input name="owner"></label>
-          <label class="wide">Failure mode / hazard<textarea name="hazard" rows="2" required></textarea></label>
-          <label>Potential cause<textarea name="cause" rows="2"></textarea></label>
-          <label>Effect on quality / patient<textarea name="effect" rows="2"></textarea></label>
-        </fieldset>
-        <fieldset>
-          <legend>Initial assessment <span class="live" id="initial-score"></span></legend>
-          <label>Severity<select name="severity" data-scale="severity"></select></label>
-          <label>Occurrence<select name="occurrence" data-scale="occurrence"></select></label>
-          <label>Detection<select name="detection" data-scale="detection"></select></label>
-        </fieldset>
-        <fieldset>
-          <legend>Risk control</legend>
-          <label class="wide">Controls / mitigation actions<textarea name="controls" rows="3"></textarea></label>
-        </fieldset>
-        <fieldset>
-          <legend>Residual assessment <span class="live" id="residual-score"></span></legend>
-          <label>Severity<select name="residualSeverity" data-scale="severity" data-optional></select></label>
-          <label>Occurrence<select name="residualOccurrence" data-scale="occurrence" data-optional></select></label>
-          <label>Detection<select name="residualDetection" data-scale="detection" data-optional></select></label>
-        </fieldset>
-        <fieldset>
-          <legend>Review</legend>
-          <label>Status<select name="status"></select></label>
-          <label>Next review date<input type="date" name="reviewDate"></label>
-        </fieldset>
-      </div>
-      <footer class="dialog-foot">
-        <button type="button" class="btn danger" id="delete-risk" hidden>Delete</button>
-        <span class="spacer"></span>
-        <button type="button" class="btn" data-close>Cancel</button>
-        <button type="submit" class="btn primary">Save risk</button>
-      </footer>
-    </form>
-  </dialog>
-
-  <!-- Confirmation (replaces window.confirm) -->
-  <dialog id="choice" class="small">
-    <div class="dialog-head"><h2 id="choice-title"></h2></div>
-    <p class="choice-message" id="choice-message"></p>
-    <div class="dialog-foot"><span class="spacer"></span><span id="choice-buttons" class="btn-row"></span></div>
-  </dialog>
-
-  <!-- CSV export -->
-  <dialog id="export-dialog">
+<!-- Risk editor -->
+<dialog id="editor" class="sheet">
+  <form id="risk-form" method="dialog" novalidate>
     <header class="dialog-head">
-      <h2>Export CSV <span class="live" id="export-count"></span></h2>
-      <button type="button" class="icon-btn" data-close aria-label="Close">×</button>
+      <div>
+        <p class="eyebrow" id="editor-eyebrow">New record</p>
+        <h2 id="editor-title">New risk</h2>
+      </div>
+      <button type="button" class="icon-btn" data-close aria-label="Close">
+        <svg viewBox="0 0 20 20" aria-hidden="true"><path d="m5.4 4 4.6 4.6L14.6 4 16 5.4 11.4 10l4.6 4.6-1.4 1.4-4.6-4.6L5.4 16 4 14.6 8.6 10 4 5.4z"/></svg>
+      </button>
     </header>
     <div class="form-body">
-      <p class="hint">Copy the text below into a spreadsheet or a .csv file. You can import it again later with Import CSV.</p>
-      <textarea id="export-text" rows="12" readonly spellcheck="false"></textarea>
+      <div class="errors" id="form-errors" role="alert" hidden></div>
+
+      <section class="form-section">
+        <h3><span class="step">1</span> Identify</h3>
+        <div class="fields">
+          <label class="wide" for="fld-title">Title<input id="fld-title" name="title" required placeholder="e.g. Tablet weight variation on press 3"></label>
+          <label for="fld-category">Category<select id="fld-category" name="category"></select></label>
+          <label for="fld-owner">Owner<input id="fld-owner" name="owner" placeholder="Department or person"></label>
+          <label class="wide" for="fld-hazard">Failure mode / hazard<textarea id="fld-hazard" name="hazard" rows="2" required></textarea></label>
+          <label for="fld-cause">Potential cause<textarea id="fld-cause" name="cause" rows="2"></textarea></label>
+          <label for="fld-effect">Effect on quality / patient<textarea id="fld-effect" name="effect" rows="2"></textarea></label>
+        </div>
+      </section>
+
+      <section class="form-section">
+        <h3><span class="step">2</span> Assess <span class="score-pill" id="initial-score"></span></h3>
+        <div class="ratings" data-prefix=""></div>
+      </section>
+
+      <section class="form-section">
+        <h3><span class="step">3</span> Control</h3>
+        <div class="fields">
+          <label class="wide" for="fld-controls">Controls / mitigation actions<textarea id="fld-controls" name="controls" rows="3" placeholder="Preventive and detective controls, CAPA references"></textarea></label>
+        </div>
+      </section>
+
+      <section class="form-section">
+        <h3><span class="step">4</span> Residual risk <span class="score-pill" id="residual-score"></span></h3>
+        <p class="hint">Score the risk again assuming the controls are in place. Leave all three blank until the controls are verified.</p>
+        <div class="ratings" data-prefix="residual"></div>
+      </section>
+
+      <section class="form-section">
+        <h3><span class="step">5</span> Review</h3>
+        <div class="fields">
+          <label for="fld-status">Status<select id="fld-status" name="status"></select></label>
+          <label for="fld-review">Next review date<input type="date" id="fld-review" name="reviewDate"></label>
+        </div>
+      </section>
+
+      <section class="form-section" id="history-section" hidden>
+        <h3>History</h3>
+        <ol class="history" id="history"></ol>
+      </section>
     </div>
     <footer class="dialog-foot">
-      <a class="btn" id="export-download" href="#">Download .csv</a>
+      <button type="button" class="btn danger" id="delete-risk" hidden>Delete</button>
       <span class="spacer"></span>
-      <button type="button" class="btn" data-close>Close</button>
-      <button type="button" class="btn primary" id="export-copy">Copy CSV</button>
+      <button type="button" class="btn" data-close>Cancel</button>
+      <button type="submit" class="btn primary">Save risk</button>
     </footer>
-  </dialog>
+  </form>
+</dialog>
 
-  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+<!-- Confirmation (replaces window.confirm) -->
+<dialog id="choice" class="small">
+  <div class="dialog-head"><h2 id="choice-title"></h2></div>
+  <p class="choice-message" id="choice-message"></p>
+  <div class="dialog-foot"><span class="spacer"></span><span id="choice-buttons" class="btn-row"></span></div>
+</dialog>
 
-  <script type="module" src="js/app.js"></script>
+<!-- CSV export -->
+<dialog id="export-dialog">
+  <header class="dialog-head">
+    <div>
+      <p class="eyebrow" id="export-count"></p>
+      <h2>Export CSV</h2>
+    </div>
+    <button type="button" class="icon-btn" data-close aria-label="Close">
+      <svg viewBox="0 0 20 20" aria-hidden="true"><path d="m5.4 4 4.6 4.6L14.6 4 16 5.4 11.4 10l4.6 4.6-1.4 1.4-4.6-4.6L5.4 16 4 14.6 8.6 10 4 5.4z"/></svg>
+    </button>
+  </header>
+  <div class="form-body">
+    <p class="hint">Copy the text below into a spreadsheet or a .csv file. You can import it again later with Import CSV.</p>
+    <textarea id="export-text" rows="12" readonly spellcheck="false" aria-label="CSV export"></textarea>
+  </div>
+  <footer class="dialog-foot">
+    <a class="btn" id="export-download" href="#">Download .csv</a>
+    <span class="spacer"></span>
+    <button type="button" class="btn" data-close>Close</button>
+    <button type="button" class="btn primary" id="export-copy">Copy CSV</button>
+  </footer>
+</dialog>
+
+<div class="viz-tip" id="viz-tip" role="tooltip" hidden></div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script type="module" src="js/app.js"></script>
 </body>
 </html>

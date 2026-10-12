@@ -157,3 +157,15 @@ test("rpnConcentration finds the Pareto set", async () => {
   assert.deepEqual(rpnConcentration(rs), { count: 2, open: 5, totalRpn: 100, share: 0.8 });
   assert.equal(rpnConcentration([]).count, 0);
 });
+
+test("describeChanges summarises edits for the history log", async () => {
+  const { describeChanges } = await import("../js/risk.js");
+  assert.equal(describeChanges(base, { ...base }), null);
+  assert.deepEqual(describeChanges(base, { ...base, owner: "QC", detection: 1 }),
+    { kind: "updated", text: "Initial RPN 24 → 12; edited owner" });
+  const closed = describeChanges(base, {
+    ...base, status: "Closed", residualSeverity: 4, residualOccurrence: 1, residualDetection: 1,
+  });
+  assert.equal(closed.kind, "closed");
+  assert.equal(closed.text, "Status Open → Closed; residual assessed at RPN 4");
+});
