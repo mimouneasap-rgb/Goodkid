@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Quality Risk Manager</title>
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo" aria-hidden="true">◆</span>
+      <h1>Quality Risk Manager</h1>
+    </div>
+    <nav class="tabs" role="tablist">
+      <button class="tab active" data-view="dashboard" role="tab">Dashboard</button>
+      <button class="tab" data-view="register" role="tab">Risk register</button>
+      <button class="tab" data-view="matrix" role="tab">Risk matrix</button>
+    </nav>
+    <button class="btn primary" id="add-risk">+ New risk</button>
+  </header>
+
+  <main>
+    <!-- Dashboard -->
+    <section id="view-dashboard" class="view active">
+      <div class="kpis" id="kpis"></div>
+      <div class="grid-2">
+        <div class="card">
+          <h2>Risks by level</h2>
+          <div id="level-bars" class="bars"></div>
+        </div>
+        <div class="card">
+          <h2>Risks by status</h2>
+          <div id="status-bars" class="bars"></div>
+        </div>
+      </div>
+      <div class="card">
+        <h2>Top open risks by RPN</h2>
+        <div id="top-risks"></div>
+      </div>
+    </section>
+
+    <!-- Register -->
+    <section id="view-register" class="view">
+      <div class="toolbar">
+        <input type="search" id="f-query" placeholder="Search title, hazard, owner…" aria-label="Search">
+        <select id="f-level" aria-label="Filter by level"><option value="">All levels</option></select>
+        <select id="f-status" aria-label="Filter by status"><option value="">All statuses</option></select>
+        <select id="f-category" aria-label="Filter by category"><option value="">All categories</option></select>
+        <button class="chip" id="cell-chip" hidden title="Clear matrix cell filter"><span id="cell-chip-text"></span> ✕</button>
+        <span class="spacer"></span>
+        <button class="btn" id="export-csv">Export CSV</button>
+        <label class="btn" for="import-csv">Import CSV</label>
+        <input type="file" id="import-csv" accept=".csv,text/csv" hidden>
+      </div>
+      <div class="table-wrap">
+        <table id="register">
+          <thead>
+            <tr>
+              <th data-sort="id">ID</th>
+              <th data-sort="title">Title</th>
+              <th data-sort="category">Category</th>
+              <th data-sort="severity" title="Severity">S</th>
+              <th data-sort="occurrence" title="Occurrence">O</th>
+              <th data-sort="detection" title="Detection">D</th>
+              <th data-sort="rpn">RPN</th>
+              <th data-sort="level">Level</th>
+              <th data-sort="residualRpn">Residual</th>
+              <th data-sort="owner">Owner</th>
+              <th data-sort="status">Status</th>
+              <th data-sort="reviewDate">Review</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+        <p class="empty" id="register-empty" hidden>No risks match the current filters.</p>
+      </div>
+    </section>
+
+    <!-- Matrix -->
+    <section id="view-matrix" class="view">
+      <div class="toolbar">
+        <div class="segmented" role="group" aria-label="Matrix mode">
+          <button class="seg active" data-matrix="initial">Initial risk</button>
+          <button class="seg" data-matrix="residual">Residual risk</button>
+        </div>
+        <span class="hint">Click a cell to list its risks in the register.</span>
+      </div>
+      <div class="card matrix-card">
+        <div class="matrix-wrap">
+          <div class="axis-y">Severity →</div>
+          <div id="matrix" class="matrix"></div>
+          <div class="axis-x">Occurrence →</div>
+        </div>
+        <div class="legend" id="legend"></div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Risk editor -->
+  <dialog id="editor">
+    <form id="risk-form" method="dialog" novalidate>
+      <header class="dialog-head">
+        <h2 id="editor-title">New risk</h2>
+        <button type="button" class="icon-btn" data-close aria-label="Close">×</button>
+      </header>
+      <div class="form-body">
+        <div class="errors" id="form-errors" role="alert" hidden></div>
+        <fieldset>
+          <legend>Identification</legend>
+          <label class="wide">Title<input name="title" required></label>
+          <label>Category<select name="category"></select></label>
+          <label>Owner<input name="owner"></label>
+          <label class="wide">Failure mode / hazard<textarea name="hazard" rows="2" required></textarea></label>
+          <label>Potential cause<textarea name="cause" rows="2"></textarea></label>
+          <label>Effect on quality / patient<textarea name="effect" rows="2"></textarea></label>
+        </fieldset>
+        <fieldset>
+          <legend>Initial assessment <span class="live" id="initial-score"></span></legend>
+          <label>Severity<select name="severity" data-scale="severity"></select></label>
+          <label>Occurrence<select name="occurrence" data-scale="occurrence"></select></label>
+          <label>Detection<select name="detection" data-scale="detection"></select></label>
+        </fieldset>
+        <fieldset>
+          <legend>Risk control</legend>
+          <label class="wide">Controls / mitigation actions<textarea name="controls" rows="3"></textarea></label>
+        </fieldset>
+        <fieldset>
+          <legend>Residual assessment <span class="live" id="residual-score"></span></legend>
+          <label>Severity<select name="residualSeverity" data-scale="severity" data-optional></select></label>
+          <label>Occurrence<select name="residualOccurrence" data-scale="occurrence" data-optional></select></label>
+          <label>Detection<select name="residualDetection" data-scale="detection" data-optional></select></label>
+        </fieldset>
+        <fieldset>
+          <legend>Review</legend>
+          <label>Status<select name="status"></select></label>
+          <label>Next review date<input type="date" name="reviewDate"></label>
+        </fieldset>
+      </div>
+      <footer class="dialog-foot">
+        <button type="button" class="btn danger" id="delete-risk" hidden>Delete</button>
+        <span class="spacer"></span>
+        <button type="button" class="btn" data-close>Cancel</button>
+        <button type="submit" class="btn primary">Save risk</button>
+      </footer>
+    </form>
+  </dialog>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,14 @@
+{
+  "name": "goodkid-quality-risk",
+  "version": "1.0.0",
+  "description": "Quality risk management app: FMEA-style risk register, risk matrix and dashboard.",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
