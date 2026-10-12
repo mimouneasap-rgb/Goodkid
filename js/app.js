@@ -293,9 +293,31 @@ function saveFromForm() {
   render();
 }
 
-function deleteCurrent() {
+/**
+ * In-page replacement for confirm(): shows #choice with the given buttons and
+ * resolves to the chosen button's value, or null when dismissed.
+ */
+function choose(title, message, buttons) {
+  const dialog = $("#choice");
+  $("#choice-title").textContent = title;
+  $("#choice-message").textContent = message;
+  return new Promise((resolve) => {
+    let result = null;
+    $("#choice-buttons").replaceChildren(...buttons.map((b) =>
+      el("button", { type: "button", class: `btn ${b.kind || ""}`, onclick: () => { result = b.value; dialog.close(); } }, b.label)));
+    dialog.addEventListener("close", () => resolve(result), { once: true });
+    dialog.showModal();
+  });
+}
+
+async function deleteCurrent() {
   const id = state.editingId;
-  if (!id || !confirm(`Delete ${id}? This cannot be undone.`)) return;
+  if (!id) return;
+  const ok = await choose(`Delete ${id}?`, "The risk is removed from the register. This cannot be undone.", [
+    { label: "Cancel", value: false },
+    { label: "Delete risk", value: true, kind: "danger" },
+  ]);
+  if (!ok) return;
   state.risks = state.risks.filter((r) => r.id !== id);
   saveRisks();
   $("#editor").close();
@@ -306,12 +328,29 @@ function deleteCurrent() {
 // ---------- import / export ----------
 
 function exportCsv() {
-  const blob = new Blob([toCsv(state.risks)], { type: "text/csv;charset=utf-8" });
-  const a = el("a", { href: URL.createObjectURL(blob), download: `quality-risks-${toIsoDate(new Date())}.csv` });
-  document.body.append(a);
-  a.click();
-  a.remove();
-  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  const csv = toCsv(state.risks);
+  const text = $("#export-text");
+  text.value = csv;
+  const download = $("#export-download");
+  URL.revokeObjectURL(download.href);
+  download.href = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+  download.download = `quality-risks-${toIsoDate(new Date())}.csv`;
+  $("#export-count").textContent = `${state.risks.length} risk(s)`;
+  $("#export-dialog").showModal();
+  text.focus();
+  text.select();
+}
+
+async function copyExport() {
+  const text = $("#export-text");
+  try {
+    await navigator.clipboard.writeText(text.value);
+    toast("CSV copied. Paste it into a spreadsheet or text file.");
+  } catch {
+    text.focus();
+    text.select();
+    toast("Press Ctrl+C (or ⌘C) to copy the selected CSV.");
+  }
 }
 
 async function importCsv(file) {
@@ -326,20 +365,26 @@ async function importCsv(file) {
       else valid.push(r);
     }
     if (!valid.length) { toast(rejected[0] || "No risks found in file."); return; }
-    const replace = confirm(
-      `${valid.length} valid risk(s) found${rejected.length ? `, ${rejected.length} rejected` : ""}.\n\n` +
-      "OK = replace the current register\nCancel = add to (and update matching IDs in) the current register");
+    const mode = await choose(
+      `Import ${valid.length} risk(s)`,
+      (rejected.length ? `${rejected.length} row(s) were rejected. First problem: ${rejected[0]}\n\n` : "") +
+        "Merge adds new risks and updates risks with matching IDs. Replace discards the current register.",
+      [
+        { label: "Cancel", value: null },
+        { label: "Replace register", value: "replace", kind: "danger" },
+        { label: "Merge", value: "merge", kind: "primary" },
+      ]);
+    if (!mode) return;
     const now = new Date().toISOString();
-    if (replace) state.risks = [];
+    if (mode === "replace") state.risks = [];
     for (const r of valid) {
-      const existing = r.id && state.risks.findIndex((x) => x.id === r.id);
-      if (r.id && existing >= 0) state.risks[existing] = { ...state.risks[existing], ...r, updatedAt: now };
+      const existing = r.id ? state.risks.findIndex((x) => x.id === r.id) : -1;
+      if (existing >= 0) state.risks[existing] = { ...state.risks[existing], ...r, updatedAt: now };
       else state.risks.push({ ...r, id: r.id || nextId(state.risks), createdAt: r.createdAt || now, updatedAt: now });
     }
     saveRisks();
     render();
     toast(`Imported ${valid.length} risk(s).${rejected.length ? ` ${rejected.length} rejected.` : ""}`);
-    if (rejected.length) console.warn("Rejected rows:\n" + rejected.join("\n"));
   } catch (err) {
     toast(`Import failed: ${err.message}`);
   }
@@ -387,6 +432,8 @@ function init() {
   }));
   $("#cell-chip").addEventListener("click", () => { state.cell = null; render(); });
   $("#export-csv").addEventListener("click", exportCsv);
+  $("#export-copy").addEventListener("click", copyExport);
+  $$("#export-dialog [data-close]").forEach((b) => b.addEventListener("click", () => $("#export-dialog").close()));
   $("#import-csv").addEventListener("change", (e) => {
     const file = e.target.files[0];
     if (file) importCsv(file);

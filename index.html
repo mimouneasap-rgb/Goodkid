@@ -146,6 +146,31 @@
     </form>
   </dialog>
 
+  <!-- Confirmation (replaces window.confirm) -->
+  <dialog id="choice" class="small">
+    <div class="dialog-head"><h2 id="choice-title"></h2></div>
+    <p class="choice-message" id="choice-message"></p>
+    <div class="dialog-foot"><span class="spacer"></span><span id="choice-buttons" class="btn-row"></span></div>
+  </dialog>
+
+  <!-- CSV export -->
+  <dialog id="export-dialog">
+    <header class="dialog-head">
+      <h2>Export CSV <span class="live" id="export-count"></span></h2>
+      <button type="button" class="icon-btn" data-close aria-label="Close">×</button>
+    </header>
+    <div class="form-body">
+      <p class="hint">Copy the text below into a spreadsheet or a .csv file. You can import it again later with Import CSV.</p>
+      <textarea id="export-text" rows="12" readonly spellcheck="false"></textarea>
+    </div>
+    <footer class="dialog-foot">
+      <a class="btn" id="export-download" href="#">Download .csv</a>
+      <span class="spacer"></span>
+      <button type="button" class="btn" data-close>Close</button>
+      <button type="button" class="btn primary" id="export-copy">Copy CSV</button>
+    </footer>
+  </dialog>
+
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
   <script type="module" src="js/app.js"></script>
