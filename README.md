@@ -24,7 +24,25 @@ ICH Q9 and ISO 14971.
 - **CSV import/export** for backups, spreadsheets or moving data between machines.
 - Data is saved in the browser (`localStorage`). Sample risks load on first use.
 
-## Running
+## Install it as an app
+
+The app is a Progressive Web App. Once hosted, you can install it from the browser. It then gets its own icon, opens in its own window and works offline.
+
+**Hosting (one-time):** in the GitHub repository, open **Settings → Pages**. Under *Build and deployment*, set **Source** to *Deploy from a branch*, choose branch `ccr-d4e1bb55-pqqfa8` and folder `/ (root)`, then click **Save**. After a minute or two the app is live at
+**https://mimouneasap-rgb.github.io/Goodkid/**.
+
+**Installing:**
+
+| Device | Steps |
+| --- | --- |
+| Android (Chrome) | Open the link, then tap **Install app** in the page header or **⋮ → Install app** |
+| iPhone / iPad (Safari) | Open the link, tap **Share → Add to Home Screen** |
+| Windows / macOS / ChromeOS (Chrome or Edge) | Open the link, then click **Install app** in the page header or the install icon in the address bar |
+| Mac (Safari 17+) | **File → Add to Dock** |
+
+Your risks are stored on the device where you enter them. Use **Export CSV** to back them up or move them to another device.
+
+## Running locally
 
 Requires Node.js 18 or later. There are no dependencies to install.
 
@@ -43,6 +61,7 @@ npm test           # runs the unit tests for the scoring logic
 | `js/charts.js` | SVG chart builders for the Analysis view |
 | `js/app.js` | UI rendering and event handling |
 | `js/sample-data.js` | Example risks loaded on first visit |
+| `manifest.webmanifest`, `sw.js`, `icons/` | App manifest, offline service worker and icons |
 | `server.js` | Tiny static server with no dependencies |
 | `tests/` | `node --test` unit tests |
 

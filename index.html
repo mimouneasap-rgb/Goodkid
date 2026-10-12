@@ -4,6 +4,16 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Quality Risk Manager</title>
+  <meta name="description" content="FMEA-style quality risk register with risk matrix, analysis charts and change history.">
+  <meta name="theme-color" content="#0e2326">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Risk Manager">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="icon" href="icons/favicon-32.png" sizes="32x32" type="image/png">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
@@ -67,6 +77,10 @@
       </div>
       <div class="page-actions">
         <span class="kbd-hint"><kbd>N</kbd> new · <kbd>/</kbd> search</span>
+        <button class="btn" id="install-app" type="button" hidden>
+          <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M9 3h2v7.2l2.6-2.6L15 9l-5 5-5-5 1.4-1.4L9 10.2zM4 15h12v2H4z"/></svg>
+          Install app
+        </button>
         <button class="btn primary" id="add-risk">
           <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M9 3h2v6h6v2h-6v6H9v-6H3V9h6z"/></svg>
           New risk

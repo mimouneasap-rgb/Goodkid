@@ -735,6 +735,31 @@ function render() {
   renderAnalysis(risks);
 }
 
+// ---------- installable app ----------
+
+function setupInstall() {
+  // Offline support and installability; unavailable in sandboxed previews, which is fine.
+  if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost")) {
+    navigator.serviceWorker.register("sw.js").catch(() => {});
+  }
+  let deferred = null;
+  const button = $("#install-app");
+  window.addEventListener("beforeinstallprompt", (e) => {
+    e.preventDefault();
+    deferred = e;
+    button.hidden = false;
+  });
+  button.addEventListener("click", async () => {
+    if (!deferred) return;
+    deferred.prompt();
+    const { outcome } = await deferred.userChoice;
+    deferred = null;
+    button.hidden = true;
+    if (outcome === "accepted") toast("Installing Quality Risk Manager…");
+  });
+  window.addEventListener("appinstalled", () => { button.hidden = true; toast("Installed. Open it from your home screen or app list."); });
+}
+
 function isTyping(e) {
   const t = e.target;
   return t instanceof HTMLElement && (t.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(t.tagName));
@@ -742,6 +767,7 @@ function isTyping(e) {
 
 function init() {
   setupTheme();
+  setupInstall();
   fillSelect($("#f-level"), LEVELS);
   fillSelect($("#f-status"), STATUSES);
   fillSelect($("#f-category"), CATEGORIES);
@@ -807,6 +833,9 @@ function init() {
   });
 
   render();
+  const fromHash = () => { const v = location.hash.slice(1); if (VIEWS[v]) showView(v); };
+  window.addEventListener("hashchange", fromHash);
+  fromHash();
 }
 
 init();

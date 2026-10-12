@@ -1,0 +1,23 @@
+{
+  "name": "Quality Risk Manager",
+  "short_name": "Risk Manager",
+  "description": "FMEA-style quality risk register with risk matrix, analysis charts and change history.",
+  "id": "./",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0e2326",
+  "theme_color": "#0e2326",
+  "categories": ["business", "productivity", "medical"],
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
+    { "src": "icons/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ],
+  "shortcuts": [
+    { "name": "Risk register", "url": "./#register", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Risk matrix", "url": "./#matrix", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] }
+  ]
+}
