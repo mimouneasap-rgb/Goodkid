@@ -19,6 +19,10 @@
   --overlay: rgba(15, 23, 42, .5);
   --toast-bg: #1c2733;
   --toast-fg: #ffffff;
+  --series-initial: #e87ba4;
+  --series-residual: #2a78d6;
+  --grid: #e8ecf0;
+  --axis: #c3cbd4;
   --radius: 10px;
   --shadow: 0 1px 2px rgba(16, 24, 40, .06), 0 1px 3px rgba(16, 24, 40, .08);
   color-scheme: light;
@@ -42,6 +46,10 @@
     --medium-ink: #e0a800;
     --toast-bg: #e6ebf0;
     --toast-fg: #11161c;
+    --series-initial: #d55181;
+    --series-residual: #3987e5;
+    --grid: #252e37;
+    --axis: #3a4652;
     --shadow: none;
     color-scheme: dark;
   }
@@ -60,6 +68,10 @@
   --medium-ink: #e0a800;
   --toast-bg: #e6ebf0;
   --toast-fg: #11161c;
+  --series-initial: #d55181;
+  --series-residual: #3987e5;
+  --grid: #252e37;
+  --axis: #3a4652;
   --shadow: none;
   color-scheme: dark;
 }
@@ -207,6 +219,51 @@ a.btn { text-decoration: none; }
 .errors { background: var(--critical-bg); color: var(--critical); border-radius: 8px; padding: 10px 14px; margin-top: 12px; }
 .errors ul { margin: 0; padding-left: 18px; }
 
+/* ---------- analysis charts ---------- */
+.align-start { align-items: start; }
+.chart-card { min-width: 0; }
+.chart-head { display: flex; gap: 12px; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; }
+.chart-head h2 { margin: 0; text-wrap: balance; }
+.chart-sub { margin: 2px 0 0; color: var(--muted); }
+.chart-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.btn.small { padding: 5px 10px; font-size: 13px; }
+label.inline { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; }
+.viz-legend { display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 12px 0 4px; color: var(--muted); font-size: 13px; }
+.viz-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.viz-legend .swatch { width: 12px; height: 12px; border-radius: 3px; }
+.chart-body { margin-top: 8px; min-width: 0; }
+.chart-body svg { display: block; max-width: 100%; overflow: visible; }
+.chart-card .table-wrap { margin-top: 12px; }
+.chart .grid { stroke: var(--grid); stroke-width: 1; }
+.chart .baseline { stroke: var(--axis); stroke-width: 1; }
+.chart .tick { fill: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+.chart .tick-alert { fill: var(--critical); font-weight: 700; }
+.chart .row-label { fill: var(--text); font-size: 12px; }
+.chart .value { fill: var(--muted); font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.chart .value-alert { fill: var(--critical); }
+.chart .note { fill: var(--muted); font-size: 11px; font-style: italic; }
+.chart .connector { stroke: var(--axis); stroke-width: 2; stroke-linecap: round; }
+.mark-initial { fill: var(--surface); stroke: var(--series-initial); stroke-width: 2.5; }
+.mark-residual { fill: var(--series-residual); stroke: var(--surface); stroke-width: 2; }
+.chart .fill-Low { fill: var(--low); }
+.chart .fill-Medium { fill: var(--medium); }
+.chart .fill-High { fill: var(--high); }
+.chart .fill-Critical { fill: var(--critical); }
+.chart .bar-due { fill: var(--series-residual); }
+.chart .bar-overdue { fill: var(--critical); }
+.chart .bar-unset { fill: var(--axis); }
+.chart .hit-area { fill: transparent; }
+.chart .hit { cursor: default; }
+.chart .hit[data-id] { cursor: pointer; }
+.chart .hit:hover .hit-area { fill: var(--grid); fill-opacity: .55; }
+.viz-tip {
+  position: fixed; z-index: 20; pointer-events: none; max-width: 300px;
+  background: var(--surface); color: var(--text); border: 1px solid var(--border);
+  border-radius: 8px; padding: 8px 10px; font-size: 12px; line-height: 1.5;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, .18); white-space: pre-line;
+}
+.viz-tip strong { display: block; margin-bottom: 2px; }
+
 .toast {
   position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%) translateY(20px);
   background: var(--toast-bg); color: var(--toast-fg); padding: 10px 18px; border-radius: 8px;
@@ -215,7 +272,10 @@ a.btn { text-decoration: none; }
 .toast.show { opacity: 1; transform: translateX(-50%); }
 
 @media (max-width: 640px) {
-  .topbar { padding: 10px 16px; }
+  .topbar { padding: 10px 16px; gap: 10px; }
+  .brand { flex: 1; }
+  .tabs { order: 3; flex: 1 0 100%; flex-wrap: nowrap; overflow-x: auto; }
+  .tab { white-space: nowrap; }
   main { padding: 16px; }
   .toolbar input[type=search] { max-width: none; }
 }

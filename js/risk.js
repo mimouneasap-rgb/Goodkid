@@ -250,3 +250,71 @@ export function toIsoDate(date) {
   const pad = (n) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
+
+/**
+ * Counts risks per group (e.g. category or owner) broken down by level.
+ * Rows are sorted by total, then by the number of critical/high risks.
+ */
+export function levelBreakdown(risks, key) {
+  const groups = new Map();
+  for (const r of risks) {
+    const name = String(r[key] || "").trim() || "Unassigned";
+    if (!groups.has(name)) {
+      groups.set(name, { group: name, total: 0, ...Object.fromEntries(LEVELS.map((l) => [l, 0])) });
+    }
+    const row = groups.get(name);
+    if (r.level) row[r.level] += 1;
+    row.total += 1;
+  }
+  return [...groups.values()].sort((a, b) =>
+    b.total - a.total || b.Critical - a.Critical || b.High - a.High || a.group.localeCompare(b.group));
+}
+
+/**
+ * Buckets open (non-closed) risks by review date: overdue, each of the next
+ * `months` calendar months starting with the current one, later, and not set.
+ */
+export function reviewSchedule(risks, today = new Date(), months = 6) {
+  const todayIso = toIsoDate(today);
+  const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const buckets = [{ key: "overdue", label: "Overdue", count: 0, ids: [] }];
+  for (let i = 0; i < months; i++) {
+    const d = new Date(today.getFullYear(), today.getMonth() + i, 1);
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    buckets.push({ key, label: `${monthNames[d.getMonth()]} ${d.getFullYear()}`, count: 0, ids: [] });
+  }
+  buckets.push({ key: "later", label: "Later", count: 0, ids: [] });
+  buckets.push({ key: "none", label: "Not set", count: 0, ids: [] });
+  const byKey = new Map(buckets.map((b) => [b.key, b]));
+  const lastMonth = buckets[months].key;
+  for (const r of risks) {
+    if (r.status === "Closed") continue;
+    let bucket;
+    if (!r.reviewDate) bucket = byKey.get("none");
+    else if (r.reviewDate < todayIso) bucket = byKey.get("overdue");
+    else {
+      const month = r.reviewDate.slice(0, 7);
+      bucket = month > lastMonth ? byKey.get("later") : byKey.get(month);
+    }
+    bucket.count += 1;
+    bucket.ids.push(r.id);
+  }
+  return buckets;
+}
+
+/**
+ * How few open risks account for `share` of the total open RPN (Pareto view).
+ * Expects evaluated risks.
+ */
+export function rpnConcentration(risks, share = 0.8) {
+  const open = risks.filter((r) => r.status !== "Closed" && r.rpn).sort((a, b) => b.rpn - a.rpn);
+  const total = open.reduce((s, r) => s + r.rpn, 0);
+  let running = 0;
+  let count = 0;
+  for (const r of open) {
+    if (running >= total * share) break;
+    running += r.rpn;
+    count += 1;
+  }
+  return { count, open: open.length, totalRpn: total, share };
+}

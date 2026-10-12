@@ -3,6 +3,8 @@ import {
   evaluate, validateRisk, nextId, filterRisks, sortRisks, buildMatrix, summarize,
   riskLevel, rpn, toCsv, fromCsv, toIsoDate,
 } from "./risk.js";
+import { levelBreakdown, reviewSchedule, rpnConcentration } from "./risk.js";
+import { controlEffectChart, levelProfileChart, reviewScheduleChart } from "./charts.js";
 import { SAMPLE_RISKS } from "./sample-data.js";
 
 const STORAGE_KEY = "goodkid.qrm.risks.v1";
@@ -18,6 +20,7 @@ const state = {
   filters: { query: "", level: "", status: "", category: "" },
   matrixMode: "initial",
   cell: null,
+  analysis: { scope: "all", category: "", group: "category", tables: new Set() },
   editingId: null,
 };
 
@@ -209,6 +212,92 @@ function matchesCell(r, { severity, occurrence, residual }) {
   return residual
     ? r.residualSeverity === severity && r.residualOccurrence === occurrence
     : r.severity === severity && r.occurrence === occurrence;
+}
+
+// ---------- analysis ----------
+
+function table(headers, rows) {
+  return el("table", {},
+    el("thead", {}, el("tr", {}, headers.map((h) => el("th", {}, h)))),
+    el("tbody", {}, rows.map((cells) => el("tr", {}, cells.map((c) =>
+      el("td", { class: typeof c === "number" ? "num" : "" }, c ?? "—"))))));
+}
+
+function chartWidth(id) {
+  return Math.floor($(id).clientWidth || $(id).parentElement.clientWidth || 600);
+}
+
+function renderAnalysis(all) {
+  if (!$("#view-analysis").classList.contains("active")) return;
+  const a = state.analysis;
+  const risks = all.filter((r) =>
+    (a.scope === "all" || r.status !== "Closed") && (!a.category || r.category === a.category));
+  $("#a-count").textContent = `${risks.length} risk(s) in view`;
+
+  // Control effect (dumbbell)
+  const assessed = risks.filter((r) => r.residualRpn !== null);
+  const reduced = assessed.reduce((s, r) => s + (r.rpn - r.residualRpn), 0);
+  const before = assessed.reduce((s, r) => s + r.rpn, 0);
+  const pareto = rpnConcentration(risks);
+  $("#effect-sub").textContent = risks.length
+    ? `${assessed.length} of ${risks.length} risks have a residual assessment` +
+      (before ? `, with controls cutting their RPN by ${Math.round((reduced / before) * 100)}%. ` : ". ") +
+      (pareto.open ? `${pareto.count} of ${pareto.open} open risks make up 80% of open RPN.` : "")
+    : "No risks match the current selection.";
+  $("#chart-effect").innerHTML = risks.length ? controlEffectChart(risks, chartWidth("#chart-effect")) : "";
+  $("#table-effect").replaceChildren(table(
+    ["ID", "Title", "Initial RPN", "Level", "Residual RPN", "Residual level", "Reduction"],
+    sortRisks(risks, "rpn").map((r) => [r.id, r.title, r.rpn, r.level, r.residualRpn, r.residualLevel,
+      r.residualRpn === null ? null : r.rpn - r.residualRpn])));
+
+  // Risk profile (stacked bars)
+  const groupLabel = { category: "Category", owner: "Owner", status: "Status" }[a.group];
+  const profile = levelBreakdown(risks, a.group);
+  $("#profile-legend").replaceChildren(...LEVELS.slice().reverse().map((l) =>
+    el("span", {}, el("span", { class: "swatch", style: `background:var(--${l.toLowerCase()})` }), l)));
+  $("#chart-profile").innerHTML = profile.length ? levelProfileChart(profile, chartWidth("#chart-profile")) : "";
+  $("#table-profile").replaceChildren(table([groupLabel, ...LEVELS.slice().reverse(), "Total"],
+    profile.map((r) => [r.group, ...LEVELS.slice().reverse().map((l) => r[l]), r.total])));
+
+  // Review schedule (bars)
+  const schedule = reviewSchedule(risks, new Date());
+  $("#chart-schedule").innerHTML = reviewScheduleChart(schedule, chartWidth("#chart-schedule"));
+  $("#table-schedule").replaceChildren(table(["Due", "Reviews", "Risks"],
+    schedule.map((b) => [b.label, b.count, b.ids.join(", ") || null])));
+
+  for (const name of ["effect", "profile", "schedule"]) {
+    const shown = a.tables.has(name);
+    $(`#table-${name}`).hidden = !shown;
+    $(`[data-table-toggle="${name}"]`).textContent = shown ? "Hide table" : "Show table";
+  }
+}
+
+function setupTooltips() {
+  const tip = $("#viz-tip");
+  const view = $("#view-analysis");
+  const place = (e) => {
+    const pad = 14;
+    const { width, height } = tip.getBoundingClientRect();
+    let x = e.clientX + pad;
+    let y = e.clientY + pad;
+    if (x + width > innerWidth - 8) x = e.clientX - width - pad;
+    if (y + height > innerHeight - 8) y = e.clientY - height - pad;
+    tip.style.left = `${Math.max(8, x)}px`;
+    tip.style.top = `${Math.max(8, y)}px`;
+  };
+  view.addEventListener("pointermove", (e) => {
+    const target = e.target.closest("[data-tip]");
+    if (!target) { tip.hidden = true; return; }
+    const [head, ...rest] = target.dataset.tip.split("\n");
+    tip.replaceChildren(el("strong", {}, head), rest.join("\n"));
+    tip.hidden = false;
+    place(e);
+  });
+  view.addEventListener("pointerleave", () => { tip.hidden = true; });
+  view.addEventListener("click", (e) => {
+    const target = e.target.closest("[data-id]");
+    if (target) { tip.hidden = true; openEditor(target.dataset.id); }
+  });
 }
 
 // ---------- editor ----------
@@ -404,6 +493,7 @@ function render() {
   renderDashboard(risks);
   renderRegister(risks);
   renderMatrix(risks);
+  renderAnalysis(risks);
 }
 
 function init() {
@@ -412,7 +502,26 @@ function init() {
   fillSelect($("#f-category"), CATEGORIES);
   setupEditor();
 
-  $$(".tab").forEach((t) => t.addEventListener("click", () => showView(t.dataset.view)));
+  $$(".tab").forEach((t) => t.addEventListener("click", () => {
+    showView(t.dataset.view);
+    if (t.dataset.view === "analysis") renderAnalysis(evaluated());
+  }));
+  fillSelect($("#a-category"), CATEGORIES);
+  for (const [id, key] of [["#a-scope", "scope"], ["#a-category", "category"], ["#a-group", "group"]]) {
+    $(id).addEventListener("input", (e) => { state.analysis[key] = e.target.value; renderAnalysis(evaluated()); });
+  }
+  $$("[data-table-toggle]").forEach((b) => b.addEventListener("click", () => {
+    const t = state.analysis.tables;
+    const name = b.dataset.tableToggle;
+    if (t.has(name)) t.delete(name); else t.add(name);
+    renderAnalysis(evaluated());
+  }));
+  setupTooltips();
+  let lastWidth = 0;
+  new ResizeObserver(([entry]) => {
+    const w = Math.round(entry.contentRect.width);
+    if (w !== lastWidth) { lastWidth = w; renderAnalysis(evaluated()); }
+  }).observe($("#view-analysis"));
   $("#add-risk").addEventListener("click", () => openEditor());
 
   for (const [id, key] of [["#f-query", "query"], ["#f-level", "level"], ["#f-status", "status"], ["#f-category", "category"]]) {

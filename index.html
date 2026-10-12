@@ -16,6 +16,7 @@
       <button class="tab active" data-view="dashboard" role="tab">Dashboard</button>
       <button class="tab" data-view="register" role="tab">Risk register</button>
       <button class="tab" data-view="matrix" role="tab">Risk matrix</button>
+      <button class="tab" data-view="analysis" role="tab">Analysis</button>
     </nav>
     <button class="btn primary" id="add-risk">+ New risk</button>
   </header>
@@ -95,7 +96,75 @@
         <div class="legend" id="legend"></div>
       </div>
     </section>
+
+    <!-- Analysis -->
+    <section id="view-analysis" class="view">
+      <div class="toolbar">
+        <label class="inline" for="a-scope">Show
+          <select id="a-scope">
+            <option value="all">All risks</option>
+            <option value="open">Open risks only</option>
+          </select>
+        </label>
+        <label class="inline" for="a-category">Category
+          <select id="a-category"><option value="">All categories</option></select>
+        </label>
+        <span class="hint" id="a-count"></span>
+      </div>
+
+      <div class="card chart-card">
+        <div class="chart-head">
+          <div>
+            <h2>Effect of risk controls</h2>
+            <p class="chart-sub" id="effect-sub"></p>
+          </div>
+          <button type="button" class="btn small" data-table-toggle="effect">Show table</button>
+        </div>
+        <div class="viz-legend">
+          <span><svg width="14" height="14" aria-hidden="true"><circle class="mark-initial" cx="7" cy="7" r="5"/></svg> Initial RPN (before controls)</span>
+          <span><svg width="14" height="14" aria-hidden="true"><circle class="mark-residual" cx="7" cy="7" r="5"/></svg> Residual RPN (after controls)</span>
+        </div>
+        <div class="chart-body" id="chart-effect"></div>
+        <div class="table-wrap" id="table-effect" hidden></div>
+      </div>
+
+      <div class="grid-2 align-start">
+        <div class="card chart-card">
+          <div class="chart-head">
+            <div>
+              <h2>Risk profile</h2>
+              <p class="chart-sub">Number of risks at each level</p>
+            </div>
+            <div class="chart-actions">
+              <select id="a-group" aria-label="Group risk profile by">
+                <option value="category">By category</option>
+                <option value="owner">By owner</option>
+                <option value="status">By status</option>
+              </select>
+              <button type="button" class="btn small" data-table-toggle="profile">Show table</button>
+            </div>
+          </div>
+          <div class="viz-legend" id="profile-legend"></div>
+          <div class="chart-body" id="chart-profile"></div>
+          <div class="table-wrap" id="table-profile" hidden></div>
+        </div>
+
+        <div class="card chart-card">
+          <div class="chart-head">
+            <div>
+              <h2>Review schedule</h2>
+              <p class="chart-sub">Next review dates of open risks</p>
+            </div>
+            <button type="button" class="btn small" data-table-toggle="schedule">Show table</button>
+          </div>
+          <div class="chart-body" id="chart-schedule"></div>
+          <div class="table-wrap" id="table-schedule" hidden></div>
+        </div>
+      </div>
+    </section>
   </main>
+
+  <div class="viz-tip" id="viz-tip" role="tooltip" hidden></div>
 
   <!-- Risk editor -->
   <dialog id="editor">

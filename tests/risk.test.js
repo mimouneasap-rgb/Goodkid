@@ -116,3 +116,44 @@ test("sample data passes validation", async () => {
   for (const r of SAMPLE_RISKS) assert.deepEqual(validateRisk(r), [], r.id);
   assert.equal(new Set(SAMPLE_RISKS.map((r) => r.id)).size, SAMPLE_RISKS.length);
 });
+
+test("levelBreakdown groups by key and level", async () => {
+  const { levelBreakdown } = await import("../js/risk.js");
+  const rows = levelBreakdown([
+    evaluate({ ...base, category: "Process" }),
+    evaluate({ ...base, category: "Process", severity: 1, occurrence: 1 }),
+    evaluate({ ...base, category: "Supplier", severity: 5, occurrence: 5 }),
+    evaluate({ ...base, category: "" }),
+  ], "category");
+  assert.deepEqual(rows.map((r) => [r.group, r.total]), [["Process", 2], ["Supplier", 1], ["Unassigned", 1]]);
+  assert.equal(rows[0].High, 1);
+  assert.equal(rows[0].Low, 1);
+  assert.equal(rows[1].Critical, 1);
+});
+
+test("reviewSchedule buckets open risks by month", async () => {
+  const { reviewSchedule } = await import("../js/risk.js");
+  const today = new Date(2026, 9, 12); // 12 Oct 2026
+  const b = reviewSchedule([
+    { id: "a", status: "Open", reviewDate: "2026-10-01" },
+    { id: "b", status: "Open", reviewDate: "2026-10-20" },
+    { id: "c", status: "Open", reviewDate: "2027-03-31" },
+    { id: "d", status: "Open", reviewDate: "2027-04-01" },
+    { id: "e", status: "Open", reviewDate: "" },
+    { id: "f", status: "Closed", reviewDate: "2020-01-01" },
+  ], today, 6);
+  const counts = Object.fromEntries(b.map((x) => [x.label, x.count]));
+  assert.equal(b.length, 9);
+  assert.equal(counts.Overdue, 1);
+  assert.equal(counts["Oct 2026"], 1);
+  assert.equal(counts["Mar 2027"], 1);
+  assert.equal(counts.Later, 1);
+  assert.equal(counts["Not set"], 1);
+});
+
+test("rpnConcentration finds the Pareto set", async () => {
+  const { rpnConcentration } = await import("../js/risk.js");
+  const rs = [50, 30, 10, 5, 5].map((rpn, i) => ({ id: String(i), rpn, status: "Open" }));
+  assert.deepEqual(rpnConcentration(rs), { count: 2, open: 5, totalRpn: 100, share: 0.8 });
+  assert.equal(rpnConcentration([]).count, 0);
+});
