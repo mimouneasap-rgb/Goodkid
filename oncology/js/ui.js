@@ -176,7 +176,7 @@ export function dataTable(cols, rows, opts = {}) {
     foot.replaceChildren(...[
       h("span", `${t("showing")} ${fmtNum(shown.length)} ${t("of")} ${fmtNum(list.length)}`),
       list.length > shown.length ? h("button.link", { type: "button", onclick: () => { limit += pageSize * 2; draw(); } }, getLang() === "FR" ? "Afficher plus" : "Show more") : null,
-      opts.exportName ? h("button.link", { type: "button", onclick: () => downloadCSV(opts.exportName, cols, list) }, t("export_csv")) : null].filter(Boolean));
+      opts.exportName && !window.OKQA_EMBED ? h("button.link", { type: "button", onclick: () => downloadCSV(opts.exportName, cols, list) }, t("export_csv")) : null].filter(Boolean));
   }
   draw();
   wrap.append(tools.childElementCount ? tools : "", body, foot);

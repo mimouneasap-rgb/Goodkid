@@ -475,7 +475,7 @@ function openImport() {
     h("p", t("import_body")), ...dropZone(() => setTimeout(() => importDlg.close(), 900)),
     h("div.modal-foot",
       store.get("data", null) ? h("button.btn.ghost", { type: "button", onclick: () => { store.del("data"); data = bundled; model = build(); render(); importDlg.close(); } }, bundled ? t("import_reset") : t("clear_data")) : h("span"),
-      h("button.btn.ghost", { type: "button", onclick: exportEntries }, t("export_json"))));
+      window.OKQA_EMBED ? h("span") : h("button.btn.ghost", { type: "button", onclick: exportEntries }, t("export_json"))));
   importDlg.onclick = (e) => { if (e.target === importDlg) importDlg.close(); };
   importDlg.showModal();
 }

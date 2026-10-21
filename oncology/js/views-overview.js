@@ -98,7 +98,7 @@ export function home(ctx) {
       card(t("h_version"), defList((m.meta.docControl ?? []).map(([a, b]) => [a, b ?? "—"]))),
       card(t("h_history"), h("ol.history", (m.meta.history ?? []).map(([a, b]) => h("li", h("b", a), h("p", b)))))),
     card(t("h_gaps"), h("div.notes", (m.meta.assumptions ?? []).filter(([type]) => type !== "Limitation").map(([type, text]) => h("div.note", h(`span.note-tag.${type.split(" ")[0].toLowerCase()}`, type), h("p", text)))), { sub: t("provisional") }),
-    card(t("h_guide"), h("ol.guide", ["ag1", "ag2", "ag3", "ag4", "ag5"].map((g) => h("li", guideText(g))))),
+    card(t("h_guide"), h("ol.guide", ["ag1", "ag2", "ag3", "ag4", "ag5"].filter((g) => !(window.OKQA_EMBED && g === "ag5")).map((g) => h("li", guideText(g))))),
   );
 }
 const getMonthsWord = () => (t("col_month") === "Mois" ? "mois" : "months");
@@ -243,7 +243,7 @@ export function review(ctx) {
     h("p.fine", t("local_note")));
 
   return h("div.view",
-    viewHeader(t("mr_title"), t("mr_sub"), h("button.btn", { type: "button", onclick: () => window.print() }, icon("print", 16), t("print"))),
+    viewHeader(t("mr_title"), t("mr_sub"), window.OKQA_EMBED ? null : h("button.btn", { type: "button", onclick: () => window.print() }, icon("print", 16), t("print"))),
     card(t("mr_meet"), h("div.meet-grid", field(t("mr_period"), "period"), field(t("mr_date"), "date", "date"), field(t("mr_chair"), "chair"), field(t("mr_att"), "attendees"))),
     card(t("mr_glance"), h("div.gauges",
       gauge(v.clos, { ...T.closure, label: t("g_closure"), sub: `${t("mr_target")} ≥ ${fmtPct(T.closure.target)}` }),
