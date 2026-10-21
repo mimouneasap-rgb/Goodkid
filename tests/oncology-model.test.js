@@ -157,3 +157,45 @@ test("SPC charts span 24 months", () => {
   assert.equal(p.x, 1);
   assert.equal(backlog(m.records, today).at(-1).open, 2);
 });
+
+test("in-app edits change, delete and add rows on top of the import", async () => {
+  const { applyEdits } = await import("../oncology/js/store.js");
+  const eqCols = SCHEMA.cols.equip;
+  const lastCal = eqCols.indexOf("Last calibration");
+  const changed = [...wb.equip.rows[1]];
+  changed[lastCal] = "2026-06-01"; // EQ2-X calibrated; 6-month frequency → due 2026-12-01
+  const added = eqCols.map((c) => ({ "Asset no": "EQ9-X", "Room code": "R-2" })[c] ?? null);
+  const edits = new Map([
+    ["equip~i1", { table: "equip", key: "i1", row: changed, at: "2026-10-21T10:00:00Z", by: "u1" }],
+    ["equip~i2", { table: "equip", key: "i2", row: null, at: "2026-10-21T10:01:00Z", by: "u1" }],
+    ["equip~n-1", { table: "equip", key: "n-1", row: added, at: "2026-10-21T10:02:00Z", by: "u2" }],
+  ]);
+  const data = applyEdits(wb, edits);
+  assert.deepEqual(data.equip.keys, ["i0", "i1", "n-1"]);
+  assert.equal(data.cc.rows.length, 2); // untouched tables pass through
+  const em = buildModel(data, { today });
+  const eq2 = em.equip.find((e) => e["Asset no"] === "EQ2-X");
+  assert.equal(eq2.calStatus, "Due 31–60 d"); // 41 days after 2026-10-21
+  assert.equal(eq2.__key, "i1");
+  assert.equal(eq2.__edit.by, "u1");
+  assert.ok(!em.equip.some((e) => e["Asset no"] === "EQ3-X"));
+  assert.equal(em.roomByCode.get("R-2").equipment, 1);
+  // a record keeps its source table and key for editing
+  assert.equal(em.recordByRef.get("CC-1").srcTable, "cc");
+  assert.equal(em.recordByRef.get("CC-1").srcKey, "i0");
+});
+
+test("edits made against an older import of a table are ignored", async () => {
+  const { applyEdits } = await import("../oncology/js/store.js");
+  const base = { ...wb, cc: { ...wb.cc, importId: "new" }, capa: { ...wb.capa, importId: "keep" } };
+  const status = SCHEMA.cols.cc.indexOf("Status");
+  const ccRow = [...wb.cc.rows[0]]; ccRow[status] = "Canceled";
+  const capaRow = [...wb.capa.rows[0]]; capaRow[SCHEMA.cols.capa.indexOf("Status")] = "Completed";
+  const edits = new Map([
+    ["cc~i0", { table: "cc", key: "i0", row: ccRow, base: "old" }],          // stale: cc was re-imported
+    ["capa~i0", { table: "capa", key: "i0", row: capaRow, base: "keep" }],   // still valid
+  ]);
+  const em = buildModel(applyEdits(base, edits), { today });
+  assert.equal(em.recordByRef.get("CC-1").status, "Open");
+  assert.equal(em.recordByRef.get("CAPA-1").status, "Completed");
+});

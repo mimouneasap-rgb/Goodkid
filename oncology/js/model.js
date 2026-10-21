@@ -18,7 +18,13 @@ export const IMPR_STAGES = ["Idea", "Assessed", "In progress", "Done"];
 /** Turn {cols, rows} into an array of objects keyed by column name. */
 export function objects(table) {
   if (!table) return [];
-  return table.rows.map((r) => Object.fromEntries(table.cols.map((c, i) => [c, r[i] ?? null])));
+  return table.rows.map((r, n) => {
+    const o = Object.fromEntries(table.cols.map((c, i) => [c, r[i] ?? null]));
+    // row identity for in-app editing (see store.applyEdits): __key addresses the row, __edit is its last change
+    o.__key = table.keys?.[n] ?? `i${n}`;
+    o.__edit = table.edits?.[n] ?? null;
+    return o;
+  });
 }
 
 /** Scigeniq writes "-----" for empty fields; Excel's TRIM/SUBSTITUTE turns that into "". */
@@ -187,6 +193,9 @@ export function buildModel(wb, opts = {}) {
         justification: isCC ? clean(r.Justification) : "",
         createdBy: clean(r["Created By"]),
         raw: r,
+        srcTable: { "Change Control": "cc", CAPA: "capa", Deviation: "qe" }[type],
+        srcKey: r.__key,
+        edit: r.__edit,
       };
       const search = `${rec.title} | ${rec.zone} | ${rec.parentAction} | ${rec.proposed}`;
       const link = linkByRef.get(rec.ref);

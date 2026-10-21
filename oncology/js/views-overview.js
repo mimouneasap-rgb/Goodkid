@@ -208,7 +208,7 @@ export function review(ctx) {
   const v = sc.values, T = m.targets;
   const meet = ctx.local.get("meeting") ?? { period: m.meta.reviewPeriod ?? "", date: "", chair: "", attendees: "" };
   const saveMeet = (k, val) => ctx.local.set("meeting", { ...meet, [k]: val });
-  const decisions = ctx.local.get("decisions") ?? [];
+  const decisions = structuredClone(ctx.local.get("decisions") ?? []); // shared data arrives frozen
   const field = (label, key, type = "text") => h("label.field", h("span", label), h("input", { type, value: meet[key] ?? "", onchange: (e) => saveMeet(key, e.target.value) }));
 
   // trend vs 30 days ago for open / overdue rate
@@ -240,7 +240,7 @@ export function review(ctx) {
     h("input", { name: "owner", placeholder: t("mr_owner") }),
     h("input", { name: "due", type: "date", "aria-label": t("mr_duec") }),
     h("button.btn.primary", { type: "submit" }, t("decision_add"))),
-    h("p.fine", t("local_note")));
+    h("p.fine", ctx.workspace.mode === "shared" ? t("shared_note") : t("local_note")));
 
   return h("div.view",
     viewHeader(t("mr_title"), t("mr_sub"), window.OKQA_EMBED ? null : h("button.btn", { type: "button", onclick: () => window.print() }, icon("print", 16), t("print"))),

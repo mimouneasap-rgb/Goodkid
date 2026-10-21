@@ -5,6 +5,7 @@ import { t, tv } from "./i18n.js";
 import { icon } from "./icons.js";
 import * as M from "./model.js";
 import { recordCols, recordSearch } from "./views-overview.js";
+import { changeLine } from "./editing.js";
 
 // ---------- FACILITY MAP ----------
 const METRICS = [
@@ -127,6 +128,7 @@ export function rooms(ctx) {
 
   return h("div.view",
     viewHeader(t("rx_title"), t("rx_sub"),
+      ctx.canEdit ? h("button.btn", { type: "button", onclick: () => ctx.edit("rooms", room.__key, `${room.Code} · ${room.Name}`) }, icon("edit", 15), t("edit_room")) : null,
       h("div.room-nav",
         h("button.icon-btn", { type: "button", title: t("rx_prev"), "aria-label": t("rx_prev"), disabled: idx <= 0 ? true : null, onclick: () => go(m.rooms[idx - 1].Code) }, h("span.flip", icon("chevron", 16))),
         select(t("rx_select"), m.rooms.map((r) => [r.Code, `${r.Code} · ${r.Name}`]), room.Code, go),
@@ -136,6 +138,7 @@ export function rooms(ctx) {
         h("span.room-code", room.Code),
         h("h2", room.Name),
         h("p", room.Area),
+        changeLine(room.__edit, ctx.who),
         h("div.room-tags",
           room.Grade ? h("span.tag", `${t("rx_grade")} ${room.Grade}`) : null,
           room.Criticality ? h("span.tag", { style: { "--dot": critC } }, h("i"), `${t("rx_crit")} · ${tv(room.Criticality)}`) : null,
@@ -231,7 +234,7 @@ export function equipment(ctx) {
   const list = E.filter((e) => (!f.reg || f.reg === M.ALL || e.Register === f.reg) && (!f.cat || f.cat === M.ALL || e.Category === f.cat) && (!f.cal || f.cal === M.ALL || e.calStatus === f.cal));
 
   return h("div.view",
-    viewHeader(t("eq_title"), t("eq_sub")),
+    viewHeader(t("eq_title"), t("eq_sub"), ctx.canEdit ? h("button.btn.primary", { type: "button", onclick: () => ctx.add("equip") }, icon("plus", 16), t("add_asset")) : null),
     noDates ? h("div.banner.warn", icon("alert", 18), t("eq_nodates")) : null,
     h("div.kpi-grid",
       kpi({ label: t("eq_k_all"), value: fmtNum(E.length), accent: "var(--c1)" }),

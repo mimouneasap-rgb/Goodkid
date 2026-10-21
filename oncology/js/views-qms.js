@@ -32,7 +32,7 @@ export function fmea(ctx) {
   const assessName = new Map(m.fmea.map((f) => [f["Assessment ref"], f.Assessment]));
 
   return h("div.view",
-    viewHeader(t("fm_title"), t("fm_sub"), select(t("fm_assess"), [[M.ALL, t("filter_all")], ...refs.map((r) => [r, `${r} · ${assessName.get(r) ?? ""}`])], assess, (v) => ctx.set("fmAssess", v))),
+    viewHeader(t("fm_title"), t("fm_sub"), ctx.canEdit ? h("button.btn.primary", { type: "button", onclick: () => ctx.add("fmea") }, icon("plus", 16), t("add_risk")) : null, select(t("fm_assess"), [[M.ALL, t("filter_all")], ...refs.map((r) => [r, `${r} · ${assessName.get(r) ?? ""}`])], assess, (v) => ctx.set("fmAssess", v))),
     h("div.kpi-grid",
       kpi({ label: t("fm_k_total"), value: fmtNum(F.length), accent: "var(--c1)" }),
       kpi({ label: t("fm_k_ih"), value: fmtNum(cnt("level", "High")), accent: "var(--critical)", onclick: () => ctx.open.risks(t("fm_k_ih"), F.filter((f) => f.level === "High")) }),
@@ -164,14 +164,17 @@ export function improvements(ctx) {
   const ben = [...M.countBy(I, "Benefit")].sort((a, b) => b[1] - a[1]).map(([b, n]) => ({ label: b, value: n, color: "var(--c7)" }));
   const own = [...M.countBy(I.filter((i) => i.Stage !== "Done"), "Owner")].sort((a, b) => b[1] - a[1]).map(([b, n]) => ({ label: b, value: n }));
   return h("div.view",
-    viewHeader(t("im_title"), t("im_sub")),
+    viewHeader(t("im_title"), t("im_sub"), ctx.canEdit ? h("button.btn.primary", { type: "button", onclick: () => ctx.add("impr") }, icon("plus", 16), t("add_improvement")) : null),
     h("div.banner.info", icon("improve", 18), t("im_note")),
     h("div.kanban", M.IMPR_STAGES.map((s) => {
       const items = I.filter((i) => i.Stage === s);
       return h("section.lane", { "data-stage": s },
         h("header", h("span", t(colKey[s])), h("b", items.length)),
-        items.length ? items.map((i) => h("article.kcard",
-          h("div.kcard-top", h("span.mono", i.ID), i.Room ? h("span.tag", i.Room) : null),
+        items.length ? items.map((i) => h("article.kcard", { class: ctx.canEdit ? "editable" : "" },
+          h("div.kcard-top", h("span.mono", i.ID), i.Room ? h("span.tag", i.Room) : null,
+            ctx.canEdit ? h("span.kcard-tools",
+              h("button.icon-btn.mini", { type: "button", title: t("edit"), "aria-label": `${t("edit")} ${i.ID}`, onclick: () => ctx.edit("impr", i.__key, `${i.ID} · ${i.Title ?? ""}`) }, icon("edit", 13)),
+              M.IMPR_STAGES.indexOf(s) < M.IMPR_STAGES.length - 1 ? h("button.icon-btn.mini", { type: "button", title: `→ ${t(colKey[M.IMPR_STAGES[M.IMPR_STAGES.indexOf(s) + 1]])}`, "aria-label": `${i.ID} → ${t(colKey[M.IMPR_STAGES[M.IMPR_STAGES.indexOf(s) + 1]])}`, onclick: () => ctx.update("impr", i.__key, { Stage: M.IMPR_STAGES[M.IMPR_STAGES.indexOf(s) + 1] }) }, icon("arrow", 13)) : null) : null),
           h("p", i.Title),
           h("div.kcard-meta", h("span.tag", { style: { "--dot": "var(--c7)" } }, h("i"), i.Benefit), h("span", i.Owner)),
           i.Comment ? h("small", i.Comment) : null)) : h("div.lane-empty", "—"));
@@ -190,7 +193,7 @@ export function sops(ctx) {
   const sites = [...new Set(S.map((s) => s.Site || "—"))].map((site, i) => ({ key: site, label: site, color: `var(--c${[1, 2, 3, 7][i % 4]})` }));
   const langs = [...M.countBy(S, (s) => s.Language || "Unknown")].map(([l, n]) => ({ label: l, value: n, color: l === "Unknown" ? "var(--muted-mark)" : "var(--c1)" }));
   return h("div.view",
-    viewHeader(t("sop_title"), t("sop_sub")),
+    viewHeader(t("sop_title"), t("sop_sub"), ctx.canEdit ? h("button.btn.primary", { type: "button", onclick: () => ctx.add("sop") }, icon("plus", 16), t("add_sop")) : null),
     h("div.banner.warn", icon("alert", 18), t("sop_banner")),
     h("div.kpi-grid",
       kpi({ label: t("sop_k_n"), value: fmtNum(S.length), accent: "var(--c1)" }),
@@ -245,7 +248,9 @@ export function records(ctx) {
   const types = [[M.ALL, t("filter_all")], ...M.TYPES.map((x) => [x, tv(x)])];
   const counts = Object.fromEntries(M.TYPES.map((ty) => [ty, m.records.filter((r) => r.type === ty).length]));
   return h("div.view",
-    viewHeader(t("qr_title"), t("qr_sub")),
+    viewHeader(t("qr_title"), t("qr_sub"), ctx.canEdit ? h("div.add-group",
+      h("span", t("new_record")),
+      [["cc", "Change Control"], ["capa", "CAPA"], ["qe", "Deviation"]].map(([k, ty]) => h("button.btn", { type: "button", style: { "--dot": TYPE_COLOR[ty] }, onclick: () => ctx.add(k) }, h("i.dot"), tv(ty)))) : null),
     h("div.type-switch", types.map(([v, l]) => h("button", { type: "button", class: (f.type ?? M.ALL) === v ? "on" : "", style: { "--dot": TYPE_COLOR[v] ?? "var(--ink)" }, onclick: () => setF("type", v) },
       h("i"), l, h("b", fmtNum(v === M.ALL ? m.records.length : counts[v]))))),
     card(null, dataTable(recordCols(["ref", "type", "status", "cls", "dept", "opened", "due", "late", "owner", "room", "title"]), list, {

@@ -1,17 +1,21 @@
 // App shell: routing, persistent state, drawers, search palette, tooltip, theme,
-// language and data import. No sign-in: everything lives in this browser.
+// language, data import and in-app editing. No sign-in: data lives in the
+// artifact's shared workspace when hosted on claude.ai, otherwise in this browser.
 import SCHEMA from "./schema.js";
 import * as M from "./model.js";
+import { openStore, applyEdits } from "./store.js";
+import { rowForm, changeLine, tableLabel, SPECS } from "./editing.js";
 import { initI18n, setLang, getLang, t, tv } from "./i18n.js";
 import { h, pill, typeTag, fmtDate, fmtNum, fmtPct, defList, dataTable } from "./ui.js";
 import { icon } from "./icons.js";
 import * as O from "./views-overview.js";
 import * as S from "./views-site.js";
 import * as Q from "./views-qms.js";
+import { dataTables } from "./views-data.js";
 
-// ---------- storage ----------
+// ---------- per-viewer preferences (theme, language, filters) ----------
 const KEY = "okqa.";
-const store = {
+const prefs = {
   get(k, d) { try { const v = localStorage.getItem(KEY + k); return v == null ? d : JSON.parse(v); } catch { return d; } },
   set(k, v) { try { localStorage.setItem(KEY + k, JSON.stringify(v)); return true; } catch { return false; } },
   del(k) { try { localStorage.removeItem(KEY + k); } catch { /* ignore */ } },
@@ -20,18 +24,50 @@ const store = {
 // The workbook data holds confidential records, so it is never committed: a local
 // js/workbook-data.js is used when present, otherwise people import the workbook here.
 const bundled = await import("./workbook-data.js").then((mod) => mod.default).catch(() => null);
-let data = store.get("data", null) ?? bundled;
-const state = store.get("state", {});
-initI18n(SCHEMA.tr, store.get("lang", "EN"));
+const state = prefs.get("state", {});
+initI18n(SCHEMA.tr, prefs.get("lang", "EN"));
 setLang(getLang());
-let model = build();
+
+let ws = null;          // workspace store (shared database or this browser)
+let wsState = { base: null, edits: new Map(), review: null, ready: false };
+let data = null;        // imported workbook with in-app edits applied
+let model = null;
+let me = null, userCap = null, isOwner = false;
+const names = new Map(); // user id → display name, resolved on demand
 
 function build() {
   if (!data) return null;
-  const built = M.buildModel(data, { links: store.get("links", []), approvals: store.get("approvals", []) });
+  const built = M.buildModel(data);
   document.getElementById("assets-dl")?.remove();
   document.body.append(h("datalist#assets-dl", built.equip.map((e) => h("option", { value: e["Asset no"] }))));
   return built;
+}
+
+/** Display name for a stored user id ("you" for this viewer, "this device" in browser mode). */
+function who(id) {
+  if (!id) return ws?.mode === "local" ? t("this_device") : t("someone");
+  if (id === me) return t("you");
+  if (names.has(id)) return names.get(id) || t("someone");
+  names.set(id, "");
+  userCap?.profiles?.([id]).then((ps) => { names.set(id, ps[id]?.name || ""); if (ps[id]?.name) ctx.rerender(); });
+  return t("someone");
+}
+
+let renderQueued = false;
+function onWorkspace(s) {
+  wsState = s;
+  data = s.base ? applyEdits(s.base, s.edits) : null;
+  model = build();
+  if (renderQueued) return;
+  renderQueued = true;
+  queueMicrotask(() => { renderQueued = false; refresh(); });
+}
+/** Re-render after a data change without stealing focus from someone typing. */
+function refresh() {
+  const a = document.activeElement;
+  if (a && main.contains(a) && /INPUT|TEXTAREA|SELECT/.test(a.tagName)) { main.addEventListener("focusout", () => setTimeout(refresh, 0), { once: true }); return; }
+  render({ keepScroll: true });
+  refreshDrawer();
 }
 const emptyData = () => ({ meta: {}, tr: SCHEMA.tr, mapGrid: [], ...Object.fromEntries(Object.entries(SCHEMA.cols).map(([k, cols]) => [k, { cols, rows: [] }])) });
 
@@ -40,12 +76,12 @@ const NAV = [
   ["nav_overview", [["home", "home", "home"], ["dashboard", "dashboard", "dash_title"], ["review", "review", "mr_title"], ["spc", "spc", "spc_title"]]],
   ["nav_ops", [["map", "map", "map_title"], ["rooms", "room", "rx_title"], ["equipment", "equipment", "eq_title"], ["products", "product", "pv_title"]]],
   ["nav_qms", [["records", "records", "qr_title"], ["capa", "capa", "cd_title"], ["cc", "cc", "cc_title"], ["fmea", "fmea", "fm_title"], ["improvements", "improve", "im_title"], ["sops", "sop", "sop_title"]]],
-  ["nav_gov", [["quality", "quality", "dq_title"]]],
+  ["nav_gov", [["data", "edit", "dt_title"], ["quality", "quality", "dq_title"]]],
 ];
 const VIEWS = {
   home: O.home, dashboard: O.dashboard, review: O.review, spc: O.spc,
   map: S.map, rooms: S.rooms, equipment: S.equipment, products: S.products,
-  records: Q.records, capa: Q.capa, cc: Q.cc, fmea: Q.fmea, improvements: Q.improvements, sops: Q.sops, quality: Q.quality,
+  records: Q.records, capa: Q.capa, cc: Q.cc, fmea: Q.fmea, improvements: Q.improvements, sops: Q.sops, quality: Q.quality, data: dataTables,
 };
 
 function parseHash() {
@@ -64,12 +100,29 @@ const ctx = {
   state,
   params: {},
   go,
-  set(k, v) { state[k] = v; store.set("state", state); render({ keepScroll: true }); },
+  set(k, v) { state[k] = v; prefs.set("state", state); render({ keepScroll: true }); },
   rerender: () => render({ keepScroll: true }),
+  // management-review details and decisions, shared through the workspace
   local: {
-    get: (k) => store.get("u." + k, null),
-    set: (k, v) => store.set("u." + k, v),
+    get: (k) => wsState.review?.[k] ?? null,
+    set: (k, v) => ws.saveReview({ ...(wsState.review ?? {}), [k]: v }).catch((e) => toast(e.message, "warn")),
   },
+  get canEdit() { return Boolean(ws?.canWrite); },
+  get data() { return data; },
+  /** Change some fields of one row (e.g. move an improvement to the next stage). */
+  update: async (table, key, patch) => {
+    const tbl = data[table];
+    const i = tbl.keys.indexOf(key);
+    if (i < 0) return;
+    const row = [...tbl.rows[i]];
+    for (const [c, v] of Object.entries(patch)) row[tbl.cols.indexOf(c)] = v;
+    try { await ws.saveRow(table, key, row, me, tbl.importId); toast(t("saved_ok")); } catch (e) { toast(e.message, "warn"); }
+  },
+  get edits() { return wsState.edits; },
+  get workspace() { return { mode: ws?.mode, info: wsState }; },
+  who: (id) => who(id),
+  edit: (table, key, title) => openEditor(table, key, title),
+  add: (table, title) => openEditor(table, null, title),
   open: {
     record: (ref) => openRecord(ref),
     risk: (id) => openRisk(id),
@@ -99,25 +152,29 @@ function renderNav(route) {
     h("span.nav-title", t(group)),
     items.map(([r, ic, key]) => h("a.nav-link", { href: `#/${r}`, class: r === route ? "active" : "", "aria-current": r === route ? "page" : null, onclick: () => document.body.classList.remove("nav-open") }, icon(ic, 18), h("span", t(key)))))));
   if (!model) { document.getElementById("side-foot").replaceChildren(h("span.side-k", t("data_source")), h("b", "—")); return; }
-  const src = store.get("data", null) ? `${t("imported")} · ${fmtDate(M.toDay(data.meta?.importedAt))}` : t("bundled");
+  const imported = data.meta?.importedAt ? `${t("imported")} ${fmtDate(M.toDay(String(data.meta.importedAt).slice(0, 10)))}` : t("bundled");
+  const changes = wsState.edits.size;
   document.getElementById("side-foot").replaceChildren(
-    h("span.side-k", t("data_source")), h("b", src),
-    h("span.side-k", t("last_refreshed")), h("b", fmtDate(model.asof)));
+    h("span.side-k", t("data_source")),
+    h("b.ws-mode", h(`i.${ws.mode}`), ws.mode === "shared" ? t("ws_shared") : t("ws_local")),
+    h("small.side-sub", imported),
+    h("span.side-k", t("last_refreshed")), h("b", fmtDate(model.asof)),
+    ...(changes ? [h("a.side-link", { href: "#/data" }, `${fmtNum(changes)} ${t("changes_in_app")}`)] : []));
 }
 
 function renderTopbar() {
-  const theme = store.get("theme", "system");
+  const theme = prefs.get("theme", "system");
   topbar.replaceChildren(
     h("button.icon-btn.menu-btn", { type: "button", "aria-label": "Menu", onclick: () => document.body.classList.toggle("nav-open") }, icon("menu", 20)),
     h("button.search-trigger", { type: "button", onclick: openPalette, "aria-label": t("search_short") }, icon("search", 17), h("span", t("search")), h("kbd", "/")),
     h("div.top-actions",
-      h("div.seg.small", { role: "radiogroup", "aria-label": "Language" }, ["EN", "FR"].map((l) => h("button", { type: "button", role: "radio", "aria-checked": String(getLang() === l), class: getLang() === l ? "on" : "", onclick: () => { setLang(l); store.set("lang", l); render({ keepScroll: true }); } }, l))),
-      h("button.icon-btn", { type: "button", title: `${t("theme")}: ${t(theme)}`, "aria-label": t("theme"), onclick: () => { const next = { system: "light", light: "dark", dark: "system" }[theme]; store.set("theme", next); applyTheme(); renderTopbar(); } }, icon(theme === "dark" ? "moon" : theme === "light" ? "sun" : "globe", 18)),
+      h("div.seg.small", { role: "radiogroup", "aria-label": "Language" }, ["EN", "FR"].map((l) => h("button", { type: "button", role: "radio", "aria-checked": String(getLang() === l), class: getLang() === l ? "on" : "", onclick: () => { setLang(l); prefs.set("lang", l); render({ keepScroll: true }); } }, l))),
+      h("button.icon-btn", { type: "button", title: `${t("theme")}: ${t(theme)}`, "aria-label": t("theme"), onclick: () => { const next = { system: "light", light: "dark", dark: "system" }[theme]; prefs.set("theme", next); applyTheme(); renderTopbar(); } }, icon(theme === "dark" ? "moon" : theme === "light" ? "sun" : "globe", 18)),
       h("button.btn.primary.compact", { type: "button", onclick: openImport }, icon("upload", 16), h("span.hide-sm", t("update_data")))));
 }
 
 function applyTheme() {
-  const th = store.get("theme", "system");
+  const th = prefs.get("theme", "system");
   if (th === "system") document.documentElement.removeAttribute("data-theme");
   else document.documentElement.dataset.theme = th;
 }
@@ -129,7 +186,11 @@ function render({ keepScroll } = {}) {
   renderNav(route);
   renderTopbar();
   document.body.classList.toggle("no-data", !model);
-  if (!model) { main.replaceChildren(welcome()); document.title = "El Kendi Oncology QA"; return; }
+  if (!model) {
+    main.replaceChildren(!wsState.ready || wsState.pending ? h("div.view.loading", h("span.spinner"), t("ws_loading")) : welcome());
+    document.title = "El Kendi Oncology QA";
+    return;
+  }
   let view;
   try { view = VIEWS[route](ctx); } catch (e) { console.error(e); view = h("div.view", h("div.banner.warn", icon("alert", 18), String(e.message ?? e))); }
   view.append(h("footer.page-foot", `${t("print_footer")}QA-WB-ONC-001 · ${t("last_refreshed")} ${fmtDate(model.asof)}`));
@@ -145,6 +206,13 @@ const drawer = h("aside.drawer", { role: "dialog", "aria-modal": "true", "aria-h
 const drawerScrim = h("div.drawer-scrim", { onclick: () => closeDrawer() });
 document.body.append(drawerScrim, drawer);
 const stack = [];
+function refreshDrawer() {
+  if (!stack.length || stack.at(-1).editor) return;
+  const body = drawer.querySelector(".drawer-body");
+  const y = body?.scrollTop ?? 0;
+  showDrawer(stack.at(-1), false);
+  drawer.querySelector(".drawer-body").scrollTop = y;
+}
 function showDrawer(content, push = true) {
   if (push) stack.push(content);
   drawer.replaceChildren(
@@ -162,6 +230,50 @@ function closeDrawer() {
   document.body.classList.remove("drawer-open");
 }
 const linkBtn = (label, fn) => h("button.link", { type: "button", onclick: fn }, label);
+const editBtn = (table, key, title) => (ws?.canWrite && key ? h("button.btn.compact", { type: "button", onclick: () => openEditor(table, key, title) }, icon("edit", 15), t("edit")) : null);
+
+/** Lists of existing values offered as suggestions in the editor. */
+function suggestionLists() {
+  const vals = (k) => model.records.map((r) => r[k]).filter(Boolean);
+  return {
+    users: vals("owner"), depts: [...vals("department").filter((d) => !d.startsWith("(")), ...model.records.map((r) => r.raw["Responsible Department"]).filter((x) => x && x !== "-----")],
+    locations: model.records.map((r) => r.raw.Location).filter((x) => x && x !== "-----"),
+    scopes: vals("scope"), rootcauses: vals("rootCause"), stages: vals("stage"),
+  };
+}
+
+/** Editor for one row of a workbook table (key null = new row). */
+function openEditor(table, key, title) {
+  const tbl = data[table];
+  if (!tbl) return;
+  const index = key ? tbl.keys.indexOf(key) : -1;
+  const row = index >= 0 ? tbl.rows[index] : null;
+  const content = () => [
+    h("div.d-head",
+      h("span.d-ref", `${tableLabel(table)}${key ? "" : " · " + t("new_row")}`),
+      h("h2", key ? (title || t("edit")) : t("add_row_title", tableLabel(table).toLowerCase()))),
+    ws.mode === "shared" ? h("p.fine", t("edit_shared_note")) : h("p.fine", t("edit_local_note")),
+    rowForm({
+      table, cols: tbl.cols, row, index, allRows: tbl.rows, lists: suggestionLists(),
+      rooms: model.rooms.map((r) => [r.Code, r.Name]),
+      onSave: async (values) => {
+        const k = key ?? `n-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+        await ws.saveRow(table, k, values, me, tbl.importId);
+        toast(t("saved_ok"));
+        stack.pop();
+        if (stack.length) showDrawer(stack.at(-1), false); else closeDrawer();
+      },
+      onDelete: key ? async () => {
+        await ws.saveRow(table, key, null, me, tbl.importId);
+        toast(t("deleted_ok"));
+        closeDrawer();
+      } : null,
+      onCancel: () => { stack.pop(); if (stack.length) showDrawer(stack.at(-1), false); else closeDrawer(); },
+    }),
+  ];
+  content.editor = true;
+  showDrawer(content);
+}
 
 function openRecord(ref) {
   showDrawer(() => {
@@ -178,8 +290,9 @@ function openRecord(ref) {
     return [
       h("div.d-head",
         h("div.d-tags", typeTag(r.type), pill(r.status), r.overdue && r.status === "Open" ? pill("Overdue") : null, r.classification !== "(Not classified)" ? h("span.tag", tv(r.classification)) : null),
-        h("span.d-ref", r.ref),
-        h("h2", r.title || "—")),
+        h("div.d-refrow", h("span.d-ref", r.ref), editBtn(r.srcTable, r.srcKey, `${r.ref} · ${r.title}`)),
+        h("h2", r.title || "—"),
+        changeLine(r.edit, who)),
       r.opened != null ? h("div.d-timeline",
         h("div.tl-bar",
           h("i.tl-fill", { class: r.overdue ? "late" : r.status === "Completed" ? "done" : "", style: { width: at(end) } }),
@@ -222,17 +335,17 @@ function linkForm(r) {
       onsubmit: (e) => {
         e.preventDefault();
         const fd = new FormData(e.target);
-        const links = store.get("links", []).filter((l) => l["Ref ID"] !== r.ref);
-        links.push({ "Ref ID": r.ref, "Room code": fd.get("room") || "", "Asset no": fd.get("asset") || "", "Confirmed by": fd.get("by") || "", Date: new Date().toISOString().slice(0, 10), Comment: "" });
-        store.set("links", links);
-        model = build(); toast(t("saved")); render({ keepScroll: true }); stack.pop(); openRecord(r.ref);
+        const tbl = data.links;
+        const at = tbl.rows.findIndex((x) => x[tbl.cols.indexOf("Ref ID")] === r.ref);
+        const key = at >= 0 ? tbl.keys[at] : `n-${Date.now().toString(36)}`;
+        const row = { "Ref ID": r.ref, "Room code": fd.get("room") || null, "Asset no": fd.get("asset") || null, "Confirmed by": fd.get("by") || null, Date: new Date().toISOString().slice(0, 10), Comment: null };
+        ws.saveRow("links", key, tbl.cols.map((c) => row[c] ?? null), me, tbl.importId).then(() => toast(t("saved_ok")), (err) => toast(err.message, "warn"));
       },
     },
     h("label.field", h("span", t("col_room")), h("select", { name: "room" }, [["", "—"], ...model.rooms.map((x) => [x.Code, `${x.Code} · ${x.Name}`])].map(([v, l]) => h("option", { value: v, selected: v === r.roomCode ? true : null }, l)))),
     h("label.field", h("span", t("col_asset")), h("input", { name: "asset", value: r.assetNo, list: "assets-dl" })),
     h("label.field", h("span", t("your_name")), h("input", { name: "by" })),
-    h("button.btn.primary", { type: "submit" }, t("save")),
-    h("p.fine", t("local_note"))));
+    h("button.btn.primary", { type: "submit", disabled: ws.canWrite ? null : true }, t("save"))));
 }
 function approvalForm(r) {
   const log = model.approvals.filter((a) => a.Record === r.ref);
@@ -243,17 +356,15 @@ function approvalForm(r) {
       onsubmit: (e) => {
         e.preventDefault();
         const fd = new FormData(e.target);
-        const list = store.get("approvals", []);
-        list.push({ "Date/time": new Date().toISOString().slice(0, 16).replace("T", " "), Record: r.ref, Action: fd.get("action"), User: fd.get("user"), Role: fd.get("role"), Comment: fd.get("comment") });
-        store.set("approvals", list);
-        model = build(); toast(t("saved")); stack.pop(); openRecord(r.ref);
+        const row = { "Date/time": new Date().toISOString().slice(0, 16).replace("T", " "), Record: r.ref, Action: fd.get("action"), User: fd.get("user"), Role: fd.get("role"), Comment: fd.get("comment") || null };
+        ws.saveRow("appr", `n-${Date.now().toString(36)}`, data.appr.cols.map((c) => row[c] ?? null), me, data.appr.importId).then(() => toast(t("saved_ok")), (err) => toast(err.message, "warn"));
       },
     },
     h("label.field", h("span", t("approval")), h("select", { name: "action" }, ["Submitted", "Approved", "Rejected"].map((a) => h("option", a)))),
     h("label.field", h("span", t("your_name")), h("input", { name: "user", required: true })),
     h("label.field", h("span", t("role")), h("input", { name: "role" })),
     h("label.field", h("span", t("comment")), h("input", { name: "comment" })),
-    h("button.btn.primary", { type: "submit" }, t("save"))));
+    h("button.btn.primary", { type: "submit", disabled: ws.canWrite ? null : true }, t("save"))));
 }
 
 function openRisk(id) {
@@ -265,7 +376,7 @@ function openRisk(id) {
       h("div.sod", [["S", S_], ["O", O_], ["D", D_]].map(([k, v]) => h("span", h("i", k), h("b", v ?? "—")))),
       h("div.score-r", h("b", fmtNum(rpn)), pill(level, "level")));
     return [
-      h("div.d-head", h("div.d-tags", h("span.tag", f["Assessment ref"]), f["Room code"] ? h("span.tag", f["Room code"]) : h("span.tag", t("site_wide"))), h("span.d-ref", f["Risk ID"]), h("h2", f["Failure mode"])),
+      h("div.d-head", h("div.d-tags", h("span.tag", f["Assessment ref"]), f["Room code"] ? h("span.tag", f["Room code"]) : h("span.tag", t("site_wide"))), h("div.d-refrow", h("span.d-ref", f["Risk ID"]), editBtn("fmea", f.__key, `${f["Risk ID"]} · ${f["Failure mode"] ?? ""}`)), h("h2", f["Failure mode"]), changeLine(f.__edit, who)),
       h("div.scores", score(t("initial"), f.S, f.O, f.D, f.rpn, f.level), h("span.score-arrow", icon("arrow", 20)), score(t("residual"), f.rS, f.rO, f.rD, f.rrpn, f.rlevel)),
       f.reduction != null ? h("p.reduction", `${t("col_rpn")} ↓ `, h("b", fmtPct(f.reduction))) : null,
       defList([
@@ -286,7 +397,7 @@ function openAsset(no) {
     if (!e) return h("p", t("none_found"));
     const recs = model.records.filter((r) => r.assetNo === no);
     return [
-      h("div.d-head", h("div.d-tags", h("span.tag", e.Register), pill(e.calStatus, "cal"), e["GMP critical"] === "Y" ? h("span.tag", "GMP") : null), h("span.d-ref", e["Asset no"]), h("h2", e.Description)),
+      h("div.d-head", h("div.d-tags", h("span.tag", e.Register), pill(e.calStatus, "cal"), e["GMP critical"] === "Y" ? h("span.tag", "GMP") : null), h("div.d-refrow", h("span.d-ref", e["Asset no"]), editBtn("equip", e.__key, `${e["Asset no"]} · ${e.Description ?? ""}`)), h("h2", e.Description), changeLine(e.__edit, who)),
       defList([
         [t("col_cat"), e.Category], [t("model"), e.Model], [t("serial"), e.Serial], [t("manufacturer"), e.Manufacturer],
         [t("col_room"), e["Room code"] ? linkBtn(`${e["Room code"]} · ${model.roomByCode.get(e["Room code"])?.Name ?? ""}`, () => { closeDrawer(); go("rooms", { room: e["Room code"] }); }) : null],
@@ -305,7 +416,7 @@ function openSop(code) {
     const s = model.sops.find((x) => x.Code === code);
     if (!s) return h("p", t("none_found"));
     return [
-      h("div.d-head", h("div.d-tags", h("span.tag", s.Type), h("span.tag", tv(s.reviewStatus))), h("span.d-ref", s.Code), h("h2", s.Title)),
+      h("div.d-head", h("div.d-tags", h("span.tag", s.Type), h("span.tag", tv(s.reviewStatus))), h("div.d-refrow", h("span.d-ref", s.Code), editBtn("sop", s.__key, `${s.Code} · ${s.Title ?? ""}`)), h("h2", s.Title), changeLine(s.__edit, who)),
       defList([[t("col_dept"), s.Department], ["Site", s.Site], ["Language", s.Language], [t("col_status"), s.Status], [t("col_rev"), s.Revision],
         ["Effective date", fmtDate(M.toDay(s["Effective date"]))], [t("col_nextrev"), fmtDate(s.next)], [t("col_owner"), s.Owner],
         ["Linked rooms", s["Linked rooms"]], ["Linked equipment", s["Linked equipment"]], [t("source"), s.Source],
@@ -433,17 +544,16 @@ function dropZone(onDone) {
       const books = [];
       for (const file of files) books.push({ file, wb: XLSX.read(await file.arrayBuffer(), { cellDates: true, bookFiles: true }) });
       books.sort((a, b) => isMaster(b.wb) - isMaster(a.wb));
-      const next = structuredClone(data ?? emptyData());
-      const done = [];
-      for (const { file, wb } of books) done.push(`${file.name}: ${await importWorkbook(XLSX, wb, next, file)}`);
+      // imports replace the imported workbook (not the edited view of it); edits to replaced lists are dropped
+      const next = structuredClone(wsState.base ?? emptyData());
+      delete next.tr;
+      const done = [], replaced = [];
+      for (const { file, wb } of books) done.push(`${file.name}: ${await importWorkbook(XLSX, wb, next, file, replaced)}`);
       if (!next.rooms.rows.length) throw new Error(t("need_master"));
-      next.meta = { ...next.meta, importedAt: new Date().toISOString().slice(0, 10) };
-      data = next;
-      model = build();
-      const saved = store.set("data", data);
-      status.replaceChildren(h("div.ok-line", icon("check", 16), t("import_done")), h("ul", done.map((d) => h("li", d))), saved ? null : h("p.warn-text", t("not_saved")));
+      next.meta = { ...next.meta, importedAt: new Date().toISOString() };
+      await ws.importBase(next, replaced, (n, total) => status.replaceChildren(h("span.spinner"), ` ${t("ws_saving")} ${n}/${total}`));
+      status.replaceChildren(h("div.ok-line", icon("check", 16), t("import_done")), h("ul", done.map((d) => h("li", d))));
       toast(t("import_done"));
-      render({ keepScroll: true });
       onDone?.();
     } catch (err) {
       console.error(err);
@@ -461,21 +571,37 @@ function welcome() {
         h("span.eyebrow", "El Kendi · Oncology · ICH Q10"),
         h("h1", t("home_title")),
         h("p", t("home_sub")),
-        h("p.welcome-lead", t("welcome_lead"))),
-      h("div.welcome-drop", dropZone(), h("p.welcome-privacy", icon("quality", 16), t("welcome_privacy")))),
+        h("p.welcome-lead", ws.canWrite ? t("welcome_lead") : t("welcome_readonly"))),
+      ws.canWrite ? h("div.welcome-drop",
+        dropZone(),
+        ws.localData() ? h("button.btn.glass", { type: "button", onclick: (e) => useDeviceData(e.currentTarget) }, icon("upload", 16), t("use_device_data")) : null,
+        h("p.welcome-privacy", icon("quality", 16), ws.mode === "shared" ? t("welcome_privacy_shared") : t("welcome_privacy"))) : null),
     h("div.welcome-grid", [["dashboard", "dash_title", "m_dash"], ["review", "mr_title", "m_mr"], ["map", "map_title", "m_map"], ["fmea", "fm_title", "m_fm"], ["capa", "cd_title", "m_cd"], ["spc", "spc_title", "m_spc"]]
       .map(([ic, title, desc], i) => h("div.module.static", { style: { "--i": i } }, h("span.module-ico", icon(ic === "capa" ? "capa" : ic, 22)), h("span.module-t", t(title)), h("span.module-d", t(desc))))));
+}
+
+/** Move a workbook loaded by the earlier, device-only version into the shared workspace. */
+async function useDeviceData(btn) {
+  btn.disabled = true;
+  try {
+    const local = ws.localData();
+    const next = { ...local, meta: { ...local.meta, importedAt: new Date().toISOString() } };
+    delete next.tr;
+    await ws.importBase(next, Object.keys(SCHEMA.cols), (n, total) => { btn.textContent = `${t("ws_saving")} ${n}/${total}`; });
+    toast(t("import_done"));
+  } catch (err) { toast(err.message, "warn"); btn.disabled = false; }
 }
 
 const importDlg = h("dialog.modal");
 document.body.append(importDlg);
 function openImport() {
+  if (!ws) return;
   importDlg.replaceChildren(
     h("div.modal-head", h("h2", t("import_title")), h("button.icon-btn", { type: "button", "aria-label": t("close"), onclick: () => importDlg.close() }, icon("close", 18))),
-    h("p", t("import_body")), ...dropZone(() => setTimeout(() => importDlg.close(), 900)),
-    h("div.modal-foot",
-      store.get("data", null) ? h("button.btn.ghost", { type: "button", onclick: () => { store.del("data"); data = bundled; model = build(); render(); importDlg.close(); } }, bundled ? t("import_reset") : t("clear_data")) : h("span"),
-      window.OKQA_EMBED ? h("span") : h("button.btn.ghost", { type: "button", onclick: exportEntries }, t("export_json"))));
+    h("p", t("import_body")),
+    wsState.edits.size ? h("p.banner.info", icon("alert", 16), t("import_replaces_edits", fmtNum(wsState.edits.size))) : null,
+    ...(ws.canWrite ? dropZone(() => setTimeout(() => importDlg.close(), 900)) : [h("p.warn-text", t("welcome_readonly"))]),
+    h("div.modal-foot", clearButton(), h("span")));
   importDlg.onclick = (e) => { if (e.target === importDlg) importDlg.close(); };
   importDlg.showModal();
 }
@@ -523,7 +649,7 @@ function readTable(XLSX, ws, cols, headerRow, keep = () => true) {
 const LISTS = { bands: 1, targets: 1, crit: 1, deptMap: 1, prio: 1, prod: 1 };
 const isMaster = (wb) => wb.SheetNames.includes("Import_CC") && wb.SheetNames.includes("Rooms");
 
-async function importWorkbook(XLSX, wb, next, file) {
+async function importWorkbook(XLSX, wb, next, file, replaced) {
   const names = wb.SheetNames;
   if (isMaster(wb)) {
     let n = 0;
@@ -531,12 +657,12 @@ async function importWorkbook(XLSX, wb, next, file) {
       const ws = wb.Sheets[sheet];
       if (!ws) continue;
       const tbl = readTable(XLSX, ws, SCHEMA.cols[key], 2);
-      if (tbl) { next[key] = tbl; n++; }
+      if (tbl) { next[key] = tbl; n++; replaced.push(key); }
     }
     if (wb.Sheets.Lists) {
       for (const [key, need] of Object.entries(LISTS)) {
         const tbl = readTable(XLSX, wb.Sheets.Lists, SCHEMA.cols[key], 0, (r) => r[need] != null && (key === "prod" || key === "deptMap" || key === "targets" || typeof r[need] === "number"));
-        if (tbl) { next[key] = tbl; n++; }
+        if (tbl) { next[key] = tbl; n++; replaced.push(key); }
       }
     }
     next.meta = { ...next.meta, ...readMeta(XLSX, wb) };
@@ -556,6 +682,7 @@ async function importWorkbook(XLSX, wb, next, file) {
     const tbl = readTable(XLSX, ws, SCHEMA.cols[key], null);
     if (!tbl) continue;
     next[key] = tbl;
+    replaced.push(key);
     next.meta.asof = new Date(file.lastModified).toISOString().slice(0, 10);
     return `${tv({ cc: "Change Control", capa: "CAPA", qe: "Deviation" }[key])} · ${tbl.rows.length} ${t("rows")}`;
   }
@@ -608,11 +735,23 @@ async function readDrawing(wb) {
   });
 }
 
-function exportEntries() {
-  const payload = { exported: new Date().toISOString(), links: store.get("links", []), approvals: store.get("approvals", []), meeting: store.get("u.meeting", null), decisions: store.get("u.decisions", []) };
-  const a = h("a", { href: URL.createObjectURL(new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" })), download: "oncology-qa-entries.json" });
-  document.body.append(a); a.click(); a.remove();
+/** Remove all data (two clicks). In the shared workspace only the owner sees it. */
+function clearButton() {
+  if (!wsState.base || !ws.canWrite || (ws.mode === "shared" && !isOwner)) return h("span");
+  let armed = false;
+  const btn = h("button.btn.ghost.danger-text", {
+    type: "button",
+    onclick: async () => {
+      if (!armed) { armed = true; btn.textContent = t("clear_confirm"); setTimeout(() => { armed = false; btn.textContent = t("clear_data"); }, 4000); return; }
+      btn.disabled = true;
+      try { await ws.clear(); importDlg.close(); toast(t("cleared")); } catch (err) { toast(err.message, "warn"); btn.disabled = false; }
+    },
+  }, ws.mode === "shared" ? t("clear_data") : t("clear_data"));
+  return btn;
 }
 
 applyTheme();
-render();
+render(); // loading state until the workspace answers
+({ store: ws, user: userCap, me } = await openStore(bundled));
+isOwner = ws.mode === "shared" ? Boolean(await userCap?.isOwner?.()) : true;
+ws.onChange(onWorkspace);
