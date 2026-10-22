@@ -1,7 +1,7 @@
 {
   "name": "goodkid-quality-risk",
   "version": "1.0.0",
-  "description": "Quality risk management app: FMEA-style risk register, risk matrix and dashboard.",
+  "description": "Quality apps: FMEA-style risk register (root) and the APQR Command Center (apqr/).",
   "type": "module",
   "private": true,
   "scripts": {

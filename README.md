@@ -1,3 +1,14 @@
+# Goodkid quality apps
+
+This repository holds two browser apps. Neither needs a sign-in or a build step.
+
+| App | Path | What it is for |
+| --- | --- | --- |
+| **APQR Command Center** | [`apqr/`](apqr/README.md) | Running the Annual Product Quality Review programme: plan, Scigeniq workflows, tasks, workload, statistics and SOP guidance |
+| **Quality Risk Manager** | `/` (this page) | FMEA-style quality risk register |
+
+Run `npm start`, then open http://localhost:8080/ for the risk manager or http://localhost:8080/apqr/ for the APQR Command Center.
+
 # Quality Risk Manager
 
 A lightweight quality risk management (QRM) app for identifying, scoring,
@@ -48,7 +59,7 @@ Requires Node.js 18 or later. There are no dependencies to install.
 
 ```bash
 npm start          # serves the app at http://localhost:8080 (set PORT to change)
-npm test           # runs the unit tests for the scoring logic
+npm test           # runs the unit tests for both apps
 ```
 
 ## Project layout

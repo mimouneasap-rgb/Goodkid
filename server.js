@@ -19,7 +19,7 @@ const types = {
 
 createServer(async (req, res) => {
   const urlPath = decodeURIComponent(new URL(req.url, "http://x").pathname);
-  const filePath = normalize(join(root, urlPath === "/" ? "index.html" : urlPath));
+  const filePath = normalize(join(root, urlPath.endsWith("/") ? `${urlPath}index.html` : urlPath));
   if (!filePath.startsWith(root.endsWith(sep) ? root : root + sep)) {
     res.writeHead(403).end("Forbidden");
     return;
@@ -31,4 +31,7 @@ createServer(async (req, res) => {
   } catch {
     res.writeHead(404).end("Not found");
   }
-}).listen(port, () => console.log(`Quality Risk Manager running at http://localhost:${port}`));
+}).listen(port, () => {
+  console.log(`Quality Risk Manager running at http://localhost:${port}`);
+  console.log(`APQR Command Center running at http://localhost:${port}/apqr/`);
+});
