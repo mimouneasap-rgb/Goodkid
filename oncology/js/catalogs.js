@@ -57,8 +57,18 @@ export const VOCAB = {
   batchScale: ["Pilote", "Industrial"],
   batchType: ["Validation", "Routine", "Reprocessing"],
   batchStatus: ["In manufacturing", "Manufactured", "Packed", "Released", "Rejected", "On hold", "Stability only"],
-  apqrStatus: ["Planned", "Data collection", "In review", "Approved", "Overdue"],
+  apqrStatus: ["Planned", "Batches selection", "Data collection", "Statistical analysis", "CAPA planning", "Final review", "Approved", "Overdue"],
   fivesStatus: ["Open", "In progress", "Closed"],
+  riskClasses: ["Critical", "High", "Medium", "Low"],
+  fivesFrequencies: ["Weekly", "Bi-weekly", "Monthly", "Quarterly"],
+  priorities: ["Critical", "High", "Medium", "Low"],
+  fivesCategories: ["Sort", "Set", "Shine", "Standardize", "Sustain"],
+  dosageForms: ["Tablets", "Hard Capsule", "Semi Solid", "Liquid/Syrup"],
+  apqrDepartments: ["QA", "QC", "Production", "RA", "Validation", "CM"],
+  apqrStreams: ["APQR Workflow", "QA", "Change Management", "Supplier", "QC", "IPC", "Process", "RA", "Validation"],
+  apqrStages: ["Batches Selection", "Data Collection", "Collecting Data", "Data Review", "CAPA Planning", "Final Review", "Completed", "Closed"],
+  apqrTaskStatus: ["Open", "Overdue", "Completed"],
+  capaDecision: ["Yes", "No", "Not yet decided"],
   units: ["kg", "g", "units", "blisters", "boxes"],
 };
 
@@ -78,7 +88,8 @@ export const METRICS = [
   { id: "em_action", group: "Environmental monitoring", name: "EM excursions above action limits", target: 0, dir: "zero", unit: "n", src: "manual", def: "Number of EM results above action limits" },
   { id: "capa_ontime", group: "CAPA", name: "CAPA completed on time", target: 0.95, dir: "max", unit: "%", src: "auto", def: "CAPAs completed by their due date ÷ CAPAs completed in the period" },
   { id: "capa_eff", group: "CAPA", name: "CAPA effectiveness rate", target: 0.95, dir: "max", unit: "%", src: "manual", def: "CAPAs judged effective ÷ effectiveness checks performed" },
-  { id: "pqr_ontime", group: "Product quality review", name: "PQR completed on time", target: 0.95, dir: "max", unit: "%", src: "auto", def: "APQRs approved by their due date ÷ APQRs due in the period" },
+  { id: "pqr_ontime", group: "Product quality review", name: "PQR completed on time", target: 0.95, dir: "max", unit: "%", src: "auto", def: "APQRs approved by their report due date ÷ APQRs due in the period" },
+  { id: "apqr_tasks_ontime", group: "Product quality review", name: "APQR data-collection tasks on time", target: 0.9, dir: "max", unit: "%", src: "auto", def: "APQR workflow tasks closed by their due date ÷ APQR tasks closed in the period" },
   { id: "oos_release", group: "OOS / OOT", name: "Confirmed OOS rate – bulk & release", target: 0.004, dir: "min", unit: "%", src: "manual", def: "Confirmed OOS ÷ release and bulk tests" },
   { id: "oos_stab", group: "OOS / OOT", name: "Confirmed OOS rate – stability", target: 0.004, dir: "min", unit: "%", src: "manual", def: "Confirmed stability OOS ÷ stability tests" },
   { id: "oos_invalid", group: "OOS / OOT", name: "Unconfirmed / invalidated OOS rate", target: 0.0005, dir: "min", unit: "%", src: "manual", def: "Invalidated OOS ÷ total tests" },
@@ -213,3 +224,48 @@ export const APQR_SECTIONS = [
   ["xi", "Qualification status of relevant equipment and utilities (HVAC, water, compressed air)", "Statut de qualification des équipements et utilités (CTA, eau, air comprimé)"],
   ["xii", "Contractual / technical arrangements", "Accords contractuels / techniques"],
 ];
+
+// ---------- 5S scoring ----------
+// Area-specific checklists score each criterion 0–3; the generic checklist above uses the same scale for new audits.
+export const FIVES_SCALE = [[0, "Non-compliant", "Non conforme"], [1, "Partial", "Partiel"], [2, "Compliant", "Conforme"], [3, "Exceeds", "Au-delà"]];
+export const FIVES_RATINGS = [[0.9, "Excellent"], [0.75, "Good"], [0.6, "Acceptable"], [0, "Needs improvement"]];
+export const fivesRating = (v) => (v == null ? null : FIVES_RATINGS.find(([min]) => v >= min)[1]);
+// Risk class sets the audit frequency (critical areas weekly, high bi-weekly, medium monthly, low quarterly).
+export const RISK_FREQUENCY = { Critical: "Weekly", High: "Bi-weekly", Medium: "Monthly", Low: "Quarterly" };
+export const FREQUENCY_DAYS = { Weekly: 7, "Bi-weekly": 14, Monthly: 30, Quarterly: 91 };
+// Days allowed to close a 5S finding by priority (critical: immediately).
+export const PRIORITY_DAYS = { Critical: 1, High: 7, Medium: 30, Low: 90 };
+/** Checklist category label ("Set", "Set in order", "Seiton"…) → 5S key. */
+export function fivesKey(category) {
+  const c = String(category ?? "").toLowerCase();
+  return /sort|seiri|tri/.test(c) ? "sort" : /set|order|seiton|rang/.test(c) ? "order" : /shine|seiso|nettoy/.test(c) ? "shine" : /standard|seiketsu/.test(c) ? "standard" : /sustain|shitsuke|mainten/.test(c) ? "sustain" : null;
+}
+
+// ---------- APQR programme ----------
+// Phases of an electronic APQR workflow, from the annual plan to the archived report. `stage` matches workflow stage names.
+export const APQR_PHASES = [
+  ["plan", "Annual plan", "Plan annuel", null],
+  ["trigger", "Plan approved – review to trigger", "Plan approuvé – revue à déclencher", null],
+  ["batches", "Batches selection", "Sélection des lots", /batch/i],
+  ["data", "Departmental data collection & review", "Collecte et revue des données", /data|collect/i],
+  ["stats", "Statistical analysis", "Analyse statistique", /statist|analysis/i],
+  ["capa", "CAPA planning", "Planification CAPA", /capa/i],
+  ["final", "Final committee review", "Revue finale du comité", /final|review committee|approval/i],
+  ["closed", "Closed & archived", "Clôturée et archivée", /closed|complete|archiv/i],
+];
+// Data streams of an APQR workflow: owning department and the EU GMP Ch.1.10 sections they feed.
+export const APQR_STREAMS = {
+  "APQR Workflow": ["QA", "Owner workflow", []],
+  QA: ["QA", "Deviations, CAPA, contracts, rejections", ["iv", "ix", "xii"]],
+  "Change Management": ["QA", "Change controls", ["v"]],
+  Supplier: ["QA", "Suppliers and starting materials", ["i"]],
+  QC: ["QC", "Materials, results, OOS/OOT, stability", ["i", "ii", "iii", "vii"]],
+  IPC: ["Production", "In-process controls", ["ii"]],
+  Process: ["Production", "Batches and process parameters", ["ii"]],
+  RA: ["RA", "Variations and post-marketing commitments", ["vi", "x"]],
+  Validation: ["Validation", "Qualification, process and cleaning validation", ["xi"]],
+  Complaints: ["CM", "Returns, complaints and recalls", ["viii"]],
+};
+// Process capability guidance (Cpk / Ppk).
+export const CPK_GUIDE = [[1.33, "Capable", "Capable"], [1, "Monitor", "À surveiller"], [-Infinity, "Not capable – CAPA", "Non capable – CAPA"]];
+

@@ -1,6 +1,6 @@
 // Home, Dashboard, Management review and SPC & trends.
 import { h, card, kpi, viewHeader, select, segmented, dataTable, pill, typeTag, fmtDate, fmtNum, fmtPct, fmtValue, TYPE_COLOR, STATUS_COLOR, defList } from "./ui.js";
-import { hbars, stacks, columns, lineChart, gauge, sparkline, legend } from "./charts.js";
+import { hbars, stacks, columns, lineChart, gauge, sparkline, legend, ring } from "./charts.js";
 import { t, tv } from "./i18n.js";
 import { icon } from "./icons.js";
 import * as M from "./model.js";
@@ -67,7 +67,7 @@ export function home(ctx) {
     ["fives", "sparkle", "fives_title", "m_5s", fivesAvg != null ? fmtPct(fivesAvg) : t("fives_start")],
     ["activities", "calendar", "qaa_title", "m_qaa", `${fmtNum(X.qaact.filter((a) => a.status === "Overdue").length)} ${t("s_overdue").toLowerCase()}`],
     ["lifecycle", "cycle", "lc_title", "m_lc", `${fmtNum(X.batches.length)} ${t("batches_lbl").toLowerCase()}`],
-    ["apqr", "report", "apqr_title", "m_apqr", "EU GMP 1.10"],
+    ["apqr", "report", "apqr_title", "m_apqr", X.apqrProg.products.length ? `${fmtNum(X.apqrProg.products.filter((p) => p.triggered).length)} / ${fmtNum(X.apqrProg.products.filter((p) => p.inPlan).length)} ${t("apqr_k_triggered").toLowerCase()}` : "EU GMP 1.10"],
     ["wip", "layers", "wip_title", "m_wip", `${fmtNum(X.wip.length)} ${t("lots_lbl")}`],
     ["calibration", "thermo", "cal_title", "m_cal", `${fmtNum(X.calplan.filter((c) => c.status === "Overdue").length)} ${t("s_overdue").toLowerCase()}`],
     ["validation", "badge", "val_title", "m_val", `${fmtNum(X.validation.length)}`],
@@ -108,6 +108,7 @@ export function home(ctx) {
         h("div.glance-grid", glance.map(([key, val, route, color, params]) => h("button.glance", { type: "button", style: { "--accent": color }, onclick: () => ctx.go(route, params) },
           h("span.glance-v", val), h("span.glance-l", t(key))))),
         h("div.glance-spark", h("span", `${t("s_opened")} · 12 ${getMonthsWord()}`), sparkline(trendVals, { color: "#8fc1ff", w: 260, hgt: 36 })))),
+    pulse(ctx),
     h("div.section-title", h("h2", t("h_menu")), h("p", t("everything"))),
     h("div.module-grid", modules.map(([route, ic, title, desc, metric], i) => h("button.module", { type: "button", style: { "--i": i }, onclick: () => ctx.go(route) },
       h("span.module-ico", icon(ic, 22)),
@@ -121,6 +122,27 @@ export function home(ctx) {
     card(t("h_gaps"), h("div.notes", (m.meta.assumptions ?? []).filter(([type]) => type !== "Limitation").map(([type, text]) => h("div.note", h(`span.note-tag.${type.split(" ")[0].toLowerCase()}`, type), h("p", text)))), { sub: t("provisional") }),
     card(t("h_guide"), h("ol.guide", ["ag1", "ag2", "ag3", "ag4", "ag5"].filter((g) => !(window.OKQA_EMBED && g === "ag5")).map((g) => h("li", guideText(g))))),
   );
+}
+/** One ring per operational programme, each opening its page. */
+function pulse(ctx) {
+  const { m } = ctx, X = m.x;
+  const share = (xs, f) => (xs.length ? xs.filter(f).length / xs.length : null);
+  const plan = X.apqrProg.products.filter((p) => p.inPlan);
+  const recent5s = X.fives.filter((a) => a.date != null && a.date >= m.now - 84 * 86400000 && a.total != null);
+  const trnDue = X.training.filter((x) => x.planned != null && x.planned <= m.now && x.status !== "Cancelled");
+  const calDue = X.calplan.filter((c) => c.start != null && c.start <= m.now);
+  const capas = m.records.filter((r) => r.type === "CAPA" && r.closedLate != null);
+  const acts = X.qaact;
+  const items = [
+    ["apqr", "apqr_title", share(plan, (p) => p.triggered), "var(--c1)", plan.length ? `${fmtNum(plan.filter((p) => p.triggered).length)}/${fmtNum(plan.length)}` : null],
+    ["fives", "fives_title", recent5s.length ? recent5s.reduce((a, b) => a + b.total, 0) / recent5s.length : null, "var(--c3)", recent5s.length ? `${fmtNum(recent5s.length)} · ${t("fives_audits_12w")}` : null],
+    ["training", "trn_title", share(trnDue, (x) => x.done != null), "var(--c4)", trnDue.length ? `${fmtNum(trnDue.filter((x) => x.done != null).length)}/${fmtNum(trnDue.length)}` : null],
+    ["calibration", "cal_title", share(calDue, (c) => c.done != null), "var(--c7)", calDue.length ? `${fmtNum(calDue.filter((c) => c.done != null).length)}/${fmtNum(calDue.length)}` : null],
+    ["capa", "nav_capa_t", share(capas, (r) => r.closedLate === 0), "var(--c2)", capas.length ? t("on_time") : null],
+    ["activities", "qaa_title", share(acts, (a) => ["In date", "Due ≤30 d", "Continuous"].includes(a.status)), "var(--good)", t("in_date_lbl")],
+  ];
+  return card(t("h_pulse"), h("div.pulse", items.map(([route, key, v, color, sub], i) => h("button.pulse-item", { type: "button", style: { "--i": i }, onclick: () => ctx.go(route) },
+    ring(v ?? 0, { size: 84, color: v == null ? "var(--muted-mark)" : color }), h("b", t(key)), h("small", v == null ? t("no_data") : sub ?? "")))), { sub: t("h_pulse_sub") });
 }
 const getMonthsWord = () => (t("col_month") === "Mois" ? "mois" : "months");
 function guideText(key) {

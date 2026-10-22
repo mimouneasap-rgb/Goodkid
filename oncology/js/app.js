@@ -15,6 +15,8 @@ import { dataTables } from "./views-data.js";
 import * as QV from "./views-quality.js";
 import * as OP from "./views-ops.js";
 import * as PE from "./views-people.js";
+import * as AP from "./views-apqr.js";
+import * as FV from "./views-fives.js";
 import { importFiles, COLS, emptyData } from "./importers.js";
 import { buildDomains } from "./domain.js";
 
@@ -74,10 +76,10 @@ function refresh() {
   render({ keepScroll: true });
   refreshDrawer();
 }
-/** Tables added in later versions start empty in workspaces imported before them. */
+/** Tables added in later versions start empty in workspaces imported before them; columns added at the end of a table appear empty. */
 function withAllTables(base) {
-  const missing = Object.keys(COLS).filter((k) => !base[k]);
-  return missing.length ? { ...base, ...Object.fromEntries(missing.map((k) => [k, { cols: COLS[k], rows: [] }])) } : base;
+  const fix = Object.keys(COLS).filter((k) => !base[k] || (base[k].cols.length < COLS[k].length && base[k].cols.every((c, i) => c === COLS[k][i])));
+  return fix.length ? { ...base, ...Object.fromEntries(fix.map((k) => [k, { ...(base[k] ?? { rows: [] }), cols: COLS[k] }])) } : base;
 }
 
 // ---------- routes ----------
@@ -92,9 +94,9 @@ const NAV = [
 const VIEWS = {
   home: O.home, dashboard: O.dashboard, review: O.review, metrics: PE.metricsView, spc: O.spc,
   deviations: QV.deviations, capa: QV.capaView, cc: QV.ccView, findings: QV.findings, actions: QV.actionsView, records: Q.records,
-  products: S.products, lifecycle: OP.lifecycle, apqr: OP.apqrView, wip: OP.wipView, suppliers: OP.suppliersView,
+  products: S.products, lifecycle: OP.lifecycle, apqr: AP.apqrView, wip: OP.wipView, suppliers: OP.suppliersView,
   map: S.map, rooms: S.rooms, equipment: S.equipment, calibration: OP.calibration, validation: OP.validation,
-  training: PE.trainingView, fives: PE.fivesView, activities: PE.activitiesView, sops: Q.sops, fmea: Q.fmea, improvements: Q.improvements,
+  training: PE.trainingView, fives: FV.fivesView, activities: PE.activitiesView, sops: Q.sops, fmea: Q.fmea, improvements: Q.improvements,
   data: dataTables, quality: Q.quality,
 };
 
@@ -140,7 +142,8 @@ const ctx = {
   /** New row with some fields filled in (e.g. a metric value for a given quarter). */
   addWith: (table, defaults, title) => openEditor(table, null, title, defaults),
   /** Save a row given as {column: value} (key null = new row); other columns are kept. */
-  saveObj: (table, key, obj) => saveObj(table, key, obj),
+  saveObj: (table, key, obj, quiet) => saveObj(table, key, obj, quiet),
+  toast: (msg, kind) => toast(msg, kind),
   /** Apply the same change to several rows (e.g. record a calibration group as done). */
   bulkUpdate: async (table, keys, patch) => {
     try { for (const k of keys) await saveObj(table, k, patch, true); toast(t("saved_ok")); } catch (e) { toast(e.message, "warn"); }
@@ -157,8 +160,8 @@ const ctx = {
     actions: (title, list) => openActions(title, list),
     action: (ref) => openAction(ref),
     table: (title, table, rows) => openTable(title, table, rows),
-    /** A custom form in the drawer (not re-rendered by data refreshes while open). */
-    drawer: (content) => { content.editor = true; showDrawer(content); },
+    /** Custom drawer content; a form is not re-rendered by data refreshes while it is open. */
+    drawer: (content, { form } = {}) => { if (form) content.editor = true; showDrawer(content); },
   },
 };
 
@@ -280,8 +283,9 @@ function suggestionLists() {
     locations: model.records.map((r) => r.raw.Location).filter((x) => x && x !== "-----"),
     scopes: vals("scope"), rootcauses: vals("rootCause"), stages: vals("stage"),
     refs: model.records.map((r) => r.ref), rooms: model.rooms.map((r) => r.Code), sops: model.sops.map((s) => s.Code),
-    assets: model.equip.map((e) => e["Asset no"]), products: model.products.map((p) => p.Product),
+    assets: model.equip.map((e) => e["Asset no"]), products: [...model.products.map((p) => p.Product), ...model.x.apqrProg.products.map((p) => p.name)],
     periods: [y - 1, y, y + 1].flatMap((yy) => [String(yy), ...[1, 2, 3, 4].map((q) => `${yy}-Q${q}`)]),
+    areas: model.x.fivesX.areas.map((a) => a.Area),
   };
 }
 
@@ -565,6 +569,8 @@ function openPalette() {
     add(t("nav_actions"), model.actions.filter((a) => m(a.ref) || m(a.title) || m(a.parentRef)).map((a) => ({ label: `${a.ref} · ${a.title}`, sub: `${a.parentRef || t("standalone")} · ${tv(a.status)}`, icon: "tasks", act: () => openAction(a.ref) })), 5);
     add(t("batches_lbl"), model.x.batches.filter((b) => m(b["Batch no"]) || m(b.Product)).map((b) => ({ label: `${b["Batch no"]} · ${b.Product}`, sub: tv(b.stage), icon: "cycle", act: () => go("lifecycle") })), 4);
     add(t("trn_title"), model.x.training.filter((x) => m(x["Training ID"]) || m(x.Program) || m(x.Reference)).map((x) => ({ label: `${x["Training ID"] ?? ""} · ${x.Program}`, sub: tv(x.status), icon: "cap", act: () => go("training") })), 4);
+    add(t("apqr_title"), model.x.apqrProg.products.filter((p) => m(p.name) || m(p.code) || p.refs.some(m)).map((p) => ({ label: p.name, sub: `${p.refs.join(" ") || p.code || ""} · ${tv(p.track)}`, icon: "report", act: () => { go("apqr"); setTimeout(() => AP.openApqrProduct(ctx, p.key), 50); } })), 6);
+    add(t("fives_title"), model.x.fivesX.areas.filter((a) => m(a.Area)).map((a) => ({ label: a.Area, sub: `${a.Risk ? tv(a.Risk) + " · " : ""}${a.score != null ? fmtPct(a.score) : tv(a.status)}`, icon: "sparkle", act: () => { go("fives"); setTimeout(() => FV.openArea(ctx, a.key), 50); } })), 4);
     add(t("qaa_title"), model.x.qaact.filter((a) => m(a.id) || m(a.activity) || m(a.reference)).map((a) => ({ label: `${a.id} · ${a.activity}`, sub: a.reference, icon: "calendar", act: () => go("activities") })), 4);
     const prods = [...new Set(model.products.map((p) => p.Product))];
     add(t("pv_title"), model.products.filter((p) => m(p.Product) || m(p.API)).filter((p, i, a) => a.findIndex((x) => x.Product === p.Product) === i).map((p) => ({ label: p.Product, sub: p.API ?? "", icon: "product", act: () => go("products", { product: p.Product }) })), prods.length);

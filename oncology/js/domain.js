@@ -3,7 +3,7 @@
 // lifecycle and cycle times, WIP and rejections, APQR, 5S audits, the GMP activity
 // register and the quarterly QMS metrics. Pure functions over the model + raw tables.
 import { objects, clean, toDay, addMonths, monthStart, monthKey, daysBetween } from "./model.js";
-import { METRICS, QA_ACTIVITIES, FIVES, FIVES_ITEMS } from "./catalogs.js";
+import { METRICS, QA_ACTIVITIES, FIVES, FIVES_ITEMS, fivesKey, fivesRating, RISK_FREQUENCY, FREQUENCY_DAYS, APQR_PHASES, APQR_STREAMS } from "./catalogs.js";
 
 const DAY = 86400000;
 const num = (v) => (v == null || v === "" || isNaN(+v) ? null : +v);
@@ -203,27 +203,15 @@ export function buildDomains(m, wb, review) {
     return { ...a, due, approved, status, start: toDay(a["Period start"]), end: toDay(a["Period end"]), onTime: approved && due ? approved <= due : null };
   });
 
-  // ----- 5S weekly audits -----
-  const fives = objects(wb.fives).filter((f) => f.Area || f["Audit ID"]).map((f) => {
-    const scores = String(f.Scores ?? "").split(",").map((x) => (x.trim() === "" || x.trim() === "-" ? null : +x));
-    const per = {};
-    for (const [key] of FIVES) {
-      const xs = scores.filter((_, i) => FIVES_ITEMS[i] === key).filter((v) => v != null && !isNaN(v));
-      per[key] = xs.length ? xs.reduce((a, b) => a + b, 0) / (2 * xs.length) : null;
-    }
-    const all = scores.filter((v) => v != null && !isNaN(v));
-    const date = toDay(f.Date);
-    const due = toDay(f.Due);
-    return { ...f, scores, per, total: all.length ? all.reduce((a, b) => a + b, 0) / (2 * all.length) : null, date, due,
-      actionOpen: Boolean(f.Actions) && !/closed|done/i.test(f["Action status"] ?? ""), actionOverdue: Boolean(f.Actions) && !/closed|done/i.test(f["Action status"] ?? "") && due != null && due < now,
-      week: f.Week || (date != null ? isoWeek(date) : "") };
-  }).sort((a, b) => (b.date ?? 0) - (a.date ?? 0));
+  const fivesX = buildFives(m, wb);
+  const fives = fivesX.audits;
+  const apqrProg = buildApqrProgramme(m, wb, apqr);
 
   // ----- GMP activity register (catalogue + entries recorded in the app) -----
   const latest = (xs) => xs.filter((x) => x != null).reduce((a, b) => Math.max(a, b), -Infinity);
   const lastBy = {
     review: toDay(review?.meeting?.date),
-    apqr: latest(apqr.map((a) => a.approved)),
+    apqr: latest([...apqr.map((a) => a.approved), ...apqrProg.tasks.map((t) => t.closed)]),
     batches: latest(batches.map((b) => b.release)),
     deviations: latest(m.records.filter((r) => r.type === "Deviation").map((r) => r.closed)),
     capa: latest(m.records.filter((r) => r.type === "CAPA").map((r) => r.closed)),
@@ -255,8 +243,181 @@ export function buildDomains(m, wb, review) {
   // ----- manual metric values -----
   const metricValues = objects(wb.metrics).filter((x) => x.Metric && x.Period);
 
-  m.x = { training, calplan, validation, suppliers, rejections, batches, wip, lifecycle, apqr, fives, qaact, metricValues };
+  m.x = { training, calplan, validation, suppliers, rejections, batches, wip, lifecycle, apqr, apqrProg, fives, fivesX, qaact, metricValues };
   return m;
+}
+
+// ---------- 5S audits ----------
+const lc = (v) => String(v ?? "").trim().toLowerCase();
+/** Generic checklist (catalogue) as items {no, key, category, criterion}. */
+export const GENERIC_CHECKLIST = FIVES.flatMap(([key, en, fr, items], g) => items.map(([ien, ifr], i) => ({ no: g * items.length + i + 1, key, category: en, categoryFr: fr, criterion: ien, criterionFr: ifr })));
+/** Area keywords used to find the rooms of an area when none are linked ("Compression" → rooms named "…compression…"). */
+const areaWords = (name) => lc(name).split(/[^a-zà-ÿ]+/).filter((w) => w.length >= 5).map((w) => w.replace(/(es|s)$/, ""));
+
+export function buildFives(m, wb) {
+  const now = m.now;
+  const templates = new Map();
+  for (const t of objects(wb.fivesTpl ?? { cols: [], rows: [] }).filter((t) => t.Area && t.Criterion)) {
+    const k = lc(t.Area);
+    if (!templates.has(k)) templates.set(k, []);
+    templates.get(k).push({ no: num(t.No), key: fivesKey(t.Category), category: t.Category, criterion: t.Criterion });
+  }
+  for (const list of templates.values()) list.sort((a, b) => (a.no ?? 0) - (b.no ?? 0));
+  const checklistOf = (name) => templates.get(lc(name)) ?? GENERIC_CHECKLIST;
+
+  const areaRows = objects(wb.fivesAreas ?? { cols: [], rows: [] }).filter((a) => a.Area);
+  const roomsOf = (a) => {
+    const linked = String(a.Rooms ?? "").split(/[,;\s]+/).filter((c) => m.roomByCode.has(c));
+    if (linked.length) return { codes: linked, auto: false };
+    const words = areaWords(a.Area);
+    return { codes: words.length ? m.rooms.filter((r) => words.some((w) => lc(r.Name).includes(w))).map((r) => r.Code) : [], auto: true };
+  };
+  const areaInfo = areaRows.map((a) => ({ ...a, key: lc(a.Area), ...(({ codes, auto }) => ({ rooms: codes, roomsAuto: auto }))(roomsOf(a)) }));
+  // an audit belongs to the area it names, or to the area whose rooms include the room code it starts with
+  const areaKeyOf = (name) => {
+    const k = lc(name);
+    if (areaInfo.some((a) => a.key === k)) return k;
+    const code = String(name ?? "").split(/\s*·\s*|\s+/)[0];
+    return areaInfo.find((a) => a.rooms.includes(code))?.key ?? k;
+  };
+
+  const audits = objects(wb.fives).filter((f) => f.Area || f["Audit ID"]).map((f) => {
+    const scale = num(f.Scale) ?? 2;
+    const scores = String(f.Scores ?? "").split(",").map((x) => (x.trim() === "" || x.trim() === "-" ? null : +x));
+    const list = f.Checklist ? checklistOf(f.Checklist) : scores.length === GENERIC_CHECKLIST.length ? GENERIC_CHECKLIST : checklistOf(f.Area);
+    const keyAt = (i) => list[i]?.key ?? FIVES_ITEMS[i] ?? null;
+    const per = {};
+    for (const [key] of FIVES) {
+      const xs = scores.filter((v, i) => keyAt(i) === key && v != null && !isNaN(v));
+      per[key] = xs.length ? xs.reduce((a, b) => a + b, 0) / (scale * xs.length) : null;
+    }
+    const all = scores.filter((v) => v != null && !isNaN(v));
+    const total = all.length ? all.reduce((a, b) => a + b, 0) / (scale * all.length) : null;
+    const date = toDay(f.Date);
+    const due = toDay(f.Due);
+    const open = Boolean(f.Actions) && !/closed|done/i.test(f["Action status"] ?? "");
+    return { ...f, scale, scores, list, per, total, rating: fivesRating(total), date, due, areaKey: areaKeyOf(f.Area), answered: all.length,
+      actionOpen: open, actionOverdue: open && due != null && due < now, week: f.Week || (date != null ? isoWeek(date) : "") };
+  }).sort((a, b) => (b.date ?? 0) - (a.date ?? 0));
+
+  const findings = objects(wb.fivesItems ?? { cols: [], rows: [] }).filter((i) => i["Audit ID"]).map((i) => {
+    const due = toDay(i.Due);
+    const open = !/closed|done|complete/i.test(i.Status ?? "");
+    return { ...i, due, open, overdue: open && due != null && due < now, closedOn: toDay(i["Closed on"]), key: fivesKey(i.Category), score: num(i.Score), areaKey: areaKeyOf(i.Area),
+      date: audits.find((a) => a["Audit ID"] === i["Audit ID"])?.date ?? null };
+  });
+
+  // schedule: the risk class sets the frequency; the next audit is due one interval after the last one
+  const seen = new Set(areaInfo.map((a) => a.key));
+  const extra = [...new Set(audits.map((a) => a.areaKey))].filter((k) => !seen.has(k)).map((k) => ({ Area: audits.find((a) => a.areaKey === k).Area, key: k, rooms: [], roomsAuto: true, extra: true }));
+  const areas = [...areaInfo, ...extra].map((a) => {
+    const frequency = a.Frequency || RISK_FREQUENCY[a.Risk] || "Monthly";
+    const days = FREQUENCY_DAYS[frequency] ?? 30;
+    const done = audits.filter((x) => x.areaKey === a.key);
+    const last = done[0] ?? null;
+    const next = last?.date != null ? last.date + days * DAY : null;
+    const status = last?.date == null ? "Never audited" : next < now ? "Overdue" : next - now <= 7 * DAY ? "Due ≤7 d" : "Scheduled";
+    const fs = findings.filter((x) => x.areaKey === a.key);
+    return { ...a, frequency, days, audits: done, last, next, status, score: last?.total ?? null, rating: last?.rating ?? null,
+      trend: done.slice(0, 10).map((x) => x.total).reverse(), checklist: checklistOf(a.Area), findings: fs, openFindings: fs.filter((x) => x.open) };
+  });
+  // room-level 5S figures for the facility map
+  for (const r of m.rooms) { r.fivesScore = null; r.fivesOpen = 0; }
+  for (const a of areas) for (const code of a.rooms) { const r = m.roomByCode.get(code); if (!r) continue; if (a.score != null && (r.fivesScore == null || a.score < r.fivesScore)) r.fivesScore = a.score; r.fivesOpen += a.openFindings.length; }
+  return { audits, findings, areas, templates, checklistOf };
+}
+
+// ---------- APQR programme ----------
+/** Product names across the annual plan, the Scigeniq plan and tasks ("… (30 TAB)-ELKENDI") → one key. */
+export const normProduct = (s) => String(s ?? "").toUpperCase().replace(/\s*-\s*ELKENDI\s*$/, "").replace(/,/g, ".").replace(/[^A-Z0-9.%/]+/g, "");
+const mmyyyy = (v) => { const x = String(v ?? "").match(/^(\d{1,2})\/(\d{4})$/); return x ? Date.UTC(+x[2], +x[1] - 1, 1) : monthTs(v); };
+const monthEnd = (ts) => (ts == null ? null : addMonths(ts, 1) - DAY);
+export const APQR_DEPTS = ["QA", "QC", "Production", "RA", "Validation"];
+
+export function buildApqrProgramme(m, wb, records = [], { lagDays = 90 } = {}) {
+  // task status is known as of the Scigeniq export, so overdue and due-soon are measured at that date (as the tracker does)
+  const asOf = toDay(m.meta.apqrAsOf);
+  const now = asOf != null ? Math.min(asOf, m.now) : m.now;
+  const none = { cols: [], rows: [] };
+  const plan = objects(wb.apqrPlan ?? none).filter((p) => p.Product).map((p) => ({ ...p, key: normProduct(p.Product), planned: monthTs(p["Planned month"]), start: monthTs(p["Period start"]), end: monthEnd(monthTs(p["Period end"])) }));
+  const sys = objects(wb.apqrSys ?? none).filter((p) => p.Product).map((p) => ({ ...p, key: normProduct(p.Product), start: mmyyyy(p["Review start"]), end: toDay(p["Period end"]) ?? monthEnd(mmyyyy(p["Review end"])) }));
+  const tasks = objects(wb.apqrTasks ?? none).filter((t) => t["Reference ID"] && t.Product).map((t) => {
+    const due = toDay(t.Due), created = toDay(t.Created), closed = toDay(t["Closed On"]);
+    const done = /^closed$/i.test(t.Closure ?? "") || /^(completed|closed)$/i.test(t.Status ?? "") || closed != null;
+    const stream = t["Data Stream"] || "—";
+    return { ...t, key: normProduct(t.Product), due, created, closed, done, open: !done, overdue: !done && due != null && due < now, sysOverdue: /overdue/i.test(t.Status ?? ""),
+      stream, dept: t.Department || APQR_STREAMS[stream]?.[0] || "—", isWorkflow: /apqr workflow/i.test(stream) || /^apqr$/i.test(t["Task Type"] ?? ""),
+      unassigned: !t["Assigned User"] || /unassigned/i.test(t["Assigned User"]), ageDays: !done && created != null ? daysBetween(created, now) : null,
+      daysToDue: !done && due != null ? daysBetween(now, due) : null, onTime: done && due != null && closed != null ? closed <= due : null, month: due != null ? monthKey(due) : "" };
+  });
+  const recs = records.map((r) => ({ ...r, key: normProduct(r.Product) }));
+  const streams = [...new Set(tasks.map((t) => t.stream))].sort((a, b) => Object.keys(APQR_STREAMS).indexOf(a) - Object.keys(APQR_STREAMS).indexOf(b));
+  const keys = [...new Set([...plan, ...sys, ...tasks].map((x) => x.key))];
+  const products = keys.map((key) => {
+    const p = plan.find((x) => x.key === key), s = sys.find((x) => x.key === key);
+    const ts = tasks.filter((t) => t.key === key);
+    const wf = ts.filter((t) => t.isWorkflow);
+    const refs = [...new Set(wf.map((t) => t["Reference ID"]))];
+    const main = [...wf].sort((a, b) => (a.done - b.done) || (a.due ?? 9e15) - (b.due ?? 9e15))[0] ?? null;
+    const start = p?.start ?? s?.start ?? null, end = p?.end ?? s?.end ?? null;
+    const reportDue = end != null ? end + lagDays * DAY : null;
+    const total = ts.length, completed = ts.filter((t) => t.done).length, overdue = ts.filter((t) => t.overdue).length;
+    const pct = total ? completed / total : 0;
+    const rec = recs.filter((r) => r.key === key).sort((a, b) => (b.approved ?? 0) - (a.approved ?? 0))[0] ?? null;
+    const approved = rec?.approved ?? null;
+    const dataTasks = ts.filter((t) => !t.isWorkflow);
+    const dataDone = dataTasks.length > 0 && dataTasks.every((t) => t.done);
+    const wfDue = main?.due ?? null;
+    const rag = !total ? "No tasks" : pct === 1 ? "Complete" : overdue ? "Overdue" : wfDue != null && wfDue - now <= 14 * DAY ? "Due soon" : "On track";
+    const track = approved ? "Approved" : !total ? (!s ? "Not in Scigeniq plan" : reportDue != null && reportDue < now ? "Not triggered – past due" : reportDue != null && reportDue - now <= 60 * DAY ? "Not triggered – due ≤60 d" : "Not yet triggered")
+      : pct === 1 ? "Data collection complete" : "In progress";
+    let phase = approved ? 7 : !total ? (s ? 1 : 0) : main?.done ? 7 : -1;
+    if (phase < 0) {
+      const stage = main?.["Workflow Stage"] ?? "";
+      phase = APQR_PHASES.findIndex(([, , , re], i) => i >= 2 && i < 7 && re && re.test(stage));
+      if (phase < 0) phase = 3;
+      if (phase === 3 && dataDone) phase = 4;
+    }
+    // the owner's workflow task stays open until closure, so only data tasks count towards the bottleneck
+    const openBy = Object.fromEntries(APQR_DEPTS.map((d) => [d, dataTasks.filter((t) => t.open && t.dept === d).length]));
+    const top = Object.entries(openBy).sort((a, b) => b[1] - a[1])[0];
+    const streamState = Object.fromEntries(streams.map((st) => { const xs = ts.filter((t) => t.stream === st); return [st, !xs.length ? null : xs.every((t) => t.done) ? "done" : xs.some((t) => t.overdue) ? "overdue" : "open"]; }));
+    const name = (p?.Product ?? s?.Product ?? ts[0]?.Product ?? key).replace(/\s*-\s*ELKENDI\s*$/i, "");
+    return {
+      key, name, code: p?.Code ?? null, form: p?.["Dosage form"] || s?.Process || ts[0]?.["Dosage Form"] || "—", inPlan: Boolean(p), inSys: Boolean(s), offPlan: !p && !s,
+      planned: p?.planned ?? null, start, end, prevReport: p?.["Previous report"] ?? null, period: p ? `${p["Period start"] ?? "?"} → ${p["Period end"] ?? "?"}` : s ? `${s["Review start"]} → ${s["Review end"]}` : "",
+      reportDue, daysToReportDue: reportDue != null ? daysBetween(now, reportDue) : null, tasks: ts, refs, duplicate: refs.length > 1, owner: main?.["Assigned User"] ?? null,
+      stage: main?.["Workflow Stage"] ?? null, wfDue, wfCreated: main?.created ?? null, total, completed, open: total - completed, overdue, pct, rag, track, phase,
+      openBy, bottleneck: top && top[1] > 0 ? top[0] : null, streamState, record: rec, approved, triggered: total > 0,
+    };
+  }).sort((a, b) => (a.planned ?? 9e15) - (b.planned ?? 9e15) || a.name.localeCompare(b.name));
+  const users = [...new Set(tasks.map((t) => t["Assigned User"] || "Unassigned"))].map((u) => {
+    const xs = tasks.filter((t) => (t["Assigned User"] || "Unassigned") === u);
+    const open = xs.filter((t) => t.open);
+    return { user: u, total: xs.length, completed: xs.length - open.length, open: open.length, overdue: xs.filter((t) => t.overdue).length, pct: xs.length ? (xs.length - open.length) / xs.length : 0,
+      earliest: open.map((t) => t.due).filter((d) => d != null).sort((a, b) => a - b)[0] ?? null };
+  }).sort((a, b) => b.overdue - a.overdue || b.open - a.open);
+  return { plan, sys, tasks, products, streams, users, lagDays, asOf, refDate: now };
+}
+
+// ---------- process statistics (APQR) ----------
+/** Individuals control chart and capability: mean, sigma within (MR̄/1.128) and overall, Cpk / Ppk against optional limits, Nelson-type signals. */
+export function capability(xs, lsl, usl) {
+  const n = xs.length;
+  if (n < 2) return null;
+  const mean = xs.reduce((a, b) => a + b, 0) / n;
+  const sd = Math.sqrt(xs.reduce((a, b) => a + (b - mean) ** 2, 0) / (n - 1));
+  const mr = xs.slice(1).map((v, i) => Math.abs(v - xs[i]));
+  const sw = mr.reduce((a, b) => a + b, 0) / mr.length / 1.128; // within-subgroup sigma from the average moving range
+  const k = (s) => (s > 0 ? Math.min(usl != null ? (usl - mean) / (3 * s) : Infinity, lsl != null ? (mean - lsl) / (3 * s) : Infinity) : null);
+  const cpk = lsl == null && usl == null ? null : k(sw), ppk = lsl == null && usl == null ? null : k(sd);
+  const ucl = mean + 3 * sw, lcl = mean - 3 * sw;
+  // signals: beyond the limits, 8 in a row on one side of the mean, 6 rising or falling in a row
+  const sig = xs.map(() => []);
+  xs.forEach((v, i) => { if (v > ucl || v < lcl) sig[i].push("1"); });
+  for (let i = 7; i < n; i++) { const w = xs.slice(i - 7, i + 1); if (w.every((v) => v > mean) || w.every((v) => v < mean)) sig[i].push("2"); }
+  for (let i = 5; i < n; i++) { const w = xs.slice(i - 5, i + 1); const up = w.every((v, j) => !j || v > w[j - 1]), dn = w.every((v, j) => !j || v < w[j - 1]); if (up || dn) sig[i].push("3"); }
+  return { n, mean, sd, sw, ucl, lcl, cpk: Number.isFinite(cpk) ? cpk : null, ppk: Number.isFinite(ppk) ? ppk : null, signals: sig };
 }
 
 export function isoWeek(ts) {
@@ -303,7 +464,13 @@ export function metricValue(m, id, p) {
     case "capa_ontime": return { ...onTime(closedIn("CAPA")), src: "auto" };
     case "cc_ontime": return { ...onTime(closedIn("Change Control")), src: "auto" };
     case "find_ontime": return { ...onTime(closedIn("Audit Finding")), src: "auto" };
-    case "pqr_ontime": { const due = x.apqr.filter((a) => inP(a.due, p)); return { ...ratio(due.filter((a) => a.onTime).length, due.length), src: "auto" }; }
+    case "pqr_ontime": {
+      const prog = x.apqrProg.products.filter((q) => q.inPlan && inP(q.reportDue, p) && q.reportDue <= asOf);
+      if (prog.length) return { ...ratio(prog.filter((q) => q.approved != null && q.approved <= q.reportDue).length, prog.length), src: "auto" };
+      const due = x.apqr.filter((a) => inP(a.due, p));
+      return { ...ratio(due.filter((a) => a.onTime).length, due.length), src: "auto" };
+    }
+    case "apqr_tasks_ontime": { const xs = x.apqrProg.tasks.filter((t) => t.done && inP(t.closed, p) && t.onTime != null); return { ...ratio(xs.filter((t) => t.onTime).length, xs.length), src: "auto" }; }
     case "sop_ontime": { const w = m.sops.filter((s) => s.next != null); return { ...ratio(w.filter((s) => s.next >= asOf).length, w.length), src: "auto" }; }
     case "sop_overdue": { const n = m.sops.filter((s) => s.next != null && s.next < asOf).length; return { value: n, num: n, src: "auto" }; }
     case "cc_actions_ontime": {

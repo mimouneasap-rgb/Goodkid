@@ -1,8 +1,8 @@
 // File importers. Everything is read in the browser:
 //  - the master workbook (.xlsx) and Scigeniq exports (CC, CAPA, Quality Event, Audit Findings, Actions)
-//  - the batch tracker (.xlsm) and the WIP workbook (.xlsx)
+//  - the batch tracker (.xlsm), the WIP workbook, the 5S area checklists and the APQR tracker / Scigeniq APQR export (.xlsx)
 //  - the controlled Word forms (.docx): annual / monthly calibration programs, validation and
-//    requalification schedules, annual training plans and the registered API supplier list.
+//    requalification schedules, annual training plans, the registered API supplier list and the APQR annual plan.
 // Each importer writes whole tables into `next` and lists them in `replaced`.
 import SCHEMA from "./schema.js";
 import { EXT_COLS } from "./schema-ext.js";
@@ -182,6 +182,111 @@ function importScigeniq(XLSX, wb, next, replaced, file) {
     return `Scigeniq ${probe.rows[0][1]} · ${tbl.rows.length} rows`;
   }
   return null;
+}
+
+// ---------- 5S area-specific checklists (.xlsx) ----------
+const is5S = (XLSX, wb) => wb.SheetNames.some((n) => /5S AUDIT CHECKLIST/i.test(text(wb.Sheets[n]?.A1?.v)));
+
+function import5S(XLSX, wb, next, replaced) {
+  if (!is5S(XLSX, wb)) return null;
+  const index = new Map(); // sheet name → { area, risk, frequency }
+  for (const name of wb.SheetNames) {
+    const objs = sheetObjects(XLSX, wb.Sheets[name], ["Sheet Name", "Area/Room"]);
+    for (const o of objs ?? []) if (o["Sheet Name"]) index.set(text(o["Sheet Name"]), { area: text(o["Area/Room"]), risk: text(o["Risk Classification"]), frequency: text(o["Audit Frequency"]) });
+  }
+  const profile = new Map(); // area → comparison row
+  for (const name of wb.SheetNames) {
+    const objs = sheetObjects(XLSX, wb.Sheets[name], ["Area/Room", "Risk Class"]);
+    for (const o of objs ?? []) if (o["Area/Room"]) profile.set(text(o["Area/Room"]).toLowerCase(), o);
+  }
+  const areaCols = COLS.fivesAreas, tplCols = COLS.fivesTpl;
+  const old = new Map((next.fivesAreas?.rows ?? []).map((r) => [String(r[0]).toLowerCase(), r]));
+  const areas = [], tpl = [], audits = [];
+  for (const name of wb.SheetNames) {
+    const ws = wb.Sheets[name];
+    const title = text(ws?.A1?.v);
+    if (!/5S AUDIT CHECKLIST/i.test(title)) continue;
+    const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null, raw: true, blankrows: false });
+    const flat = rows.slice(0, 5).flat().map(text);
+    const field = (label) => { const i = flat.findIndex((c) => c.toLowerCase().startsWith(label)); if (i < 0) return ""; const v = flat[i].slice(flat[i].indexOf(":") + 1).trim(); return v || (flat[i + 1] && !flat[i + 1].includes(":") ? flat[i + 1] : ""); };
+    const idx = index.get(name) ?? {};
+    const area = field("area:") || idx.area || title.replace(/^.*CHECKLIST\s*-\s*/i, "");
+    const prof = profile.get(area.toLowerCase()) ?? {};
+    const prev = old.get(area.toLowerCase());
+    const rec = {
+      Area: area, Code: name, Risk: field("risk:") || idx.risk || text(prof["Risk Class"]) || null, Frequency: field("frequency:") || idx.frequency || null,
+      "Key equipment": text(prof["Key Equipment"]) || null, "Critical focus": text(prof["Critical 5S Focus"]) || null, "GMP requirements": text(prof["Unique GMP Requirements"]) || null,
+      "Common issues": text(prof["Common Issues"]) || null, Rooms: prev?.[areaCols.indexOf("Rooms")] ?? null, Owner: prev?.[areaCols.indexOf("Owner")] ?? null,
+    };
+    areas.push(areaCols.map((c) => rec[c] ?? null));
+    const hi = rows.findIndex((r) => r.some((c) => /5S Category/i.test(text(c))) && r.some((c) => /Criteria/i.test(text(c))));
+    if (hi < 0) continue;
+    const h = rows[hi].map(text);
+    const ci = { no: h.findIndex((c) => /^No/i.test(c)), cat: h.findIndex((c) => /Category/i.test(c)), crit: h.findIndex((c) => /Criteria/i.test(c)), score: h.findIndex((c) => /^Score/i.test(c)),
+      comment: h.findIndex((c) => /Comment/i.test(c)), action: h.findIndex((c) => /Action/i.test(c)), prio: h.findIndex((c) => /Priority/i.test(c)), due: h.findIndex((c) => /Due/i.test(c)) };
+    const scores = [], found = [];
+    for (const r of rows.slice(hi + 1)) {
+      const no = r[ci.no];
+      if (typeof no !== "number" || !text(r[ci.crit])) continue;
+      tpl.push(tplCols.map((c) => ({ Area: area, No: no, Category: text(r[ci.cat]), Criterion: text(r[ci.crit]) })[c] ?? null));
+      const sc = r[ci.score];
+      scores.push(typeof sc === "number" ? sc : /^n\/?a$/i.test(text(sc)) ? "-" : "");
+      if (typeof sc === "number" && (sc < 2 || text(r[ci.action]))) found.push({ no, cat: text(r[ci.cat]), crit: text(r[ci.crit]), score: sc, comment: text(r[ci.comment]), action: text(r[ci.action]), prio: text(r[ci.prio]), due: dmy(r[ci.due]) });
+    }
+    // a checklist that was filled in is also an audit
+    if (scores.some((v) => typeof v === "number")) {
+      const date = dmy(field("audit date:")) ?? null;
+      const id = `5S-${(date ?? "").slice(0, 4) || "IMP"}-${name}`;
+      audits.push({ "Audit ID": id, Date: date, Area: area, Auditor: field("auditor:") || null, Supervisor: field("supervisor:") || null, Checklist: area, Scale: 3, Scores: scores.map((v) => (v === "" ? "-" : v)).join(","), items: found });
+    }
+  }
+  if (!areas.length) return null;
+  const keepTpl = (next.fivesTpl?.rows ?? []).filter((r) => !areas.some((a) => a[0] === r[0]));
+  next.fivesAreas = { cols: areaCols, rows: [...[...old.values()].filter((r) => !areas.some((a) => String(a[0]).toLowerCase() === String(r[0]).toLowerCase())), ...areas] };
+  next.fivesTpl = { cols: tplCols, rows: [...keepTpl, ...tpl] };
+  replaced.push("fivesAreas", "fivesTpl");
+  if (audits.length) {
+    const fc = COLS.fives, ic = COLS.fivesItems;
+    next.fives = { cols: fc, rows: [...(next.fives?.rows ?? []), ...audits.map((a) => fc.map((c) => a[c] ?? null))] };
+    next.fivesItems = { cols: ic, rows: [...(next.fivesItems?.rows ?? []), ...audits.flatMap((a) => a.items.map((it) => ic.map((c) => ({ "Audit ID": a["Audit ID"], Area: a.Area, No: it.no, Category: it.cat, Criterion: it.crit, Score: it.score, Comment: it.comment || null, Action: it.action || null, Priority: it.prio || null, Due: it.due, Status: "Open" })[c] ?? null)))] };
+    replaced.push("fives", "fivesItems");
+  }
+  return `5S checklists · ${areas.length} areas · ${tpl.length} criteria${audits.length ? ` · ${audits.length} completed audits` : ""}`;
+}
+
+// ---------- APQR programme (Scigeniq APQR export or the master APQR tracker) ----------
+const APQR_TASK_ALIASES = { "Reference ID": ["Reference ID", "Reference Id", "Ref ID"], "Closed On": ["Closed On", "Closing date", "Closed on"], "Assigned User": ["Assigned User", "Assignee"], "Dosage Form": ["Dosage Form", "Process"] };
+function importApqr(XLSX, wb, next, replaced, file) {
+  const out = [];
+  for (const name of wb.SheetNames) {
+    const ws = wb.Sheets[name];
+    const objs = sheetObjects(XLSX, ws, ["Workflow Stage", "Assigned User"]) ?? sheetObjects(XLSX, ws, ["Workflow Stage", "Assignee"]);
+    if (!objs || !objs.length || !Object.keys(objs[0]).some((k) => /^ref/i.test(k))) continue;
+    const pick = (o, col) => { for (const k of APQR_TASK_ALIASES[col] ?? [col]) if (o[k] != null) return o[k]; return null; };
+    const cols = COLS.apqrTasks;
+    const rows = objs.filter((o) => pick(o, "Reference ID") && o.Product).map((o) => cols.map((c) => cellVal(pick(o, c))));
+    if (!rows.length) continue;
+    next.apqrTasks = { cols, rows };
+    replaced.push("apqrTasks");
+    const dates = rows.flatMap((r) => [r[cols.indexOf("Created")], r[cols.indexOf("Closed On")]]).filter(Boolean).map(String).sort();
+    const reportDate = cellVal(wb.Sheets.Dashboard?.C5?.v);
+    next.meta = { ...next.meta, apqrAsOf: (typeof reportDate === "string" && /^\d{4}-/.test(reportDate) ? reportDate : null) ?? dates.at(-1)?.slice(0, 10) ?? new Date(file.lastModified).toISOString().slice(0, 10) };
+    out.push(`${rows.length} APQR tasks`);
+    break;
+  }
+  for (const name of wb.SheetNames) {
+    const objs = sheetObjects(XLSX, wb.Sheets[name], ["Product", "Review Start"]);
+    if (!objs?.length || !("Plan Status" in objs[0] || "Process" in objs[0])) continue;
+    const cols = COLS.apqrSys;
+    const map = { Product: "Product", Process: "Process", "Exec. year": "Exec. Year", Site: "Site", "Review start": "Review Start", "Review end": "Review End", "Period end": "Period End (date)", "Plan status": "Plan Status" };
+    const rows = objs.filter((o) => text(o.Product)).map((o) => cols.map((c) => cellVal(o[map[c]] ?? null)));
+    if (!rows.length) continue;
+    next.apqrSys = { cols, rows };
+    replaced.push("apqrSys");
+    out.push(`Scigeniq APQR plan · ${rows.length} products`);
+    break;
+  }
+  return out.length ? `APQR ${out.join(" · ")}` : null;
 }
 
 // ---------- batch tracker (.xlsm) ----------
@@ -472,11 +577,46 @@ function importApiList(doc, next, replaced) {
   return `registered API list · ${rows.length} entries`;
 }
 
+const FR_MONTHS = { jan: 1, janv: 1, fev: 2, fevr: 2, feb: 2, mar: 3, mars: 3, avr: 4, apr: 4, mai: 5, may: 5, juin: 6, jun: 6, juil: 7, jul: 7, aou: 8, aout: 8, aug: 8, sep: 9, sept: 9, oct: 10, nov: 11, dec: 12 };
+/** "janv.-26", "juil-26", "Sep-2026" → "2026-01" … */
+export function monthYear(v) {
+  if (v instanceof Date) return isoDate(v).slice(0, 7);
+  const s = text(v).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  const m = s.match(/([a-z]+)\.?\s*[-/ ]\s*(\d{2,4})/);
+  if (!m || !FR_MONTHS[m[1]]) return my(v);
+  const y = m[2].length === 2 ? 2000 + +m[2] : +m[2];
+  return `${y}-${pad(FR_MONTHS[m[1]])}`;
+}
+const FORM_BY_CODE = { TB: "Tablets", CP: "Hard Capsule", LQ: "Liquid/Syrup", SS: "Semi Solid" };
+function importApqrPlan(doc, next, replaced) {
+  const tbl = doc.tables.find((t) => findHeader(t, "Planned product") >= 0);
+  if (!tbl) return null;
+  const hi = findHeader(tbl, "Planned product");
+  const h = tbl[hi];
+  const c = { code: colOf(h, "product code"), product: colOf(h, "Planned product"), month: colOf(h, "Planned Month"), prev: colOf(h, "Previous"), period: colOf(h, "Current report period") };
+  const cols = COLS.apqrPlan;
+  const rows = [];
+  for (const r of tbl.slice(hi + 1)) {
+    const product = text(r[c.product]);
+    if (!product) continue;
+    const [, a, b] = text(r[c.period]).match(/(\d{1,2}\/\d{2,4}).*?(\d{1,2}\/\d{2,4})/) ?? [];
+    const ym = (x) => { const m = String(x ?? "").match(/(\d{1,2})\/(\d{2,4})/); return m ? `${m[2].length === 2 ? "20" + m[2] : m[2]}-${pad(m[1])}` : null; };
+    const code = text(r[c.code]);
+    const rec = { Code: code || null, Product: product, "Dosage form": FORM_BY_CODE[code.slice(0, 2).toUpperCase()] ?? null, "Planned month": monthYear(r[c.month]), "Previous report": text(r[c.prev]) || null, "Period start": ym(a), "Period end": ym(b) };
+    rows.push(cols.map((k) => rec[k] ?? null));
+  }
+  next.apqrPlan = { cols, rows };
+  replaced.push("apqrPlan");
+  return `APQR annual plan · ${rows.length} products`;
+}
+
 function importDocx(XLSX, buffer, next, replaced) {
   const doc = docxTables(XLSX, buffer);
   const all = [doc.text, ...doc.tables.flat().flat()].join(" ");
   // the metrics report also mentions training and calibration, so it is recognised first
   if (/Quality Metrics Report/i.test(all)) return "quality metrics report · metric definitions and targets are built into the QMS metrics page; enter quarterly values there";
+  if (/Planned product/i.test(all) && /Final product code/i.test(all)) return importApqrPlan(doc, next, replaced);
+  if (/Annual Product Quality Review/i.test(all) && /APQR Owner/i.test(all)) return "APQR procedure · its workflow phases, departmental data streams and Cpk guidance are built into the APQR page";
   if (/Description of Training/i.test(all)) return importTrainingPlan(doc, next, replaced);
   if (/Monthly Calibration Program/i.test(all)) return importCalibration(doc, next, replaced, true);
   if (/Calibration Program/i.test(all)) return importCalibration(doc, next, replaced, false);
@@ -512,12 +652,12 @@ export async function importFiles(files, base, { needMaster } = {}) {
     try {
       if (it.kind === "xlsx") {
         if (isMaster(it.wb)) msg = await importMaster(XLSX, it.wb, next, replaced);
-        else msg = importScigeniq(XLSX, it.wb, next, replaced, it.file) ?? importWip(XLSX, it.wb, next, replaced) ?? importBatches(XLSX, it.wb, next, replaced);
+        else msg = import5S(XLSX, it.wb, next, replaced) ?? importApqr(XLSX, it.wb, next, replaced, it.file) ?? importScigeniq(XLSX, it.wb, next, replaced, it.file) ?? importWip(XLSX, it.wb, next, replaced) ?? importBatches(XLSX, it.wb, next, replaced);
       } else if (it.kind === "docx") msg = importDocx(XLSX, it.buf, next, replaced);
       else if (it.kind === "slides") msg = "presentation · nothing to import; quarterly metric values are entered on the QMS metrics page";
       else msg = null;
     } catch (e) { console.error(e); msg = `✘ ${e.message ?? e}`; }
-    done.push([it.file.name, msg ?? "✘ not recognised (supported: master workbook, Scigeniq exports, batch tracker, WIP workbook, calibration / validation / training / API Word forms)"]);
+    done.push([it.file.name, msg ?? "✘ not recognised (supported: master workbook, Scigeniq exports, APQR tracker, 5S checklists, batch tracker, WIP workbook, calibration / validation / training / API / APQR plan Word forms)"]);
   }
   if (needMaster && !next.rooms?.rows?.length) throw new Error(needMaster);
   return { next, replaced: [...new Set(replaced)], done };

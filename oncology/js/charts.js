@@ -174,7 +174,7 @@ export function gantt(items, { from, months = 12, today } = {}) {
 }
 
 /** Lines over months, optional control limits and signal markers. */
-export function lineChart(points, series, { height = 260, limits, fmt = fmtNum, yMax, pct } = {}) {
+export function lineChart(points, series, { height = 260, limits, fmt = fmtNum, yMax, yMin = 0, pct, xFmt = fmtMonth } = {}) {
   const f = pct ? (v) => fmtPct(v) : fmt;
   return h("div", legend([...series.map((s) => ({ ...s, line: true })), ...(limits ? [{ label: t("s_cl"), color: "var(--ink-3)", line: true }, { label: `${t("s_ucl")} / ${t("s_lcl")}`, color: "var(--critical)", line: true }, { label: t("s_sig"), color: "var(--critical)" }] : [])]), responsive((W) => {
     const H = height, L = pct ? 42 : 34, R = 10, T = 12, B = 28;
@@ -183,11 +183,12 @@ export function lineChart(points, series, { height = 260, limits, fmt = fmtNum, 
     const max = yMax ?? niceMax(Math.max(pct ? 0.1 : 1, ...vals), pct);
     const step = iw / Math.max(1, points.length - 1);
     const x = (i) => L + i * step;
-    const y = (v) => T + ih - (Math.min(v, max) / max) * ih;
+    const y = (v) => T + ih - ((Math.max(yMin, Math.min(v, max)) - yMin) / (max - yMin)) * ih;
     const svg = h("svg", { viewBox: `0 0 ${W} ${H}`, width: W, height: H, class: "svg-chart", role: "img" });
-    for (const v of ticks(max, pct)) svg.append(h("line.grid", { x1: L, x2: W - R, y1: y(v), y2: y(v) }), h("text.tick", { x: L - 6, y: y(v) + 4, "text-anchor": "end" }, f(v)));
+    const tickVals = yMin ? [0, 1, 2, 3, 4].map((i) => yMin + ((max - yMin) * i) / 4) : ticks(max, pct);
+    for (const v of tickVals) svg.append(h("line.grid", { x1: L, x2: W - R, y1: y(v), y2: y(v) }), h("text.tick", { x: L - 6, y: y(v) + 4, "text-anchor": "end" }, f(v)));
     const every = Math.ceil(points.length / Math.max(2, Math.floor(iw / 56)));
-    points.forEach((p, i) => { if (i % every === 0) svg.append(h("text.tick", { x: x(i), y: H - 8, "text-anchor": "middle" }, fmtMonth(p.month))); });
+    points.forEach((p, i) => { if (i % every === 0) svg.append(h("text.tick", { x: x(i), y: H - 8, "text-anchor": "middle" }, xFmt(p.month))); });
     const path = (key, stroke, dash, w = 2) => {
       let d = "", pen = false;
       points.forEach((p, i) => {
@@ -215,11 +216,86 @@ export function lineChart(points, series, { height = 260, limits, fmt = fmtNum, 
       if (limits) rows.push([t("s_cl"), f(p.cl)], [t("s_ucl"), p.ucl == null ? "—" : f(p.ucl)], [t("s_lcl"), p.lcl == null ? "—" : f(p.lcl)]);
       if (p.n != null) rows.push([t("col_n"), fmtNum(p.n)]);
       if (p.signals?.length) rows.push([t("s_sig"), p.signals.join(" "), "var(--critical)"]);
-      svg.append(h("rect.hit", { x: x(i) - step / 2, y: T, width: Math.max(step, 6), height: ih, fill: "transparent", "data-tip": tip(fmtMonth(p.month), rows) }));
+      svg.append(h("rect.hit", { x: x(i) - step / 2, y: T, width: Math.max(step, 6), height: ih, fill: "transparent", "data-tip": tip(xFmt(p.month), rows) }));
     });
     svg.append(h("line.axis", { x1: L, x2: W - R, y1: T + ih, y2: T + ih }));
     return svg;
   }, height));
+}
+
+/**
+ * Vertical bars in HTML (any scale, crisp labels) with an optional dashed target line.
+ * points: [{label, value, color?, tip?, onclick?}]
+ */
+export function vbars(points, { target, fmt = fmtNum, height = 120, color = "var(--c1)" } = {}) {
+  const max = Math.max(...points.map((p) => p.value ?? 0), target ?? 0) * 1.18 || 1;
+  const pos = (v) => `${Math.max(0, Math.min(100, (v / max) * 100))}%`;
+  return h("div.vbars", { style: { "--h": `${height}px` } },
+    h("div.vbars-plot",
+      target != null ? h("i.vbars-target", { style: { bottom: pos(target) }, title: `${t("target_lbl")} ${fmt(target)}` }) : null,
+      points.map((p) => h(p.onclick ? "button.vbar" : "div.vbar", {
+        type: p.onclick ? "button" : null, onclick: p.onclick,
+        "data-tip": `<b>${esc(p.label)}</b><div class="tip-row"><span>${esc(t("col_value"))}</span><b>${esc(p.value == null ? "—" : fmt(p.value))}</b></div>${p.tip ?? ""}`,
+      },
+      h("span.vbar-v", p.value == null ? "—" : fmt(p.value)),
+      h("span.vbar-fill", { style: { height: p.value == null ? "0" : pos(p.value), background: p.color ?? color } })))),
+    h("div.vbars-x", points.map((p) => h("span", p.short ?? p.label))));
+}
+
+/**
+ * Radar (spider) chart on a 0–max scale. axes: [label], series: [{label, color, values:[…], dash?}].
+ * Drawn in a fixed viewBox that scales with its container.
+ */
+export function radar(axes, series, { max = 1, fmt = (v) => fmtPct(v), rings = [0.25, 0.5, 0.75, 1], size = 300 } = {}) {
+  const S = size, c = S / 2, r = S / 2 - 62, n = axes.length;
+  if (!n) return h("div.empty", t("no_data"));
+  const pt = (i, v) => { const a = -Math.PI / 2 + (i * 2 * Math.PI) / n; const rr = r * Math.max(0, Math.min(1, (v ?? 0) / max)); return [c + rr * Math.cos(a), c + rr * Math.sin(a)]; };
+  const svg = h("svg", { viewBox: `0 0 ${S} ${S}`, class: "svg-radar", role: "img" });
+  for (const k of rings) svg.append(h("polygon", { points: axes.map((_, i) => pt(i, k * max).join(",")).join(" "), class: "radar-ring" }));
+  axes.forEach((label, i) => {
+    const [x2, y2] = pt(i, max);
+    svg.append(h("line", { x1: c, y1: c, x2, y2, class: "radar-axis" }));
+    const [lx, ly] = (() => { const a = -Math.PI / 2 + (i * 2 * Math.PI) / n; return [c + (r + 12) * Math.cos(a), c + (r + 14) * Math.sin(a)]; })();
+    svg.append(h("text.radar-label", { x: lx, y: ly + 4, "text-anchor": Math.abs(lx - c) < 6 ? "middle" : lx > c ? "start" : "end" }, label));
+  });
+  for (const s of series) {
+    const pts = s.values.map((v, i) => pt(i, v));
+    svg.append(h("polygon", { points: pts.map((p) => p.join(",")).join(" "), fill: s.color, "fill-opacity": s.dash ? 0 : 0.16, stroke: s.color, "stroke-width": 2, "stroke-dasharray": s.dash ? "5 4" : null, "stroke-linejoin": "round" }));
+    pts.forEach(([x, y], i) => { if (s.values[i] != null && !s.dash) svg.append(h("circle", { cx: x, cy: y, r: 4, fill: s.color, stroke: "var(--surface)", "stroke-width": 1.5, "data-tip": tip(axes[i], [[s.label, fmt(s.values[i]), s.color]]) })); });
+  }
+  return h("div.radar", series.length > 1 ? legend(series.map((s) => ({ ...s, line: Boolean(s.dash) }))) : null, svg);
+}
+
+/** Donut with a centre figure and a value legend. segments: [{label, value, color, onclick?}] */
+export function donut(segments, { center, sub, size = 168, fmt = fmtNum } = {}) {
+  const total = segments.reduce((a, s) => a + (s.value || 0), 0);
+  if (!total) return h("div.empty", t("no_data"));
+  const R = 62, C = 2 * Math.PI * R;
+  let acc = 0;
+  const svg = h("svg", { viewBox: "0 0 168 168", width: size, height: size, class: "svg-donut", role: "img" },
+    h("circle", { cx: 84, cy: 84, r: R, fill: "none", stroke: "var(--track)", "stroke-width": 20 }),
+    segments.filter((s) => s.value > 0).map((s) => {
+      const len = (s.value / total) * C;
+      const el = h("circle", { cx: 84, cy: 84, r: R, fill: "none", stroke: s.color, "stroke-width": 20, "stroke-dasharray": `${Math.max(0, len - 1.5)} ${C}`, "stroke-dashoffset": -acc, transform: "rotate(-90 84 84)",
+        class: s.onclick ? "clickable" : "", onclick: s.onclick, "data-tip": tip(s.label, [[t("s_count"), fmt(s.value), s.color], ["%", fmtPct(s.value / total)]]) });
+      acc += len;
+      return el;
+    }),
+    h("text.donut-v", { x: 84, y: center != null && sub ? 86 : 92, "text-anchor": "middle" }, center ?? fmt(total)),
+    sub ? h("text.donut-s", { x: 84, y: 106, "text-anchor": "middle" }, sub) : null);
+  return h("div.donut",
+    svg,
+    h("div.donut-legend", segments.map((s) => h(s.onclick ? "button.donut-item" : "div.donut-item", { type: s.onclick ? "button" : null, onclick: s.onclick },
+      h("i", { style: { background: s.color } }), h("span", s.label), h("b", fmt(s.value)), h("small", fmtPct(s.value / total))))));
+}
+
+/** Funnel of decreasing stages (HTML). stages: [{label, value, color, sub?, onclick?}] */
+export function funnel(stages, { fmt = fmtNum } = {}) {
+  const top = Math.max(1, ...stages.map((s) => s.value));
+  return h("div.funnel", stages.map((s, i) => h(s.onclick ? "button.funnel-row" : "div.funnel-row", { type: s.onclick ? "button" : null, onclick: s.onclick, style: { "--i": i } },
+    h("span.funnel-label", s.label, s.sub ? h("small", s.sub) : null),
+    h("span.funnel-track", h("span.funnel-bar", { style: { width: `${Math.max(3, (s.value / top) * 100)}%`, background: s.color } }, h("b", fmt(s.value)))),
+    h("span.funnel-pct", i ? fmtPct(stages[0].value ? s.value / stages[0].value : 0) : ""))));
 }
 
 /** 5×5 severity × occurrence heat map (HTML grid). counts[o][s] = {n, items} */

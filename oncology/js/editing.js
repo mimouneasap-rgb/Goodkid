@@ -134,12 +134,44 @@ export const SPECS = {
       ["Quantity", "number"], ["Unit", "pick", V.units], ["Deviation / CAPA", "suggest", "refs"], ["Reworks", "number"], ["R&D recommendation", "long"], ["QA comments", "long"], ["Decision date", "date"]],
   },
   apqr: {
-    label: ["APQR", "RQP"], id: "Product", title: "Period",
+    label: ["APQR record", "Enregistrement RQP"], id: "Product", title: "Period",
     defaults: () => ({ Status: "Planned" }),
     fields: [["Product", "suggest", "products"], ["Period", "text"], ["Period start", "date"], ["Period end", "date"], ["Due date", "date"], ["Status", "pick", V.apqrStatus],
-      ["Owner", "suggest", "users"], ["Approved on", "date"], ["Report ref", "text"], ["Conclusion", "long"], ["Comment", "long"]],
+      ["Owner", "suggest", "users"], ["Previous CAPA status", "long"], ["CAPA required", "pick", V.capaDecision], ["Conclusion", "long"], ["Approved on", "date"], ["Report ref", "text"], ["Comment", "long"]],
   },
-  fives: { label: ["5S audit", "Audit 5S"], id: "Audit ID", title: "Area", prefix: "5S-" },
+  fives: {
+    label: ["5S audit", "Audit 5S"], id: "Audit ID", title: "Area", prefix: "5S-",
+    fields: [["Audit ID", "text"], ["Area", "suggest", "areas"], ["Date", "date"], ["Week", "text"], ["Auditor", "suggest", "users"], ["Supervisor", "suggest", "users"], ["Checklist", "suggest", "areas"],
+      ["Scale", "pick", ["2", "3"]], ["Scores", "long"], ["Findings", "text"], ["Actions", "long"], ["Owner", "suggest", "users"], ["Due", "date"], ["Action status", "pick", V.fivesStatus], ["Comment", "long"]],
+  },
+  fivesAreas: {
+    label: ["5S area", "Zone 5S"], id: "Area", title: "Area",
+    fields: [["Area", "text"], ["Code", "text"], ["Risk", "pick", V.riskClasses], ["Frequency", "pick", V.fivesFrequencies], ["Rooms", "suggest", "rooms"], ["Owner", "suggest", "users"],
+      ["Key equipment", "long"], ["Critical focus", "long"], ["GMP requirements", "long"], ["Common issues", "long"]],
+  },
+  fivesTpl: {
+    label: ["5S criterion", "Critère 5S"], id: "No", title: "Criterion",
+    fields: [["Area", "suggest", "areas"], ["No", "number"], ["Category", "pick", V.fivesCategories], ["Criterion", "long"]],
+  },
+  fivesItems: {
+    label: ["5S finding", "Constat 5S"], id: "Audit ID", title: "Criterion",
+    defaults: () => ({ Status: "Open", Priority: "Medium" }),
+    fields: [["Audit ID", "text"], ["Area", "suggest", "areas"], ["No", "number"], ["Category", "pick", V.fivesCategories], ["Criterion", "long"], ["Score", "pick", ["0", "1", "2", "3"]],
+      ["Comment", "long"], ["Action", "long"], ["Priority", "pick", V.priorities], ["Owner", "suggest", "users"], ["Due", "date"], ["Status", "pick", V.fivesStatus], ["Closed on", "date"]],
+  },
+  apqrPlan: {
+    label: ["APQR plan line", "Ligne du plan RQP"], id: "Code", title: "Product",
+    fields: [["Code", "text"], ["Product", "long"], ["Dosage form", "pick", V.dosageForms], ["Planned month", "month"], ["Previous report", "text"], ["Period start", "month"], ["Period end", "month"], ["Comment", "long"]],
+  },
+  apqrSys: {
+    label: ["Scigeniq APQR plan line", "Ligne du plan RQP Scigeniq"], id: "Product", title: "Product",
+    fields: [["Product", "long"], ["Process", "pick", V.dosageForms], ["Exec. year", "number"], ["Site", "text"], ["Review start", "text"], ["Review end", "text"], ["Period end", "date"], ["Plan status", "suggest", "col"]],
+  },
+  apqrTasks: {
+    label: ["APQR task", "Tâche RQP"], id: "Reference ID", title: "Task Title",
+    fields: [["Reference ID", "text"], ["Product", "suggest", "col"], ["Dosage Form", "pick", V.dosageForms], ["Department", "pick", V.apqrDepartments], ["Data Stream", "pick", V.apqrStreams], ["Task Type", "suggest", "col"],
+      ["Task Title", "long"], ["Workflow Stage", "pick", V.apqrStages], ["Status", "pick", V.apqrTaskStatus], ["Assigned User", "suggest", "col"], ["Created", "date"], ["Start", "date"], ["Due", "date"], ["Closed On", "date"], ["Closure", "pick", ["Closed", "Not Closed"]]],
+  },
   qaact: {
     label: ["QA activity", "Activité AQ"], id: "Activity ID", title: "Activity", prefix: "QA-",
     fields: [["Activity ID", "text"], ["Activity", "long"], ["Category", "suggest", "col"], ["Reference", "long"], ["Frequency (months)", "pick", ["0", "0.25", "1", "3", "6", "12", "24", "36"]],

@@ -18,10 +18,13 @@ const METRICS = [
   ["grade", "Grade (D = 2, CNC = 1)", (r) => (r.Grade === "D" ? 2 : r.Grade === "CNC" ? 1 : null)],
   ["all", "All quality records", (r) => r.qualityRecords],
   ["risk", "Room risk score", (r) => r.riskScore],
+  ["fives", "5S gap (100 − latest 5S score %)", (r) => (r.fivesScore == null ? null : Math.round((1 - r.fivesScore) * 100) || null)],
+  ["fivesOpen", "Open 5S findings", (r) => r.fivesOpen || null],
 ];
 const METRIC_FR = {
   crit: "Criticité (1 bas – 3 élevé)", open: "Enregistrements ouverts ou en retard", rpn: "IPR AMDEC initial max", cal: "Étalonnages en retard",
   assets: "Nombre d’actifs", press: "Consigne de pression (Pa)", grade: "Classe (D = 2, CNC = 1)", all: "Tous les enregistrements qualité", risk: "Score de risque de la salle",
+  fives: "Écart 5S (100 − dernier score 5S %)", fivesOpen: "Constats 5S ouverts",
 };
 const metricLabel = (mm) => (t("col_month") === "Mois" ? METRIC_FR[mm[0]] : mm[1]);
 const RAMP = ["#cde2fb", "#9ec5f4", "#6da7ec", "#3987e5", "#256abf", "#184f95", "#0d366b"];
