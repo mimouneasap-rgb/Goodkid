@@ -1,7 +1,7 @@
 // Service worker: makes the APQR Command Center installable and usable offline.
 // App files are served from cache and refreshed in the background; bump VERSION
 // to drop old caches after a large change.
-const VERSION = "apqr-v1";
+const VERSION = "apqr-v2";
 const APP_SHELL = [
   "./",
   "index.html",
@@ -9,6 +9,7 @@ const APP_SHELL = [
   "css/apqr.css",
   "js/app.js",
   "js/store.js",
+  "js/sync.js",
   "js/model.js",
   "js/stats.js",
   "js/sop.js",

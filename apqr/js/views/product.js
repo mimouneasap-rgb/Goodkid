@@ -75,7 +75,7 @@ function header(ctx, p) {
       el("div", { class: "eyebrow" },
         p.apqrNo ? el("span", { class: "apqr-no" }, p.apqrNo,
           el("button", { class: "btn ghost sm icon-only no-print", type: "button", style: { color: "#fff", padding: "2px" }, "aria-label": "Copy APQR number",
-            onclick: () => navigator.clipboard?.writeText(p.apqrNo).then(() => toast("APQR number copied")) }, icon("copy", "sm"))) : el("span", { class: "apqr-no" }, p.id),
+            onclick: () => navigator.clipboard?.writeText(p.apqrNo).then(() => toast("APQR number copied"), () => toast(`APQR number: ${p.apqrNo}`)) }, icon("copy", "sm"))) : el("span", { class: "apqr-no" }, p.id),
         el("span", { class: "chip" }, p.form), el("span", { class: "chip" }, p.site),
         el("span", { class: "chip" }, p.route === "QMex" ? "QMex route" : "Scigeniq"),
         planChip(p.planStatus), p.triggered ? ragChip(p.rag) : null),
@@ -89,7 +89,7 @@ function header(ctx, p) {
       el("div", { class: "no-print", style: { display: "flex", gap: "8px", marginTop: "16px", flexWrap: "wrap" } },
         el("button", { class: "btn sm", type: "button", onclick: () => editDetails(ctx, p) }, icon("edit", "sm"), "Edit details"),
         el("button", { class: "btn sm", type: "button", onclick: () => ctx.go(`tasks?product=${encodeURIComponent(p.id)}`) }, icon("tasks", "sm"), "Tasks"),
-        el("button", { class: "btn sm", type: "button", onclick: () => { ctx.ui.product.tab = "report"; ctx.refresh(); setTimeout(() => window.print(), 250); } }, icon("print", "sm"), "Print status report"),
+        ctx.canPrint ? el("button", { class: "btn sm", type: "button", onclick: () => { ctx.ui.product.tab = "report"; ctx.refresh(); setTimeout(() => window.print(), 250); } }, icon("print", "sm"), "Print status report") : null,
         el("button", { class: "btn sm danger", type: "button", onclick: () => deleteProduct(ctx, p) }, icon("trash", "sm"), "Delete"))),
     el("div", { html: ringSvg(ringValue, fmtPct(ringValue), p.total ? "tasks done" : "requirements") }),
   );
@@ -414,7 +414,7 @@ function reportTab(ctx, p, studies) {
           el("dt", {}, "CAPA required"), el("dd", {}, src.capa.required || "Not decided"),
           el("dt", {}, "Committee"), el("dd", {}, `${p.committeeProgress.approved} of ${p.committeeProgress.total} approved`),
           el("dt", {}, "Conclusion"), el("dd", { style: { fontWeight: 400 } }, src.conclusion || src.capa.conclusion || "—")))),
-      el("button", { class: "btn primary no-print", type: "button", onclick: () => window.print() }, icon("print", "sm"), "Print or save as PDF")));
+      ctx.canPrint ? el("button", { class: "btn primary no-print", type: "button", onclick: () => window.print() }, icon("print", "sm"), "Print or save as PDF") : null));
 }
 
 // ---------- history ----------
@@ -423,15 +423,16 @@ function historyTab(ctx, p, tasks) {
   const ids = new Set(tasks.map((t) => t.id));
   const entries = ctx.state.log.filter((e) => (e.kind === "product" && e.id === p.id) || (e.kind === "task" && ids.has(e.id))).slice(0, 200);
   return el("section", { class: "card" }, cardHead("Change history", "Every edit to this product and its tasks, newest first"),
-    entries.length ? el("div", { class: "log", style: { marginTop: "10px" } }, entries.map((e) => logItem(e))) :
+    entries.length ? el("div", { class: "log", style: { marginTop: "10px" } }, entries.map((e) => logItem(e, ctx.nameOf))) :
       el("div", { class: "empty" }, icon("history"), el("h3", {}, "No changes yet"), el("p", {}, "Edits made here are recorded with your name and the time.")));
 }
 
-export function logItem(e) {
+export function logItem(e, nameOf = (x) => x.by || "Someone") {
+  const by = nameOf(e);
   return el("div", { class: "log-item" },
-    el("span", { class: "avatar", style: { "--h": "230" } }, (e.by || "?").slice(0, 1).toUpperCase()),
+    el("span", { class: "avatar", style: { "--h": "230" } }, by.slice(0, 1).toUpperCase()),
     el("div", { style: { minWidth: 0 } },
-      el("div", { class: "log-what" }, el("strong", {}, e.by), ` · ${e.action}`, e.label ? el("span", { class: "muted" }, ` · ${e.label}`) : null),
+      el("div", { class: "log-what" }, el("strong", {}, by), ` · ${e.action}`, e.label ? el("span", { class: "muted" }, ` · ${e.label}`) : null),
       e.changes?.length ? el("div", { class: "log-changes" }, e.changes.slice(0, 6).flatMap((c) => describeChange(c))) : null),
     el("span", { class: "log-time", title: e.ts }, relativeTime(e.ts)));
 }

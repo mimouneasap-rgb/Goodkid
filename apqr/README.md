@@ -98,8 +98,16 @@ from `file://`.
 
 ## Data and compliance
 
-- Data is saved in this browser's local storage, on this device only. Export
-  a backup regularly, and use the JSON backup to move between devices.
+- Run from this repository (or any static host), data is saved in this
+  browser's local storage, on this device only. Export a backup regularly,
+  and use the JSON backup to move between devices.
+- Published as a claude.ai page, the app uses the page's shared database
+  (`js/sync.js`). Everyone the page is shared with sees the same products,
+  tasks and change history, live. People with view-only access can look but
+  not change anything. Personal settings, such as the status date, stay on
+  each device. Products are stored grouped by planned month and tasks grouped
+  by product, so two people editing different items do not overwrite each
+  other.
 - Scigeniq remains the system of record. This app is a tracking and planning
   aid. It does not provide the controls of 21 CFR Part 11 or EU GMP Annex 11:
   it has no authentication or e-signatures, and its change history is not
@@ -114,6 +122,7 @@ from `file://`.
 | `index.html`, `css/apqr.css` | App shell and design system (light and dark) |
 | `js/app.js` | Navigation, routing, search palette, task editor |
 | `js/store.js` | State, local storage, undo and change history |
+| `js/sync.js` | Shared workspace when published on claude.ai |
 | `js/model.js` | Programme logic: dates, RAG, phases, KPIs, numbering, CSV, Scigeniq import |
 | `js/stats.js` | Capability, control limits, run rules, normality |
 | `js/sop.js` | Content transcribed from the two SOPs |

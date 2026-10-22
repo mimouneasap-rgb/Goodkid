@@ -155,7 +155,20 @@ export function relativeTime(iso, now = Date.now()) {
   return `${Math.floor(s / 86400)} d ago`;
 }
 
+/** Set by the app shell: the page's `downloads` capability when it runs on claude.ai, and a notifier. */
+export const platform = { downloads: null, hosted: false, notify: () => {} };
+
 export function download(filename, content, type = "text/plain") {
+  if (platform.downloads) {
+    platform.downloads.save({ filename, data: content }).catch((e) => {
+      if (e?.code !== "declined") platform.notify("The file could not be saved here.");
+    });
+    return;
+  }
+  if (platform.hosted) {
+    platform.notify("Downloads are not available in this view. Open the page in claude.ai to export.");
+    return;
+  }
   const blob = content instanceof Blob ? content : new Blob([content], { type });
   const url = URL.createObjectURL(blob);
   const a = el("a", { href: url, download: filename });

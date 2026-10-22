@@ -1,8 +1,9 @@
 // App shell: navigation, routing, top bar, command palette, task editor and
 // the shared context every view renders from.
 
-import { el, $, $$, icon, iconSvg, fmtDate, debounce, relativeTime } from "./dom.js";
+import { el, $, $$, icon, iconSvg, fmtDate, debounce, relativeTime, platform } from "./dom.js";
 import { createStore } from "./store.js";
+import { connectShared } from "./sync.js";
 import {
   deriveProgramme, programmeKpis, todayIso, TASK_STAGES, TASK_STATUSES, DEPT_IDS, UNASSIGNED, matchesQuery,
   shortProduct, nextTaskId, planBucket, nowStamp,
@@ -27,11 +28,21 @@ const NAV = [
   ["Workspace", [["data", "Data & settings", "data"]]],
 ];
 
-const store = createStore();
+// Running as a published claude.ai page: data is shared through the page's
+// database when available, and the frame refuses printing and plain downloads.
+const HOSTED = typeof window.claude?.use === "function" || window.self !== window.top;
+
+const store = createStore({ shared: HOSTED });
+platform.hosted = HOSTED;
+platform.notify = (m) => toast(m);
 const ui = {}; // per-view UI state (filters, sort, tabs), kept for the session
 let derived = null;
 let kpis = null;
 let saveState = "saved";
+// Shared workspace status: null (local app) or { state, canWrite, error }.
+let shared = HOSTED ? { state: "connecting", canWrite: true } : null;
+let sharedApi = null;
+let names = new Map();
 
 const ctx = {
   store,
@@ -50,6 +61,11 @@ const ctx = {
   newTask,
   openProduct: (id) => go(`product/${encodeURIComponent(id)}`),
   undoToast,
+  hosted: HOSTED,
+  canPrint: !HOSTED,
+  get shared() { return shared; },
+  get sharedApi() { return sharedApi; },
+  nameOf: (entry) => entry.by || names.get(entry.uid) || "Someone",
   get users() {
     return [...new Set(store.state.tasks.map((t) => t.user).filter((u) => u && u !== UNASSIGNED))].sort((a, b) => a.localeCompare(b));
   },
@@ -62,22 +78,31 @@ function recompute() {
 
 // ---------- routing ----------
 
-function parseHash() {
-  const raw = location.hash.replace(/^#\/?/, "");
-  const [path, qs = ""] = raw.split("?");
+// Routes look like "plan", "tasks?user=X" or "product/TB040P02". Navigation is
+// handled in the page, and mirrored to the address bar only in the standalone app.
+
+function parseRoute(raw) {
+  const [path, qs = ""] = String(raw || "").replace(/^#\/?/, "").split("?");
   const [view, ...rest] = path.split("/");
   return { view: VIEWS[view] ? view : "overview", param: decodeURIComponent(rest.join("/")), query: new URLSearchParams(qs) };
 }
 
 function go(path) {
-  const next = `#/${path}`;
-  if (location.hash === next) render();
-  else location.hash = next;
+  ctx.route = parseRoute(path);
+  if (!HOSTED && location.hash !== `#/${path}`) history.pushState(null, "", `#/${path}`);
+  document.body.classList.remove("nav-open");
+  render({ scroll: true });
 }
 
-window.addEventListener("hashchange", () => {
-  ctx.route = parseHash();
-  document.body.classList.remove("nav-open");
+document.addEventListener("click", (e) => {
+  const a = e.target.closest?.('a[href^="#/"]');
+  if (!a || e.defaultPrevented || e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
+  e.preventDefault();
+  go(a.getAttribute("href").slice(2));
+});
+
+window.addEventListener("popstate", () => {
+  ctx.route = parseRoute(location.hash);
   render({ scroll: true });
 });
 
@@ -145,9 +170,24 @@ function renderTopbar(view) {
       el("button", { class: `asof ${live ? "live" : ""}`, type: "button", onclick: asOfDialog, "data-tip": live ? "Status calculated against today's date" : "Status calculated against the data snapshot date. Click to change." },
         el("span", { class: "dot" }), el("span", { class: "label" }, live ? "Live · " : "As of "), fmtDate(derived.asOf)),
       el("button", { class: "btn ghost icon-only", type: "button", "aria-label": store.canUndo ? `Undo ${store.lastUndo}` : "Nothing to undo", "data-tip": store.canUndo ? `Undo: ${store.lastUndo}` : "Nothing to undo", disabled: !store.canUndo, onclick: doUndo }, icon("undo")),
-      el("span", { class: `save-state ${saveState === "error" ? "error" : ""}`, "data-tip": saveState === "error" ? "Browser storage is full or blocked. Export a backup from Data & settings." : "Changes are saved in this browser" },
-        icon(saveState === "error" ? "alert" : "checkCircle", "sm"), saveState === "error" ? "Not saved" : "Saved")),
+      saveBadge()),
   );
+}
+
+function saveBadge() {
+  const [cls, ic, label, tip] = !shared
+    ? saveState === "error"
+      ? ["error", "alert", "Not saved", "Browser storage is full or blocked. Export a backup from Data & settings."]
+      : ["", "checkCircle", "Saved", "Changes are saved in this browser"]
+    : {
+      connecting: ["", "clock", "Connecting…", "Opening the shared workspace"],
+      live: ["live", "people", "Shared · live", "Everyone with access sees the same data. Changes save as you make them."],
+      empty: ["", "data", "Not set up", "The shared workspace has no data yet"],
+      readonly: ["", "shield", "View only", shared.error || "You can look but not change data on this page"],
+      error: ["error", "alert", "Not saved", shared.error || "A change could not be saved"],
+      local: ["", "checkCircle", "Saved", "Changes are saved in this browser"],
+    }[shared.state] || ["", "checkCircle", "Saved", ""];
+  return el("span", { class: `save-state ${cls}`, "data-tip": tip }, icon(ic, "sm"), label);
 }
 
 function renderTabbar() {
@@ -159,6 +199,20 @@ function renderTabbar() {
 }
 
 let lastView = null;
+let deferred = false;
+
+/** True while someone is typing in the page or a dialog is open: live updates wait. */
+function busy() {
+  const a = document.activeElement;
+  return Boolean(document.querySelector("dialog[open]")) || Boolean(a && a.closest?.("#content") && a.matches?.("input:not([type=checkbox]):not([type=radio]), textarea, select"));
+}
+
+function flushDeferred() {
+  if (deferred && !busy()) { deferred = false; render(); }
+}
+document.addEventListener("focusout", () => setTimeout(flushDeferred, 0));
+document.addEventListener("close", () => setTimeout(flushDeferred, 0), true);
+
 function render({ scroll = false } = {}) {
   recompute();
   const view = VIEWS[ctx.route.view];
@@ -167,7 +221,7 @@ function render({ scroll = false } = {}) {
   renderRail();
   renderTopbar(view);
   renderTabbar();
-  content.replaceChildren(view.render(ctx));
+  content.replaceChildren(sharedBanner(), view.render(ctx));
   mountCharts(content);
   document.title = `${view.title(ctx)} · APQR Command Center`;
   if (scroll || lastView !== ctx.route.view + ctx.route.param) {
@@ -176,6 +230,22 @@ function render({ scroll = false } = {}) {
     window.scrollTo(0, keepScroll);
   }
   lastView = ctx.route.view + ctx.route.param;
+}
+
+function sharedBanner() {
+  if (!shared || !(shared.state === "empty" || shared.state === "error" || shared.state === "readonly")) return "";
+  if (shared.state === "empty") {
+    return el("div", { class: "callout info no-print", style: { marginBottom: "18px", alignItems: "center" } }, icon("data"),
+      el("span", { style: { flex: 1 } }, el("strong", {}, "The shared workspace is empty. "),
+        shared.canWrite ? "Load the 2026 plan and the Scigeniq export into it so everyone with access works on the same data. Until then you are looking at the source data, and changes stay in this browser."
+          : "The owner has not loaded the data yet. You are looking at the source data."),
+      shared.canWrite ? el("button", { class: "btn primary sm", type: "button", onclick: async (e) => {
+        e.currentTarget.disabled = true;
+        try { await sharedApi.seed(store.state); toast("Shared workspace ready"); } catch { toast("Could not set up the shared workspace. Try again."); e.currentTarget.disabled = false; }
+      } }, "Load source data") : null);
+  }
+  return el("div", { class: `callout ${shared.state === "error" ? "critical" : "info"} no-print`, style: { marginBottom: "18px" } },
+    icon(shared.state === "error" ? "alert" : "shield"), el("span", {}, shared.error || (shared.state === "readonly" ? "You have view-only access, so changes are not saved." : "")));
 }
 
 // ---------- undo ----------
@@ -420,21 +490,38 @@ window.addEventListener("resize", debounce(() => {
 store.subscribe((info) => {
   if (info.saved === false) saveState = "error";
   else if (info.saved === true) saveState = "saved";
-  if (info.changed) render();
-  else if ("saved" in info) {
-    const s = $(".save-state");
-    if (s) renderTopbar(VIEWS[ctx.route.view]);
+  if (info.blocked) toast(shared?.error || "You have view-only access, so this change was not saved.");
+  if (info.changed) {
+    // Someone else's change: wait until this viewer finishes typing.
+    if (info.remote && busy()) { deferred = true; renderTopbar(VIEWS[ctx.route.view]); return; }
+    render();
+  } else if ("saved" in info) {
+    renderTopbar(VIEWS[ctx.route.view]);
   }
 });
 
 installTooltips();
-ctx.route = parseHash();
+ctx.route = parseRoute(location.hash);
 render({ scroll: true });
 
-if (!store.restored) {
-  setTimeout(() => toast(`Loaded ${store.state.products.length} products and ${store.state.tasks.length} tasks from the 2026 plan and Scigeniq export. Edits save in this browser.`), 600);
-}
-
-if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
-  window.addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => { /* offline support is optional */ }));
+if (HOSTED) {
+  connectShared(store, {
+    onStatus: (s) => {
+      const before = shared?.state;
+      shared = s;
+      if (before !== s.state) render(); else renderTopbar(VIEWS[ctx.route.view]);
+    },
+    onNames: (n) => { names = n; if (ctx.route.view === "data" || ctx.route.view === "product") render(); },
+  }).then((api) => {
+    sharedApi = api;
+    if (!api) { shared = { state: "local", canWrite: true }; renderTopbar(VIEWS[ctx.route.view]); }
+  }).catch(() => { shared = { state: "local", canWrite: true }; renderTopbar(VIEWS[ctx.route.view]); });
+  window.claude?.use?.("downloads").then((d) => { platform.downloads = d; }).catch(() => { /* exports stay hidden */ });
+} else {
+  if (!store.restored) {
+    setTimeout(() => toast(`Loaded ${store.state.products.length} products and ${store.state.tasks.length} tasks from the 2026 plan and Scigeniq export. Edits save in this browser.`), 600);
+  }
+  if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
+    window.addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => { /* offline support is optional */ }));
+  }
 }

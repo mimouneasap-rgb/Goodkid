@@ -8,7 +8,7 @@ import { cardHead, select } from "../ui.js";
 import { logItem } from "./product.js";
 
 export const title = () => "Data & settings";
-export const crumbs = () => ["Everything is stored in this browser · no sign-in"];
+export const crumbs = (ctx) => [ctx.store.shared ? "Shared workspace · everyone with access sees the same data" : "Everything is stored in this browser · no sign-in"];
 
 export function render(ctx) {
   const s = ctx.state.settings;
@@ -26,7 +26,7 @@ export function render(ctx) {
           el("div", { class: "field full" }, el("label", { for: "set-name" }, "Your name"),
             el("input", { id: "set-name", class: "input", value: s.userName, placeholder: "Shown in the change history", autocomplete: "name",
               onchange: (e) => set({ userName: e.target.value.trim() }, "Set user name") }),
-            el("span", { class: "hint" }, "No sign-in: the name you type here is recorded with each change.")),
+            el("span", { class: "hint" }, ctx.store.shared ? "Shown in the change history. Leave it empty to use your claude.ai name." : "No sign-in: the name you type here is recorded with each change.")),
           el("div", { class: "field" }, el("label", {}, "Status date"),
             select([["snapshot", `Snapshot (${fmtDate(ctx.state.meta.snapshot)})`], ["today", `Today (${fmtDate(todayIso())})`], ["custom", "Specific date"]], s.asOfMode,
               (v) => set({ asOfMode: v, asOf: v === "snapshot" ? ctx.state.meta.snapshot : s.asOf }, "Change status date"), { label: "Status date mode" })),
@@ -65,10 +65,11 @@ export function render(ctx) {
         el("div", { class: "card-body" },
           el("ul", { style: { margin: 0, paddingLeft: "18px", display: "flex", flexDirection: "column", gap: "4px", fontSize: "13px" } }, ctx.state.meta.sources.map((x) => el("li", {}, x))),
           el("div", { class: "callout info", style: { marginTop: "14px" } }, icon("shield"), el("span", {},
-            "This is a tracking and planning workspace. Scigeniq remains the system of record: official data, digital signatures and archived reports (21 CFR Part 11) live there. Data here is kept in this browser only, so export a backup regularly.")))),
+            "This is a tracking and planning workspace. Scigeniq remains the system of record: official data, digital signatures and archived reports (21 CFR Part 11) live there. ",
+            ctx.store.shared ? "Here, products, tasks and the change history are shared with everyone who can open this page; your settings stay on your device." : "Data here is kept in this browser only, so export a backup regularly.")))),
       el("section", { class: "card span-5" }, cardHead("Reset", "Start again from the source documents"),
         el("div", { class: "card-body", style: { display: "flex", flexDirection: "column", gap: "12px" } },
-          el("p", { class: "muted", style: { fontSize: "13px" } }, "Replaces all products, tasks, statistics and approvals with the original plan and Scigeniq export. Your name and settings are kept. You can undo straight after."),
+          el("p", { class: "muted", style: { fontSize: "13px" } }, "Replaces all products, tasks, statistics and approvals with the original plan and Scigeniq export", ctx.store.shared ? ", for everyone using this page" : "", ". Your name and settings are kept. You can undo straight after."),
           el("button", { class: "btn danger", type: "button", onclick: async () => {
             if (await ctx.confirm({ title: "Reset all data?", message: "Every edit, study and approval will be replaced by the source data. Export a backup first if you may need them.", confirmLabel: "Reset", danger: true })) {
               ctx.store.reset();
@@ -157,10 +158,10 @@ function auditCard(ctx) {
         ]);
         download(`APQR-change-history-${todayIso()}.csv`, `﻿${csv}`, "text/csv");
       } }, icon("download", "sm"), "CSV"),
-      el("button", { class: "btn sm danger", type: "button", disabled: !all.length, onclick: async () => {
+      ctx.store.shared ? null : el("button", { class: "btn sm danger", type: "button", disabled: !all.length, onclick: async () => {
         if (await ctx.confirm({ title: "Clear the change history?", message: "The history list is emptied. Your data is not changed. This cannot be undone.", confirmLabel: "Clear history", danger: true })) ctx.store.clearLog();
       } }, "Clear")),
-    rows.length ? el("div", { class: "log", style: { marginTop: "10px" } }, rows.slice(0, u.limit).map((e) => logItem(e)),
+    rows.length ? el("div", { class: "log", style: { marginTop: "10px" } }, rows.slice(0, u.limit).map((e) => logItem(e, ctx.nameOf)),
       rows.length > u.limit ? el("div", { class: "table-more" }, el("button", { class: "btn", type: "button", onclick: () => { u.limit += 100; ctx.refresh(); } }, `Show more (${rows.length - u.limit})`)) : null) :
       el("div", { class: "empty" }, icon("history"), el("h3", {}, all.length ? "No entries match" : "No changes yet"), el("p", {}, "Edit a task, a product or a setting and it appears here with your name and the time.")));
 }

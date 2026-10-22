@@ -214,7 +214,7 @@ p { margin: 0; }
 .scrim { display: none; }
 
 .rail {
-  position: sticky; top: 0; height: 100vh;
+  position: sticky; top: 0; height: 100vh; height: 100dvh;
   display: flex; flex-direction: column;
   background:
     radial-gradient(500px 300px at -10% -5%, rgba(99, 102, 241, .28), transparent 60%),
@@ -282,7 +282,7 @@ p { margin: 0; }
 
 .main { min-width: 0; display: flex; flex-direction: column; }
 .topbar {
-  position: sticky; top: 0; z-index: 15;
+  position: sticky; top: env(safe-area-inset-top, 0px); z-index: 15;
   display: flex; align-items: center; gap: 14px;
   padding: 14px 32px; min-height: 68px;
   background: color-mix(in srgb, var(--bg) 82%, transparent);
@@ -313,6 +313,7 @@ kbd {
 .asof.live .dot { background: var(--good); box-shadow: 0 0 0 3px color-mix(in srgb, var(--good) 25%, transparent); }
 .save-state { font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
 .save-state.error { color: var(--critical-ink); }
+.save-state.live { color: var(--good-ink); font-weight: 650; }
 
 .content { padding: 26px 32px 64px; max-width: 1560px; width: 100%; margin: 0 auto; }
 .view { display: flex; flex-direction: column; gap: 20px; animation: view-in .28s ease-out; }
