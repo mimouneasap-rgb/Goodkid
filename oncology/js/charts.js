@@ -342,13 +342,14 @@ export function gauge(value, { target, warning, label, sub }) {
     h("div.gauge-s", h(`span.rag.rag-${status}`, h("i"), [null, t("st_action"), t("st_watch"), t("st_on")][status]), " ", sub));
 }
 
-/** Progress ring for a single share. */
+/** Progress ring for a single share; a null value (nothing measured yet) draws an empty track with "—" rather than 0%. */
 export function ring(value, { size = 64, color = "var(--c1)", label } = {}) {
-  const r = size / 2 - 5, c = 2 * Math.PI * r, v = Math.max(0, Math.min(1, value ?? 0));
-  return h("svg", { viewBox: `0 0 ${size} ${size}`, width: size, height: size, class: "ring", role: "img", "aria-label": label ?? fmtPct(v) },
+  const none = value == null || Number.isNaN(value);
+  const r = size / 2 - 5, c = 2 * Math.PI * r, v = none ? 0 : Math.max(0, Math.min(1, value));
+  return h("svg", { viewBox: `0 0 ${size} ${size}`, width: size, height: size, class: "ring", role: "img", "aria-label": label ?? (none ? "—" : fmtPct(v)) },
     h("circle", { cx: size / 2, cy: size / 2, r, fill: "none", stroke: "var(--track)", "stroke-width": 7 }),
-    h("circle", { cx: size / 2, cy: size / 2, r, fill: "none", stroke: color, "stroke-width": 7, "stroke-linecap": "round", "stroke-dasharray": `${c * v} ${c}`, transform: `rotate(-90 ${size / 2} ${size / 2})` }),
-    h("text", { x: size / 2, y: size / 2 + 4, "text-anchor": "middle", class: "ring-t" }, fmtPct(v)));
+    none ? null : h("circle", { cx: size / 2, cy: size / 2, r, fill: "none", stroke: color, "stroke-width": 7, "stroke-linecap": "round", "stroke-dasharray": `${c * v} ${c}`, transform: `rotate(-90 ${size / 2} ${size / 2})` }),
+    h("text", { x: size / 2, y: size / 2 + 4, "text-anchor": "middle", class: "ring-t" }, none ? "—" : fmtPct(v)));
 }
 
 /** Tiny trend line for KPI tiles. */

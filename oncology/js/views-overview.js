@@ -142,7 +142,7 @@ function pulse(ctx) {
     ["activities", "qaa_title", share(acts, (a) => ["In date", "Due ≤30 d", "Continuous"].includes(a.status)), "var(--good)", t("in_date_lbl")],
   ];
   return card(t("h_pulse"), h("div.pulse", items.map(([route, key, v, color, sub], i) => h("button.pulse-item", { type: "button", style: { "--i": i }, onclick: () => ctx.go(route) },
-    ring(v ?? 0, { size: 84, color: v == null ? "var(--muted-mark)" : color }), h("b", t(key)), h("small", v == null ? t("no_data") : sub ?? "")))), { sub: t("h_pulse_sub") });
+    ring(v, { size: 84, color: v == null ? "var(--muted-mark)" : color }), h("b", t(key)), h("small", v == null ? t("no_data") : sub ?? "")))), { sub: t("h_pulse_sub") });
 }
 const getMonthsWord = () => (t("col_month") === "Mois" ? "mois" : "months");
 function guideText(key) {
