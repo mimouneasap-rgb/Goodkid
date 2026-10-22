@@ -17,7 +17,7 @@ import * as OP from "./views-ops.js";
 import * as PE from "./views-people.js";
 import * as AP from "./views-apqr.js";
 import * as FV from "./views-fives.js";
-import { importFiles, COLS, emptyData } from "./importers.js";
+import { importFiles, COLS, emptyData, upsertRows } from "./importers.js";
 import { buildDomains } from "./domain.js";
 
 // ---------- per-viewer preferences (theme, language, filters) ----------
@@ -144,6 +144,24 @@ const ctx = {
   /** Save a row given as {column: value} (key null = new row); other columns are kept. */
   saveObj: (table, key, obj, quiet) => saveObj(table, key, obj, quiet),
   toast: (msg, kind) => toast(msg, kind),
+  /**
+   * Add or update many rows at once ({column: value} objects; rows matching on keyCols are updated).
+   * A few rows are saved as individual changes; a large batch rewrites the table once (its in-app changes are folded in).
+   */
+  bulkUpsert: async (table, objs, keyCols, progress) => {
+    const tbl = data[table];
+    const res = upsertRows(tbl.cols, tbl.rows, objs, keyCols);
+    if (!res.changed.length) return res;
+    if (res.changed.length <= 25) {
+      let n = 0;
+      for (const i of res.changed) { progress?.(++n, res.changed.length); await ws.saveRow(table, i < tbl.rows.length ? tbl.keys[i] : newKey(), res.rows[i], me, tbl.importId); }
+    } else {
+      const next = structuredClone(wsState.base);
+      next[table] = { cols: tbl.cols, rows: res.rows };
+      await ws.importBase(next, [table], progress);
+    }
+    return res;
+  },
   /** Apply the same change to several rows (e.g. record a calibration group as done). */
   bulkUpdate: async (table, keys, patch) => {
     try { for (const k of keys) await saveObj(table, k, patch, true); toast(t("saved_ok")); } catch (e) { toast(e.message, "warn"); }
@@ -569,7 +587,7 @@ function openPalette() {
     add(t("nav_actions"), model.actions.filter((a) => m(a.ref) || m(a.title) || m(a.parentRef)).map((a) => ({ label: `${a.ref} · ${a.title}`, sub: `${a.parentRef || t("standalone")} · ${tv(a.status)}`, icon: "tasks", act: () => openAction(a.ref) })), 5);
     add(t("batches_lbl"), model.x.batches.filter((b) => m(b["Batch no"]) || m(b.Product)).map((b) => ({ label: `${b["Batch no"]} · ${b.Product}`, sub: tv(b.stage), icon: "cycle", act: () => go("lifecycle") })), 4);
     add(t("trn_title"), model.x.training.filter((x) => m(x["Training ID"]) || m(x.Program) || m(x.Reference)).map((x) => ({ label: `${x["Training ID"] ?? ""} · ${x.Program}`, sub: tv(x.status), icon: "cap", act: () => go("training") })), 4);
-    add(t("apqr_title"), model.x.apqrProg.products.filter((p) => m(p.name) || m(p.code) || p.refs.some(m)).map((p) => ({ label: p.name, sub: `${p.refs.join(" ") || p.code || ""} · ${tv(p.track)}`, icon: "report", act: () => { go("apqr"); setTimeout(() => AP.openApqrProduct(ctx, p.key), 50); } })), 6);
+    add(t("apqr_title"), model.x.apqrProg.products.filter((p) => m(p.name) || m(p.code) || p.refs.some(m)).map((p) => ({ label: p.name, sub: `${p.refs.join(" ") || p.code || ""} · ${tv(p.track)}`, icon: "report", act: () => go("apqr", { p: p.key }) })), 6);
     add(t("fives_title"), model.x.fivesX.areas.filter((a) => m(a.Area)).map((a) => ({ label: a.Area, sub: `${a.Risk ? tv(a.Risk) + " · " : ""}${a.score != null ? fmtPct(a.score) : tv(a.status)}`, icon: "sparkle", act: () => { go("fives"); setTimeout(() => FV.openArea(ctx, a.key), 50); } })), 4);
     add(t("qaa_title"), model.x.qaact.filter((a) => m(a.id) || m(a.activity) || m(a.reference)).map((a) => ({ label: `${a.id} · ${a.activity}`, sub: a.reference, icon: "calendar", act: () => go("activities") })), 4);
     const prods = [...new Set(model.products.map((p) => p.Product))];
@@ -655,7 +673,7 @@ function dropZone(onDone) {
     status.replaceChildren(h("span.spinner"), " …");
     try {
       // imports replace the imported tables (not the edited view of them); edits to replaced tables are dropped
-      const { next, replaced, done } = await importFiles(files, wsState.base, { needMaster: wsState.base?.rooms?.rows?.length ? null : t("need_master") });
+      const { next, replaced, done } = await importFiles(files, wsState.base, { needMaster: wsState.base?.rooms?.rows?.length ? null : t("need_master"), current: data });
       const report = h("ul", done.map(([name, msg]) => h("li", { class: msg.startsWith("✘") ? "warn-text" : "" }, h("b", name), " · ", msg)));
       if (!replaced.length) { status.replaceChildren(h("div.warn-text", t("import_nothing")), report); return; }
       next.meta = { ...next.meta, importedAt: new Date().toISOString() };

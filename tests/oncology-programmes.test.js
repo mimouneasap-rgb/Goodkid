@@ -200,3 +200,91 @@ test("APQR tracker workbook: task register, Scigeniq plan and export date", asyn
   assert.equal(next.apqrTasks.rows[0][next.apqrTasks.cols.indexOf("Data Stream")], "QC");
   assert.equal(next.apqrSys.rows[0][next.apqrSys.cols.indexOf("Review start")], "12/2025");
 });
+
+// ---------- Scigeniq all-tasks report → APQR task list ----------
+const { dmyTime, apqrTaskClass, dosageFormOf, mergeApqrTasks, parseDelimited, matchColumns, upsertRows, prepBulkRow } = await import("../oncology/js/importers.js");
+const SCIG_HDR = ["Creation Date", "Type", "Stage", "Title", "Reference Id", "Status", "Closed", "Closing date", "Closed by", "Project", "Location", "Zone", "Asset", "Creating method", "Role",
+  "Start Date", "End Date", "Assigned User", "Associated Users", "Critical Level", "Tags", "Created By", "Folders", "Parent action", "Duration"];
+const scig = (o) => SCIG_HDR.map((c) => o[c] ?? "-----");
+const DEMO = "DEMOLOL (Demolol) 10 mg F/C Tablets (30 TAB)-ELKENDI";
+
+test("Scigeniq task fields: dates, department and stream, dosage form", () => {
+  assert.equal(dmyTime("22/10/2026 04:11 pm"), "2026-10-22T16:11");
+  assert.equal(dmyTime("07/01/2027 12:05 am"), "2027-01-07T00:05");
+  assert.equal(dmyTime("15/12/2026"), "2026-12-15");
+  assert.deepEqual([["APQR", "x"], ["IPC Data Collection - Tablet", "x"], ["Process Data Collection - Hard Capsule", "x"], ["QC Data Collection - liquid", "x"], ["RA Data Collection", "x"],
+    ["QA Data Collection", "CM Data Collection"], ["QA Data Collection", "Supplier Data Collection"], ["QA Data Collection", "VL Process Data Collection"], ["QA Data Collection", "QC OOS/OOT Data Collection"],
+    ["QA Data Collection", "Compliance Data Collection"]].map(([a, b]) => apqrTaskClass(a, b).join("/")),
+  ["QA/APQR Workflow", "Production/IPC", "Production/Process", "QC/QC", "RA/RA", "QA/Change Management", "QA/Supplier", "Validation/Validation", "QC/QC", "QA/QA"]);
+  assert.deepEqual(["X 20 mg Capsules (30 CAP)", "X 1% Gel (30 gm)", "X Syrup (100 ml)", "X 5 mg Tablets (30 TAB)", "X 10 mg/ml Injectable", "Shampoo"].map(dosageFormOf),
+    ["Hard Capsule", "Semi Solid", "Liquid/Syrup", "Tablets", "Injectable", null]);
+});
+
+test("Scigeniq all-tasks report merges into the APQR tasks: update, add, infer closure, flag duplicates", async () => {
+  const rows = [
+    scig({ "Creation Date": "01/10/2026 09:00 am", Type: "APQR", Stage: "Data Collection", Title: `APQR , ${DEMO}`, "Reference Id": "APQR-KE-50", Status: "Open", Closed: "Not Closed", "End Date": "01/01/2027 09:00 am", "Assigned User": "Owner A", "Critical Level": "Low", "Parent action": `Row - ${DEMO}(Tablets)` }),
+    scig({ "Creation Date": "02/10/2026 09:00 am", Type: "QA Data Collection", Stage: "Collecting Data", Title: "Supplier Data Collection", "Reference Id": "APQR-KE-50", Status: "Overdue", Closed: "Not Closed", "End Date": "10/10/2026 09:00 am", "Parent action": `Task - APQR , ${DEMO}` }),
+    scig({ "Creation Date": "02/10/2026 09:00 am", Type: "QC Data Collection - Tablet", Stage: "Collecting Data", Title: "QC Data Collection - Tablet", "Reference Id": "QCTAB-KE-50", Status: "Open", Closed: "Not Closed", "End Date": "02/01/2027 09:00 am", "Parent action": `Task - APQR , ${DEMO}` }),
+    scig({ "Creation Date": "03/09/2026 09:00 am", Type: "APQR", Stage: "Data Collection", Title: "Duplicated", "Reference Id": "APQR-KE-49", Status: "Overdue", Closed: "Not Closed", "End Date": "01/10/2026 09:00 am", "Parent action": `Row - ${DEMO}(Tablets)` }),
+    scig({ "Creation Date": "03/09/2026 09:00 am", Type: "RA Data Collection", Stage: "Collecting Data", Title: "RA Data Collection", "Reference Id": "APQR-KE-49", Status: "Overdue", Closed: "Not Closed", "End Date": "01/10/2026 09:00 am", "Parent action": "Task - Duplicated" }),
+    scig({ "Creation Date": "04/10/2026 09:00 am", Type: "Approval", Stage: "In Progress", Title: "Area Manager Approval", "Reference Id": "APV-KE-9", Status: "Open", Closed: "Not Closed" }),
+  ];
+  // padding rows so the export qualifies as a full list of open tasks
+  for (let i = 0; i < 50; i++) rows.push(scig({ "Creation Date": "05/10/2026 09:00 am", Type: "Validation Data Collection", Stage: "Collecting Data", Title: `Validation Data Collection ${i}`, "Reference Id": `APQR-KE-${100 + i}`, Status: i % 2 ? "Open" : "Overdue", Closed: "Not Closed", "End Date": "05/11/2026 09:00 am", "Parent action": `Task - APQR , OTHER${i} 5 mg Tablets (30 TAB)-ELKENDI` }));
+  const f = fileOf("allTasks_report.xlsx", { "Over All": [["", "scigeniq"], ["", "Overview"], [null, "Generation Date : 22/10/2026 06:06 pm"], [null, " # Open : 30"]], Data: [SCIG_HDR, ...rows] });
+  const cols = COLS.apqrTasks;
+  const current = { cols, rows: [
+    // still open → updated, the comment typed in the app is kept
+    cols.map((c) => ({ "Reference ID": "APQR-KE-50", Product: DEMO, "Task Title": "Supplier Data Collection", Status: "Open", Closure: "Not Closed", Comment: "chased by mail" })[c] ?? null),
+    // open before, missing now → closed in Scigeniq meanwhile
+    cols.map((c) => ({ "Reference ID": "APQR-KE-50", Product: DEMO, "Task Title": "RA Data Collection", Status: "Open", Closure: "Not Closed" })[c] ?? null),
+    // other workflow family absent from the export → left alone
+    cols.map((c) => ({ "Reference ID": "APQR-PS-1", Product: "OTHER SITE PRODUCT", "Task Title": "Validation Data Collection", Status: "Open", Closure: "Not Closed" })[c] ?? null),
+  ] };
+  const base = { meta: { apqrAsOf: "2026-07-28" }, apqrTasks: current };
+  const { next, done, replaced } = await importFiles([f], base, { current: base });
+  assert.match(done[0][1], /Scigeniq APQR tasks of 22\/10\/2026 · 55 tasks in 2 workflows · 54 new, 1 updated, 1 no longer open \(marked closed\) · 1 non-APQR tasks ignored/);
+  assert.deepEqual(replaced, ["apqrTasks"]);
+  assert.equal(next.meta.apqrAsOf, "2026-10-22");
+  const objs = next.apqrTasks.rows.map((r) => Object.fromEntries(cols.map((c, i) => [c, r[i]])));
+  const sup = objs.find((o) => o["Task Title"] === "Supplier Data Collection");
+  assert.deepEqual([sup.Status, sup.Comment, sup.Department, sup["Data Stream"], sup["Dosage Form"], sup.Site, sup.Due, sup["Last seen"]], ["Overdue", "chased by mail", "QA", "Supplier", "Tablets", "ELKENDI", "2026-10-10T09:00", "2026-10-22"]);
+  const ra = objs.find((o) => o["Reference ID"] === "APQR-KE-50" && o["Task Title"] === "RA Data Collection");
+  assert.deepEqual([ra.Status, ra.Closure, ra["Last seen"]], ["Closed (inferred)", "Closed", "2026-07-28"]);
+  assert.equal(objs.find((o) => o["Reference ID"] === "APQR-PS-1").Status, "Open");
+  const dupTask = objs.find((o) => o["Reference ID"] === "APQR-KE-49" && o["Task Title"] === "RA Data Collection");
+  assert.equal(dupTask.Product, DEMO); // taken from the duplicated workflow's row
+  // in the programme: the duplicate workflow and its tasks are kept apart, the inferred closure counts as done
+  const w = { ...wb, meta: { ...wb.meta, apqrAsOf: "2026-10-22" }, apqrTasks: next.apqrTasks,
+    apqrSections: table("apqrSections", [{ Product: DEMO, Section: "i", Status: "Complete" }, { Product: DEMO, Section: "ii", Status: "Not applicable" }, { Product: DEMO, Section: "iii", Status: "In progress" }]) };
+  const p = build(w).x.apqrProg.products.find((x) => x.key === normProduct(DEMO));
+  assert.deepEqual(p.refs, ["APQR-KE-50"]);
+  assert.deepEqual(p.dupRefs, ["APQR-KE-49"]);
+  assert.equal(p.dupTasks.length, 2);
+  assert.equal(p.duplicate, false);
+  assert.equal(p.inferred, 1);
+  assert.equal(p.total, 4); // workflow, supplier, QC tablet, inferred RA
+  assert.equal(p.sectionPct, 2 / 12);
+  assert.equal(p.mainRef, "APQR-KE-50");
+});
+
+test("merge without an open-only export never infers closures", () => {
+  const cols = ["Reference ID", "Task Title", "Status", "Closure", "Closed On", "Last seen"];
+  const cur = { cols, rows: [["APQR-KE-1", "A", "Open", "Not Closed", null, null]] };
+  const res = mergeApqrTasks(cols, cur, [{ "Reference ID": "APQR-KE-2", "Task Title": "B", Status: "Open" }], { openOnly: false });
+  assert.deepEqual([res.added, res.inferred, res.rows[0][2]], [1, 0, "Open"]);
+});
+
+test("bulk insert: pasted rows, column matching and upsert", () => {
+  assert.deepEqual(parseDelimited("A\tB\n1\t2\n\n3\t4\n"), [["A", "B"], ["1", "2"], ["3", "4"]]);
+  assert.deepEqual(parseDelimited('Code;Product\nX1;"Name; with ""quotes"""\n'), [["Code", "Product"], ["X1", 'Name; with "quotes"']]);
+  assert.deepEqual(parseDelimited("a,b\n1,2"), [["a", "b"], ["1", "2"]]);
+  assert.deepEqual(matchColumns(["reference id", "Title", "End Date", "assigned user", "Nonsense", "Task Title"], COLS.apqrTasks, "apqrTasks"),
+    ["Reference ID", "Task Title", "Due", "Assigned User", null, null]); // a column is filled once
+  const cols = ["Code", "Product", "Comment"];
+  const res = upsertRows(cols, [["X1", "Old", "keep"], ["X2", "Two", null]], [{ Code: "x1", Product: "New" }, { Code: "X3", Product: "Three" }, { Code: "X2", Product: "Two" }, { Product: "No code" }], ["Code"]);
+  assert.deepEqual(res.rows, [["X1", "New", "keep"], ["X2", "Two", null], ["X3", "Three", null], [null, "No code", null]]);
+  assert.deepEqual([res.added, res.updated, res.unchanged, res.changed], [2, 1, 1, [0, 2, 3]]);
+  const x = prepBulkRow("apqrTasks", { "Reference ID": "APQR-KE-7", "Task Title": "CM Data Collection", "Task Type": "QA Data Collection", Product: "DEMO 5 mg Capsules (30 CAP)-ELKENDI", Due: "15/12/2026 05:00 pm" });
+  assert.deepEqual([x.Department, x["Data Stream"], x["Dosage Form"], x.Site, x.Due, x.Closure], ["QA", "Change Management", "Hard Capsule", "ELKENDI", "2026-12-15T17:00", "Not Closed"]);
+});

@@ -1,9 +1,9 @@
 // File importers. Everything is read in the browser:
 //  - the master workbook (.xlsx) and Scigeniq exports (CC, CAPA, Quality Event, Audit Findings, Actions)
-//  - the batch tracker (.xlsm), the WIP workbook, the 5S area checklists and the APQR tracker / Scigeniq APQR export (.xlsx)
+//  - the batch tracker (.xlsm), the WIP workbook, the 5S area checklists, the APQR tracker and the Scigeniq all-tasks report (.xlsx)
 //  - the controlled Word forms (.docx): annual / monthly calibration programs, validation and
 //    requalification schedules, annual training plans, the registered API supplier list and the APQR annual plan.
-// Each importer writes whole tables into `next` and lists them in `replaced`.
+// Each importer writes whole tables into `next` and lists them in `replaced` (the Scigeniq task report merges into the APQR task list).
 import SCHEMA from "./schema.js";
 import { EXT_COLS } from "./schema-ext.js";
 
@@ -287,6 +287,241 @@ function importApqr(XLSX, wb, next, replaced, file) {
     break;
   }
   return out.length ? `APQR ${out.join(" · ")}` : null;
+}
+
+// ---------- Scigeniq "all tasks" report: the APQR workflows (APQR-xx-n, QCTAB-xx-n) and their data-collection tasks ----------
+// site from the reference (APQR-KE-12); other sites are named by the product suffix ("…-SITE") or keep their code
+const APQR_SITES = { KE: "ELKENDI", KO: "ELKENDI Oncology" };
+const APQR_REF = /^(APQR|QC[A-Z]*)-([A-Z]{2})-\d+$/i;
+const none = (v) => { const s = text(v); return s && !/^-+$/.test(s) ? s : null; };
+/** "22/10/2026 04:11 pm" → "2026-10-22T16:11" (the tracker's format); a bare date → "2026-10-22". */
+export function dmyTime(v) {
+  if (v instanceof Date) return cellVal(v);
+  const m = text(v).match(/(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{2})\s*([ap]m)?)?/i);
+  if (!m) return null;
+  let hh = +(m[4] ?? 0);
+  if (m[6]) hh = (hh % 12) + (/pm/i.test(m[6]) ? 12 : 0);
+  return `${m[3]}-${pad(m[2])}-${pad(m[1])}${m[4] != null ? `T${pad(hh)}:${m[5]}` : ""}`;
+}
+/** Department and data stream of a Scigeniq APQR task, from its type (and, for QA data collection, its title). */
+export function apqrTaskClass(type, title) {
+  const ty = text(type), ti = text(title);
+  if (/^apqr$/i.test(ty)) return ["QA", "APQR Workflow"];
+  if (/^ipc/i.test(ty)) return ["Production", "IPC"];
+  if (/process data collection|semi solid/i.test(ty) && !/^qc/i.test(ty)) return ["Production", "Process"];
+  if (/^qc/i.test(ty)) return ["QC", "QC"];
+  if (/^ra\b/i.test(ty)) return ["RA", "RA"];
+  if (/^validation/i.test(ty)) return ["Validation", "Validation"];
+  if (/^cm\b|change/i.test(ti)) return ["QA", "Change Management"];
+  if (/supplier/i.test(ti)) return ["QA", "Supplier"];
+  if (/^vl\b|validation/i.test(ti)) return ["Validation", "Validation"];
+  if (/\bqc\b|oos|oot/i.test(ti)) return ["QC", "QC"];
+  return ["QA", "QA"];
+}
+/** Dosage form from a task type suffix or a product name ("… Capsules (30 CAP)"). */
+export function dosageFormOf(s) {
+  const x = text(s);
+  if (/inject|\bvial\b|iv bag|ampoule/i.test(x)) return "Injectable";
+  if (/semi.?solid|\bgel\b|ointment|cream|\d\s*gm\)/i.test(x)) return "Semi Solid";
+  if (/capsule|\bcap\)/i.test(x)) return "Hard Capsule";
+  if (/liquid|syrup|drops|solution|suspension|\d\s*ml\)/i.test(x)) return "Liquid/Syrup";
+  if (/tablet|\btab\)/i.test(x)) return "Tablets";
+  return null;
+}
+
+/**
+ * Merge Scigeniq task rows (objects keyed by the apqrTasks columns) into the task list: the same
+ * Reference ID and Task Title is the same task. When the export lists open tasks only, an open task of
+ * the same workflow families that is no longer listed was closed in the meantime ("Closed (inferred)").
+ */
+export function mergeApqrTasks(cols, current, incoming, { asOf = null, prevAsOf = null, openOnly = false } = {}) {
+  const ix = Object.fromEntries(cols.map((c, i) => [c, i]));
+  const keyOf = (ref, title) => `${text(ref)}|${text(title).toLowerCase()}`;
+  const rows = (current?.rows ?? []).map((r) => {
+    if (current.cols === cols) return cols.map((_, i) => r[i] ?? null);
+    const o = Object.fromEntries(current.cols.map((c, i) => [c, r[i]]));
+    return cols.map((c) => o[c] ?? null);
+  });
+  const at = new Map(rows.map((r, i) => [keyOf(r[ix["Reference ID"]], r[ix["Task Title"]]), i]));
+  const seen = new Set(), families = new Set();
+  let added = 0, updated = 0, inferred = 0;
+  for (const o of incoming) {
+    const k = keyOf(o["Reference ID"], o["Task Title"]);
+    seen.add(k);
+    families.add(text(o["Reference ID"]).replace(/-\d+$/, ""));
+    const i = at.get(k);
+    if (i == null) { rows.push(cols.map((c) => o[c] ?? null)); at.set(k, rows.length - 1); added++; continue; }
+    const r = rows[i];
+    for (const c of cols) if (c in o && c !== "Comment" && !(o[c] == null && ["Dosage Form", "Created", "Start"].includes(c))) r[ix[c]] = o[c];
+    updated++;
+  }
+  if (openOnly) {
+    for (const r of rows) {
+      const k = keyOf(r[ix["Reference ID"]], r[ix["Task Title"]]);
+      if (seen.has(k) || !families.has(text(r[ix["Reference ID"]]).replace(/-\d+$/, ""))) continue;
+      const open = !/^closed$/i.test(r[ix.Closure] ?? "") && !/^(completed|closed)/i.test(r[ix.Status] ?? "") && r[ix["Closed On"]] == null;
+      if (!open) continue;
+      r[ix.Status] = "Closed (inferred)";
+      r[ix.Closure] = "Closed";
+      if (ix["Last seen"] != null) r[ix["Last seen"]] ??= prevAsOf;
+      inferred++;
+    }
+  }
+  return { rows, added, updated, inferred, asOf };
+}
+
+function importApqrExport(XLSX, wb, next, replaced, file, current) {
+  for (const name of wb.SheetNames) {
+    const objs = sheetObjects(XLSX, wb.Sheets[name], ["Reference Id", "Type", "Stage", "Parent action"]);
+    if (!objs?.length) continue;
+    const apqr = objs.filter((o) => APQR_REF.test(text(o["Reference Id"])));
+    if (!apqr.length) continue;
+    // the export date is on the overview sheet ("Generation Date : 22/10/2026 06:06 pm")
+    const cells = wb.SheetNames.flatMap((n) => XLSX.utils.sheet_to_json(wb.Sheets[n], { header: 1, defval: null, blankrows: false }).slice(0, 12).flat()).map(text);
+    const gen = cells.map((c) => c.match(/generation date\s*:\s*(.+)$/i)?.[1]).find(Boolean);
+    const asOf = (dmyTime(gen) ?? apqr.map((o) => dmyTime(o["Creation Date"])).filter(Boolean).sort().at(-1) ?? new Date(file.lastModified).toISOString()).slice(0, 10);
+    // workflow rows carry the product and its dosage form ("Row - NAME …-ELKENDI(Tablets)"); their tasks inherit the form
+    const productOf = (o) => {
+      const ti = text(o.Title), pa = text(o["Parent action"]);
+      return ti.match(/^APQR\s*,\s*(.+)$/i)?.[1] ?? pa.match(/^Task\s*-\s*APQR\s*,\s*(.+)$/i)?.[1] ?? pa.match(/^Row\s*-\s*(.+?)\s*\(([^()]*)\)\s*$/)?.[1] ?? null;
+    };
+    // tasks of a workflow renamed "Duplicated" lose the product in their parent: take it from the workflow or the tasks already known
+    const productByRef = new Map();
+    const known = current?.apqrTasks ?? next.apqrTasks;
+    for (const r of known?.rows ?? []) { const ref = r[known.cols.indexOf("Reference ID")], p = r[known.cols.indexOf("Product")]; if (ref && p) productByRef.set(text(ref), p); }
+    for (const o of apqr) { const p = productOf(o); if (p) productByRef.set(text(o["Reference Id"]), p); }
+    const formByRef = new Map();
+    for (const o of apqr) {
+      const f = text(o["Parent action"]).match(/\(([^()]*)\)\s*$/)?.[1];
+      if (/^apqr$/i.test(text(o.Type)) && f && dosageFormOf(f)) formByRef.set(text(o["Reference Id"]), dosageFormOf(f));
+    }
+    // a site code (PS in APQR-PS-3) gets the name its products carry ("…-SITE"), when any of them does
+    const siteOf = (p) => text(p).match(/-\s*([A-Z][A-Z0-9]{1,9})$/)?.[1] ?? null;
+    const siteByCode = new Map();
+    for (const o of apqr) { const c = text(o["Reference Id"]).match(APQR_REF)[2].toUpperCase(), sname = siteOf(productOf(o)); if (sname && !siteByCode.has(c)) siteByCode.set(c, sname); }
+    const all = apqr.map((o) => {
+      const ref = text(o["Reference Id"]);
+      const product = productOf(o) ?? productByRef.get(ref) ?? null;
+      const [dept, stream] = apqrTaskClass(o.Type, o.Title);
+      const code = ref.match(APQR_REF)[2].toUpperCase();
+      const site = APQR_SITES[code] ?? siteByCode.get(code) ?? code;
+      const closedOn = dmyTime(o["Closing date"]);
+      return {
+        "Reference ID": ref, Product: product, "Dosage Form": formByRef.get(ref) ?? dosageFormOf(text(o.Type).replace(/^.*data collection/i, "")) ?? dosageFormOf(product),
+        Site: site, Department: dept, "Data Stream": stream, "Task Type": none(o.Type), "Task Title": none(o.Title), "Workflow Stage": none(o.Stage), Status: none(o.Status),
+        "Assigned User": none(o["Assigned User"]), Created: dmyTime(o["Creation Date"]), Start: dmyTime(o["Start Date"]), Due: dmyTime(o["End Date"]), "Closed On": closedOn,
+        Closure: none(o.Closed) ?? (closedOn ? "Closed" : "Not Closed"), "Critical level": none(o["Critical Level"]), "Created by": none(o["Created By"]), "Parent action": none(o["Parent action"]), "Last seen": asOf,
+      };
+    });
+    const tasks = all.filter((x) => x.Product && x["Task Title"]), skipped = all.length - tasks.length;
+    if (!tasks.length) continue;
+    // an export of open tasks only (Open and Overdue, nothing closed) lets tasks that dropped out be marked closed
+    const statuses = new Set(tasks.map((x) => text(x.Status).toLowerCase()));
+    const openOnly = tasks.length >= 50 && tasks.every((x) => !/^closed$/i.test(x.Closure ?? "")) && statuses.has("open") && statuses.has("overdue");
+    const cols = COLS.apqrTasks;
+    const res = mergeApqrTasks(cols, current?.apqrTasks ?? next.apqrTasks, tasks, { asOf, prevAsOf: next.meta?.apqrAsOf ?? null, openOnly });
+    next.apqrTasks = { cols, rows: res.rows };
+    replaced.push("apqrTasks");
+    next.meta = { ...next.meta, apqrAsOf: asOf };
+    const wf = new Set(tasks.filter((x) => x["Data Stream"] === "APQR Workflow").map((x) => x["Reference ID"])).size;
+    const other = objs.filter((o) => text(o["Reference Id"]) && !APQR_REF.test(text(o["Reference Id"]))).length;
+    return `Scigeniq APQR tasks of ${asOf.split("-").reverse().join("/")} · ${tasks.length} tasks in ${wf} workflows · ${res.added} new, ${res.updated} updated`
+      + (res.inferred ? `, ${res.inferred} no longer open (marked closed)` : "") + (skipped ? ` · ${skipped} without a product skipped` : "") + (other ? ` · ${other} non-APQR tasks ignored` : "");
+  }
+  return null;
+}
+
+// ---------- bulk insert: rows pasted from Excel or read from a CSV / XLSX file ----------
+/** Tab-separated text (Excel copy) or CSV (comma / semicolon, quoted cells) → rows of trimmed cells. */
+export function parseDelimited(src) {
+  const s = String(src ?? "").replace(/\r\n?/g, "\n").replace(/^﻿/, "");
+  const first = s.split("\n").find((l) => l.trim()) ?? "";
+  const sep = first.includes("\t") ? "\t" : (first.match(/;/g)?.length ?? 0) > (first.match(/,/g)?.length ?? 0) ? ";" : ",";
+  const rows = [];
+  let row = [], cell = "", q = false;
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i];
+    if (q) { if (c === '"' && s[i + 1] === '"') { cell += '"'; i++; } else if (c === '"') q = false; else cell += c; }
+    else if (c === '"' && cell === "") q = true;
+    else if (c === sep) { row.push(cell); cell = ""; }
+    else if (c === "\n") { row.push(cell); rows.push(row); row = []; cell = ""; }
+    else cell += c;
+  }
+  if (cell !== "" || row.length) { row.push(cell); rows.push(row); }
+  return rows.map((r) => r.map((x) => x.trim())).filter((r) => r.some((x) => x !== ""));
+}
+
+// other spellings of the columns (the raw Scigeniq report headers for APQR tasks)
+const BULK_ALIASES = {
+  apqrTasks: { "Reference Id": "Reference ID", Title: "Task Title", Type: "Task Type", Stage: "Workflow Stage", "Creation Date": "Created", "Start Date": "Start", "End Date": "Due",
+    "Closing date": "Closed On", Closed: "Closure", "Critical Level": "Critical level", "Created By": "Created by", Assignee: "Assigned User", Department: "Department", Stream: "Data Stream" },
+  apqrPlan: { "Final product code": "Code", "Planned product": "Product", Form: "Dosage form", Month: "Planned month" },
+  apqrSys: { "Exec. Year": "Exec. year", "Review Start": "Review start", "Review End": "Review end", "Period End (date)": "Period end", "Plan Status": "Plan status" },
+};
+const squash = (s) => text(s).toLowerCase().replace(/[^a-z0-9]+/g, "");
+/** For each source header, the table column it fills (exact, case / punctuation-insensitive, or a known alias) or null. */
+export function matchColumns(headers, cols, table) {
+  const alias = Object.fromEntries(Object.entries(BULK_ALIASES[table] ?? {}).map(([k, v]) => [squash(k), v]));
+  const byKey = new Map(cols.map((c) => [squash(c), c]));
+  const used = new Set();
+  return headers.map((hd) => {
+    const c = byKey.get(squash(hd)) ?? (alias[squash(hd)] && cols.includes(alias[squash(hd)]) ? alias[squash(hd)] : null);
+    if (!c || used.has(c)) return null;
+    used.add(c);
+    return c;
+  });
+}
+
+/** Table-specific completion of a bulk row (APQR tasks: department, stream, form, site and closure from the other fields). */
+export function prepBulkRow(table, o) {
+  const x = { ...o };
+  if (table === "apqrTasks") {
+    for (const c of ["Created", "Start", "Due", "Closed On"]) if (x[c] != null && /\d{1,2}\/\d{1,2}\/\d{4}/.test(String(x[c]))) x[c] = dmyTime(x[c]);
+    x.Product ??= text(x["Task Title"]).match(/^APQR\s*,\s*(.+)$/i)?.[1] ?? text(x["Parent action"]).match(/^Task\s*-\s*APQR\s*,\s*(.+)$/i)?.[1] ?? null;
+    if (!x.Department || !x["Data Stream"]) { const [d, st] = apqrTaskClass(x["Task Type"], x["Task Title"]); x.Department ??= d; x["Data Stream"] ??= st; }
+    x["Dosage Form"] ??= dosageFormOf(text(x["Task Type"]).replace(/^.*data collection/i, "")) ?? dosageFormOf(x.Product);
+    const code = text(x["Reference ID"]).match(APQR_REF)?.[2]?.toUpperCase();
+    x.Site ??= APQR_SITES[code] ?? text(x.Product).match(/-\s*([A-Z][A-Z0-9]{1,9})$/)?.[1] ?? code ?? null;
+    for (const c of ["Assigned User", "Closed On", "Closure"]) if (x[c] != null && /^-+$/.test(String(x[c]))) x[c] = null;
+    x.Closure ??= x["Closed On"] || /^(completed|closed)/i.test(x.Status ?? "") ? "Closed" : "Not Closed";
+  }
+  return x;
+}
+
+/**
+ * Merge objects ({column: value}) into a table. With key columns, a row whose keys match (case-insensitive) is
+ * updated with the non-empty values; everything else is added. Returns the new rows and which ones changed.
+ */
+export function upsertRows(cols, rows, objs, keyCols = []) {
+  const out = rows.map((r) => cols.map((_, i) => r[i] ?? null));
+  const kix = keyCols.map((c) => cols.indexOf(c)).filter((i) => i >= 0);
+  const keyOf = (get) => (kix.length && kix.every((i) => text(get(i)) !== "") ? kix.map((i) => text(get(i)).toLowerCase()).join("|") : null);
+  const at = new Map();
+  out.forEach((r, i) => { const k = keyOf((j) => r[j]); if (k != null && !at.has(k)) at.set(k, i); });
+  const changed = new Set();
+  let added = 0, updated = 0, unchanged = 0;
+  for (const o of objs) {
+    const vals = cols.map((c) => (o[c] === "" ? null : o[c] ?? null));
+    if (vals.every((v) => v == null)) continue;
+    const k = keyOf((j) => vals[j]);
+    const i = k != null ? at.get(k) : undefined;
+    if (i == null) { out.push(vals); changed.add(out.length - 1); if (k != null) at.set(k, out.length - 1); added++; continue; }
+    let diff = false;
+    vals.forEach((v, j) => { if (v != null && !kix.includes(j) && String(v) !== String(out[i][j] ?? "")) { out[i][j] = v; diff = true; } });
+    if (diff) { changed.add(i); updated++; } else unchanged++;
+  }
+  return { rows: out, changed: [...changed].sort((a, b) => a - b), added, updated, unchanged };
+}
+
+/** First sheet (or the one with the most rows) of a spreadsheet file as rows of cells. */
+export async function readSheetRows(file) {
+  const XLSX = await loadXLSX();
+  const wb = XLSX.read(await file.arrayBuffer(), { cellDates: true });
+  const sheets = wb.SheetNames.map((n) => XLSX.utils.sheet_to_json(wb.Sheets[n], { header: 1, defval: null, raw: true, blankrows: false }));
+  const best = sheets.sort((a, b) => b.length - a.length)[0] ?? [];
+  // the header row is the first row with at least two text cells
+  const hr = Math.max(0, best.findIndex((r) => r.filter((c) => typeof c === "string" && c.trim()).length >= 2));
+  return best.slice(hr).map((r) => r.map((c) => (c instanceof Date ? cellVal(c) : c == null ? "" : typeof c === "number" ? c : text(c))));
 }
 
 // ---------- batch tracker (.xlsm) ----------
@@ -627,9 +862,10 @@ function importDocx(XLSX, buffer, next, replaced) {
 
 /**
  * Import files into a copy of `base`. Master workbooks go first so exports dropped together
- * replace their lists afterwards. Returns { next, replaced, done: [[file, message]] }.
+ * replace their lists afterwards. `current` (base with in-app edits) is what merging imports update.
+ * Returns { next, replaced, done: [[file, message]] }.
  */
-export async function importFiles(files, base, { needMaster } = {}) {
+export async function importFiles(files, base, { needMaster, current } = {}) {
   const XLSX = await loadXLSX();
   const items = [];
   for (const file of files) {
@@ -652,12 +888,12 @@ export async function importFiles(files, base, { needMaster } = {}) {
     try {
       if (it.kind === "xlsx") {
         if (isMaster(it.wb)) msg = await importMaster(XLSX, it.wb, next, replaced);
-        else msg = import5S(XLSX, it.wb, next, replaced) ?? importApqr(XLSX, it.wb, next, replaced, it.file) ?? importScigeniq(XLSX, it.wb, next, replaced, it.file) ?? importWip(XLSX, it.wb, next, replaced) ?? importBatches(XLSX, it.wb, next, replaced);
+        else msg = import5S(XLSX, it.wb, next, replaced) ?? importApqrExport(XLSX, it.wb, next, replaced, it.file, current) ?? importApqr(XLSX, it.wb, next, replaced, it.file) ?? importScigeniq(XLSX, it.wb, next, replaced, it.file) ?? importWip(XLSX, it.wb, next, replaced) ?? importBatches(XLSX, it.wb, next, replaced);
       } else if (it.kind === "docx") msg = importDocx(XLSX, it.buf, next, replaced);
       else if (it.kind === "slides") msg = "presentation · nothing to import; quarterly metric values are entered on the QMS metrics page";
       else msg = null;
     } catch (e) { console.error(e); msg = `✘ ${e.message ?? e}`; }
-    done.push([it.file.name, msg ?? "✘ not recognised (supported: master workbook, Scigeniq exports, APQR tracker, 5S checklists, batch tracker, WIP workbook, calibration / validation / training / API / APQR plan Word forms)"]);
+    done.push([it.file.name, msg ?? "✘ not recognised (supported: master workbook, Scigeniq exports (incl. the all-tasks report for APQR), APQR tracker, 5S checklists, batch tracker, WIP workbook, calibration / validation / training / API / APQR plan Word forms)"]);
   }
   if (needMaster && !next.rooms?.rows?.length) throw new Error(needMaster);
   return { next, replaced: [...new Set(replaced)], done };

@@ -35,7 +35,11 @@ export const EXT_COLS = {
   // APQR programme: approved annual plan (QA0021E/TE02), the plan as entered in Scigeniq, and the Scigeniq APQR task export
   apqrPlan: ["Code", "Product", "Dosage form", "Planned month", "Previous report", "Period start", "Period end", "Comment"],
   apqrSys: ["Product", "Process", "Exec. year", "Site", "Review start", "Review end", "Period end", "Plan status"],
-  apqrTasks: ["Reference ID", "Product", "Dosage Form", "Site", "Department", "Data Stream", "Task Type", "Task Title", "Workflow Stage", "Status", "Assigned User", "Created", "Start", "Due", "Closed On", "Closure"],
+  // (Last seen: date of the latest Scigeniq export that listed the task; Comment is kept across re-imports)
+  apqrTasks: ["Reference ID", "Product", "Dosage Form", "Site", "Department", "Data Stream", "Task Type", "Task Title", "Workflow Stage", "Status", "Assigned User", "Created", "Start", "Due", "Closed On", "Closure",
+    "Critical level", "Created by", "Parent action", "Last seen", "Comment"],
+  // Progress of each EU GMP Ch.1.10 review section within one product's APQR
+  apqrSections: ["Product", "Section", "Status", "Owner", "Due", "Evidence", "Comment", "Updated"],
   // QA activity register entries (override / extend the built-in GMP activity catalogue)
   qaact: ["Activity ID", "Activity", "Category", "Reference", "Frequency (months)", "Owner", "Last performed", "Next due", "Evidence", "Comment"],
   // Manually entered QMS metric values per quarter

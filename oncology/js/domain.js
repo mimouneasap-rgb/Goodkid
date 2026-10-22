@@ -2,8 +2,8 @@
 // training plan, calibration program, validation schedule, API suppliers, batch
 // lifecycle and cycle times, WIP and rejections, APQR, 5S audits, the GMP activity
 // register and the quarterly QMS metrics. Pure functions over the model + raw tables.
-import { objects, clean, toDay, addMonths, monthStart, monthKey, daysBetween } from "./model.js";
-import { METRICS, QA_ACTIVITIES, FIVES, FIVES_ITEMS, fivesKey, fivesRating, RISK_FREQUENCY, FREQUENCY_DAYS, APQR_PHASES, APQR_STREAMS } from "./catalogs.js";
+import { objects, clean, toDay, addMonths, monthStart, monthKey, daysBetween, countBy } from "./model.js";
+import { METRICS, QA_ACTIVITIES, FIVES, FIVES_ITEMS, fivesKey, fivesRating, RISK_FREQUENCY, FREQUENCY_DAYS, APQR_PHASES, APQR_STREAMS, APQR_SECTIONS } from "./catalogs.js";
 
 const DAY = 86400000;
 const num = (v) => (v == null || v === "" || isNaN(+v) ? null : +v);
@@ -341,21 +341,29 @@ export function buildApqrProgramme(m, wb, records = [], { lagDays = 90 } = {}) {
   const none = { cols: [], rows: [] };
   const plan = objects(wb.apqrPlan ?? none).filter((p) => p.Product).map((p) => ({ ...p, key: normProduct(p.Product), planned: monthTs(p["Planned month"]), start: monthTs(p["Period start"]), end: monthEnd(monthTs(p["Period end"])) }));
   const sys = objects(wb.apqrSys ?? none).filter((p) => p.Product).map((p) => ({ ...p, key: normProduct(p.Product), start: mmyyyy(p["Review start"]), end: toDay(p["Period end"]) ?? monthEnd(mmyyyy(p["Review end"])) }));
-  const tasks = objects(wb.apqrTasks ?? none).filter((t) => t["Reference ID"] && t.Product).map((t) => {
+  const allTasks = objects(wb.apqrTasks ?? none).filter((t) => t["Reference ID"] && t.Product).map((t) => {
     const due = toDay(t.Due), created = toDay(t.Created), closed = toDay(t["Closed On"]);
-    const done = /^closed$/i.test(t.Closure ?? "") || /^(completed|closed)$/i.test(t.Status ?? "") || closed != null;
+    const done = /^closed$/i.test(t.Closure ?? "") || /^(completed|closed)/i.test(t.Status ?? "") || closed != null;
     const stream = t["Data Stream"] || "—";
+    const isWorkflow = /apqr workflow/i.test(stream) || /^apqr$/i.test(t["Task Type"] ?? "");
     return { ...t, key: normProduct(t.Product), due, created, closed, done, open: !done, overdue: !done && due != null && due < now, sysOverdue: /overdue/i.test(t.Status ?? ""),
-      stream, dept: t.Department || APQR_STREAMS[stream]?.[0] || "—", isWorkflow: /apqr workflow/i.test(stream) || /^apqr$/i.test(t["Task Type"] ?? ""),
+      stream, dept: t.Department || APQR_STREAMS[stream]?.[0] || "—", isWorkflow, inferred: /inferred/i.test(t.Status ?? ""), lastSeen: toDay(t["Last seen"]),
+      // Scigeniq has no cancel: a duplicate workflow is renamed "Duplicated" and its tasks point to "Task - Duplicated"
+      dupFlag: (isWorkflow && /^duplicat/i.test(t["Task Title"] ?? "")) || /duplicat/i.test(t["Parent action"] ?? ""),
       unassigned: !t["Assigned User"] || /unassigned/i.test(t["Assigned User"]), ageDays: !done && created != null ? daysBetween(created, now) : null,
       daysToDue: !done && due != null ? daysBetween(now, due) : null, onTime: done && due != null && closed != null ? closed <= due : null, month: due != null ? monthKey(due) : "" };
   });
+  const dupRefs = new Set(allTasks.filter((t) => t.dupFlag && t.isWorkflow).map((t) => t["Reference ID"]));
+  for (const t of allTasks) t.dupWf = t.dupFlag || dupRefs.has(t["Reference ID"]);
+  // tasks of workflows flagged as duplicates are kept apart: they are cancelled work, not progress
+  const tasks = allTasks.filter((t) => !t.dupWf), dupTasks = allTasks.filter((t) => t.dupWf);
+  const sectionRows = objects(wb.apqrSections ?? none).filter((x) => x.Product && x.Section).map((x) => ({ ...x, key: normProduct(x.Product), sec: String(x.Section).trim().toLowerCase() }));
   const recs = records.map((r) => ({ ...r, key: normProduct(r.Product) }));
   const streams = [...new Set(tasks.map((t) => t.stream))].sort((a, b) => Object.keys(APQR_STREAMS).indexOf(a) - Object.keys(APQR_STREAMS).indexOf(b));
-  const keys = [...new Set([...plan, ...sys, ...tasks].map((x) => x.key))];
+  const keys = [...new Set([...plan, ...sys, ...tasks, ...dupTasks].map((x) => x.key))];
   const products = keys.map((key) => {
     const p = plan.find((x) => x.key === key), s = sys.find((x) => x.key === key);
-    const ts = tasks.filter((t) => t.key === key);
+    const ts = tasks.filter((t) => t.key === key), dts = dupTasks.filter((t) => t.key === key);
     const wf = ts.filter((t) => t.isWorkflow);
     const refs = [...new Set(wf.map((t) => t["Reference ID"]))];
     const main = [...wf].sort((a, b) => (a.done - b.done) || (a.due ?? 9e15) - (b.due ?? 9e15))[0] ?? null;
@@ -382,22 +390,37 @@ export function buildApqrProgramme(m, wb, records = [], { lagDays = 90 } = {}) {
     const openBy = Object.fromEntries(APQR_DEPTS.map((d) => [d, dataTasks.filter((t) => t.open && t.dept === d).length]));
     const top = Object.entries(openBy).sort((a, b) => b[1] - a[1])[0];
     const streamState = Object.fromEntries(streams.map((st) => { const xs = ts.filter((t) => t.stream === st); return [st, !xs.length ? null : xs.every((t) => t.done) ? "done" : xs.some((t) => t.overdue) ? "overdue" : "open"]; }));
-    const name = (p?.Product ?? s?.Product ?? ts[0]?.Product ?? key).replace(/\s*-\s*ELKENDI\s*$/i, "");
+    const name = (p?.Product ?? s?.Product ?? ts[0]?.Product ?? dts[0]?.Product ?? key).replace(/\s*-\s*ELKENDI\s*$/i, "");
+    const sites = [...countBy(ts.concat(dts), (t) => t.Site || "")].filter(([x]) => x).sort((a, b) => b[1] - a[1]);
+    // EU GMP Ch.1.10 sections (i–xii) as tracked in the app; the last saved entry of each section counts
+    const secs = APQR_SECTIONS.map(([id]) => ({ id, ...(sectionRows.filter((x) => x.key === key && x.sec === id).at(-1) ?? {}) }));
+    const secDone = secs.filter((x) => /complete|not applicable/i.test(x.Status ?? "")).length;
     return {
       key, name, code: p?.Code ?? null, form: p?.["Dosage form"] || s?.Process || ts[0]?.["Dosage Form"] || "—", inPlan: Boolean(p), inSys: Boolean(s), offPlan: !p && !s,
       planned: p?.planned ?? null, start, end, prevReport: p?.["Previous report"] ?? null, period: p ? `${p["Period start"] ?? "?"} → ${p["Period end"] ?? "?"}` : s ? `${s["Review start"]} → ${s["Review end"]}` : "",
       reportDue, daysToReportDue: reportDue != null ? daysBetween(now, reportDue) : null, tasks: ts, refs, duplicate: refs.length > 1, owner: main?.["Assigned User"] ?? null,
       stage: main?.["Workflow Stage"] ?? null, wfDue, wfCreated: main?.created ?? null, total, completed, open: total - completed, overdue, pct, rag, track, phase,
       openBy, bottleneck: top && top[1] > 0 ? top[0] : null, streamState, record: rec, approved, triggered: total > 0,
+      site: sites[0]?.[0] ?? (p || s ? "ELKENDI" : null), sysStatus: s?.["Plan status"] ?? null, sysSite: s?.Site ?? null, planComment: p?.Comment ?? null,
+      productLabel: ts[0]?.Product ?? dts[0]?.Product ?? p?.Product ?? s?.Product ?? name, mainRef: main?.["Reference ID"] ?? refs[0] ?? null, dupTasks: dts, dupRefs: [...new Set(dts.filter((t) => t.isWorkflow).map((t) => t["Reference ID"]))],
+      inferred: ts.filter((t) => t.inferred).length, lastSeen: ts.reduce((a, t) => Math.max(a, t.lastSeen ?? -Infinity), -Infinity),
+      sections: secs, sectionPct: secDone / APQR_SECTIONS.length, sectionsStarted: secs.some((x) => x.Status),
     };
   }).sort((a, b) => (a.planned ?? 9e15) - (b.planned ?? 9e15) || a.name.localeCompare(b.name));
-  const users = [...new Set(tasks.map((t) => t["Assigned User"] || "Unassigned"))].map((u) => {
+  const users = apqrUsers(tasks);
+  for (const p of products) if (!Number.isFinite(p.lastSeen)) p.lastSeen = null;
+  const sites = [...countBy(tasks, (t) => t.Site || "")].filter(([x]) => x).sort((a, b) => b[1] - a[1]).map(([x]) => x);
+  return { plan, sys, tasks, dupTasks, products, streams, users, sites, lagDays, asOf, refDate: now };
+}
+
+/** Workload per assignee over a list of APQR tasks, most overdue first. */
+export function apqrUsers(tasks) {
+  return [...new Set(tasks.map((t) => t["Assigned User"] || "Unassigned"))].map((u) => {
     const xs = tasks.filter((t) => (t["Assigned User"] || "Unassigned") === u);
     const open = xs.filter((t) => t.open);
     return { user: u, total: xs.length, completed: xs.length - open.length, open: open.length, overdue: xs.filter((t) => t.overdue).length, pct: xs.length ? (xs.length - open.length) / xs.length : 0,
       earliest: open.map((t) => t.due).filter((d) => d != null).sort((a, b) => a - b)[0] ?? null };
   }).sort((a, b) => b.overdue - a.overdue || b.open - a.open);
-  return { plan, sys, tasks, products, streams, users, lagDays, asOf, refDate: now };
 }
 
 // ---------- process statistics (APQR) ----------

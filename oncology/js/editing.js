@@ -3,7 +3,7 @@
 import { h, fmtDate } from "./ui.js";
 import { t, tv, getLang } from "./i18n.js";
 import { STATUSES, CC_STAGES, IMPR_STAGES, toDay } from "./model.js";
-import { VOCAB as V, METRICS } from "./catalogs.js";
+import { VOCAB as V, METRICS, APQR_SECTIONS } from "./catalogs.js";
 
 const FR = () => getLang() === "FR";
 const YN = ["Yes", "No"];
@@ -170,7 +170,14 @@ export const SPECS = {
   apqrTasks: {
     label: ["APQR task", "Tâche RQP"], id: "Reference ID", title: "Task Title",
     fields: [["Reference ID", "text"], ["Product", "suggest", "col"], ["Dosage Form", "pick", V.dosageForms], ["Department", "pick", V.apqrDepartments], ["Data Stream", "pick", V.apqrStreams], ["Task Type", "suggest", "col"],
-      ["Task Title", "long"], ["Workflow Stage", "pick", V.apqrStages], ["Status", "pick", V.apqrTaskStatus], ["Assigned User", "suggest", "col"], ["Created", "date"], ["Start", "date"], ["Due", "date"], ["Closed On", "date"], ["Closure", "pick", ["Closed", "Not Closed"]]],
+      ["Task Title", "long"], ["Workflow Stage", "pick", V.apqrStages], ["Status", "pick", V.apqrTaskStatus], ["Assigned User", "suggest", "col"], ["Created", "date"], ["Start", "date"], ["Due", "date"], ["Closed On", "date"], ["Closure", "pick", ["Closed", "Not Closed"]],
+      ["Site", "suggest", "col"], ["Critical level", "pick", ["Low", "Medium", "High", "Emergency"]], ["Created by", "suggest", "col"], ["Parent action", "long"], ["Last seen", "date"], ["Comment", "long"]],
+  },
+  apqrSections: {
+    label: ["APQR review section", "Section de revue RQP"], id: "Section", title: "Product",
+    defaults: () => ({ Status: "Not started", Updated: isoToday() }),
+    fields: [["Product", "suggest", "products"], ["Section", "pick", APQR_SECTIONS.map(([id]) => id)], ["Status", "pick", V.apqrSectionStatus], ["Owner", "suggest", "users"], ["Due", "date"],
+      ["Evidence", "long"], ["Comment", "long"], ["Updated", "date"]],
   },
   qaact: {
     label: ["QA activity", "Activité AQ"], id: "Activity ID", title: "Activity", prefix: "QA-",

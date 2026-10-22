@@ -4,9 +4,13 @@ import { t } from "./i18n.js";
 import { icon } from "./icons.js";
 import { toDay } from "./model.js";
 import { SPECS, tableLabel } from "./editing.js";
+import { openBulk } from "./bulk.js";
 
 const GROUPS = [
-  ["dt_quality", ["cc", "capa", "qe", "links", "appr"]],
+  ["dt_quality", ["cc", "capa", "qe", "find", "actions", "links", "appr"]],
+  ["dt_apqr", ["apqrTasks", "apqrPlan", "apqrSys", "apqr", "apqrSections"]],
+  ["dt_programmes", ["training", "calplan", "validation", "fives", "fivesItems", "fivesAreas", "fivesTpl", "qaact", "metrics"]],
+  ["dt_product", ["batches", "wip", "rejections", "suppliers"]],
   ["dt_site", ["rooms", "adj", "equip", "ccp"]],
   ["dt_docs", ["fmea", "sop", "forms", "impr"]],
   ["dt_settings", ["targets", "bands", "crit", "prio", "prod", "deptMap"]],
@@ -43,6 +47,7 @@ export function dataTables(ctx) {
 
   return h("div.view",
     viewHeader(t("dt_title"), t("dt_sub"),
+      ctx.canEdit ? h("button.btn", { type: "button", onclick: () => openBulk(ctx, sel) }, icon("upload", 16), t("bulk_insert")) : null,
       ctx.canEdit ? h("button.btn.primary", { type: "button", onclick: () => ctx.add(sel) }, icon("plus", 16), t("add_row_title", tableLabel(sel).toLowerCase())) : null),
     h("div.ws-banner", { class: ctx.workspace.mode },
       icon(ctx.workspace.mode === "shared" ? "globe" : "records", 18),

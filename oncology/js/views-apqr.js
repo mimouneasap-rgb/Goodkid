@@ -6,8 +6,10 @@ import { t, tv, getLang } from "./i18n.js";
 import { icon } from "./icons.js";
 import * as M from "./model.js";
 import { APQR_SECTIONS, APQR_PHASES, APQR_STREAMS, CPK_GUIDE } from "./catalogs.js";
-import { APQR_DEPTS, capability } from "./domain.js";
+import { APQR_DEPTS, apqrUsers, capability } from "./domain.js";
 import { recordCols } from "./views-overview.js";
+import { apqrPage } from "./views-apqr-item.js";
+import { openBulk } from "./bulk.js";
 
 const DAY = 86400000;
 const ALL = M.ALL;
@@ -20,31 +22,46 @@ export const TRACK_COLOR = {
   "Not triggered – due ≤60 d": "var(--warning)", "Not triggered – past due": "var(--critical)", "Not in Scigeniq plan": "var(--muted-mark)",
 };
 const TRACKS = Object.keys(TRACK_COLOR);
-const STATE_COLOR = { done: "var(--good)", open: "var(--c1)", overdue: "var(--critical)" };
-const dot = (color, label) => h("span.pill", { style: { "--dot": color ?? "var(--muted-mark)" } }, h("i"), label);
-const phaseName = (i) => APQR_PHASES[i]?.[FR() ? 2 : 1] ?? "—";
-const short = (s, n = 34) => (String(s).length > n ? String(s).slice(0, n - 1) + "…" : String(s));
+export const STATE_COLOR = { done: "var(--good)", open: "var(--c1)", overdue: "var(--critical)" };
+export const dot = (color, label) => h("span.pill", { style: { "--dot": color ?? "var(--muted-mark)" } }, h("i"), label);
+export const phaseName = (i) => APQR_PHASES[i]?.[FR() ? 2 : 1] ?? "—";
+export const short = (s, n = 34) => (String(s).length > n ? String(s).slice(0, n - 1) + "…" : String(s));
 /** "BRAND (Molecule) 160 mg F/C Tablets (30 TAB)" → "BRAND 160 mg" */
 const chipLabel = (name) => {
   const brand = String(name).split("(")[0].trim();
   const strength = (String(name).replace(/^[^)]*\)/, "").match(/\d+(?:[.,]\d+)?(?:\/\d+(?:[.,]\d+)?)*\s*(?:mg\/ml|mg\/5ml|mg|g|%|ml|µg)/i) ?? [])[0];
   return short(strength ? `${brand} ${strength}` : brand, 24);
 };
-const pctBar = (v, color = "var(--c1)") => h("span.pct-bar", h("i", { style: { width: `${Math.round((v ?? 0) * 100)}%`, background: color } }), fmtPct(v));
+export const pctBar = (v, color = "var(--c1)") => h("span.pct-bar", h("i", { style: { width: `${Math.round((v ?? 0) * 100)}%`, background: color } }), fmtPct(v));
 
 const TABS = [["programme", "apqr_tab_prog"], ["plan", "apqr_tab_plan"], ["workflows", "apqr_tab_wf"], ["tasks", "apqr_tab_tasks"], ["report", "apqr_tab_report"]];
 
 export function apqrView(ctx) {
-  const X = ctx.m.x.apqrProg;
+  const all = ctx.m.x.apqrProg;
+  if (ctx.params.p) return apqrPage(ctx, all, ctx.params.p);
+  // the annual plan is the home site's: other sites' products (validation tasks done here) show under "All sites"
+  const scope = ctx.state.apqrSite ?? "home";
+  const X = scoped(all, scope);
   const has = X.products.length > 0;
   const tab = TABS.some(([k]) => k === ctx.state.apqrTab) ? ctx.state.apqrTab : has ? "programme" : "report";
   const body = { programme, plan: planTab, workflows: workflowsTab, tasks: tasksTab, report: reportBuilder }[tab](ctx, X);
   const stale = X.asOf != null && ctx.m.now - X.asOf > 30 * DAY;
+  const others = all.sites.filter((s) => !HOME_SITES.includes(s));
   return h("div.view",
     viewHeader(t("apqr_title"), t("apqr_sub2"), segmented(TABS.map(([k, l]) => [k, t(l)]), tab, (v) => ctx.set("apqrTab", v), t("apqr_title"))),
+    tab !== "report" && others.length ? h("div.scope-bar", h("span", t("site_lbl")), segmented([["home", t("apqr_site_home")], ["all", t("apqr_site_all")], ...others.map((s) => [s, s])], scope, (v) => ctx.set("apqrSite", v), t("site_lbl"))) : null,
     !has && tab !== "report" ? h("div.banner.info", icon("upload", 18), h("span", t("apqr_empty"), " ", ctx.canEdit ? h("button.link", { type: "button", onclick: () => ctx.openImport() }, t("update_data")) : null)) : null,
     has && stale && tab !== "report" ? h("div.banner.warn", icon("alert", 18), t("apqr_stale", fmtDate(X.asOf), fmtNum(Math.round((ctx.m.now - X.asOf) / DAY)))) : null,
     body);
+}
+const HOME_SITES = ["ELKENDI", "ELKENDI Oncology"];
+function scoped(X, scope) {
+  if (scope === "all") return X;
+  const keep = (p) => (scope === "home" ? p.inPlan || p.inSys || !p.site || HOME_SITES.includes(p.site) : p.site === scope);
+  const products = X.products.filter(keep);
+  const keys = new Set(products.map((p) => p.key));
+  const tasks = X.tasks.filter((t) => keys.has(t.key));
+  return { ...X, products, tasks, dupTasks: X.dupTasks.filter((t) => keys.has(t.key)), users: apqrUsers(tasks), streams: X.streams.filter((st) => tasks.some((t) => t.stream === st)) };
 }
 
 // ---------- programme dashboard ----------
@@ -90,6 +107,8 @@ function programme(ctx, X) {
       kpi({ label: t("apqr_k_unassigned"), value: fmtNum(T.filter((x) => x.open && x.unassigned).length), accent: "var(--warning)", onclick: tasksList(t("apqr_k_unassigned"), T.filter((x) => x.open && x.unassigned)) }),
       kpi({ label: t("apqr_k_prod_overdue"), value: fmtNum(trig.filter((p) => p.rag === "Overdue").length), accent: "var(--critical)", onclick: list(t("apqr_k_prod_overdue"), trig.filter((p) => p.rag === "Overdue")) }),
       kpi({ label: t("apqr_k_dupes"), value: fmtNum(P.filter((p) => p.duplicate).length), hint: t("apqr_dupes_hint"), onclick: list(t("apqr_k_dupes"), P.filter((p) => p.duplicate)) }),
+      X.dupTasks.length ? kpi({ label: t("apqr_k_dup_flagged"), value: fmtNum(new Set(X.dupTasks.map((x) => x["Reference ID"])).size), hint: `${fmtNum(X.dupTasks.filter((x) => x.open).length)} ${t("apqr_tasks_to_cancel")}`, accent: "var(--warning)", onclick: tasksList(t("apqr_k_dup_flagged"), X.dupTasks) }) : null,
+      T.some((x) => x.inferred) ? kpi({ label: t("apqr_k_inferred"), value: fmtNum(T.filter((x) => x.inferred).length), hint: t("apqr_inferred_hint"), accent: "var(--c3)", onclick: tasksList(t("apqr_k_inferred"), T.filter((x) => x.inferred)) }) : null,
       kpi({ label: t("apqr_approved"), value: fmtNum(approved.length), accent: "var(--good)", onclick: list(t("apqr_approved"), approved) })),
     card(t("apqr_phases"), phaseStepper(phases.map((xs) => xs.length), (i) => openProducts(ctx, phaseName(i), phases[i])), { sub: t("apqr_phases_sub") }),
     h("div.grid.cols-2",
@@ -137,7 +156,7 @@ function mostCommonYear(ts) {
 }
 
 /** The 8 phases of the APQR workflow as a stepper with the number of products in each. */
-function phaseStepper(counts, onPick, current) {
+export function phaseStepper(counts, onPick, current) {
   return h("ol.stepper", APQR_PHASES.map((ph, i) => h("li", { class: [current === i ? "now" : "", current != null && i < current ? "past" : ""].filter(Boolean).join(" ") || null },
     h(onPick && counts?.[i] ? "button.step" : "div.step", { type: onPick && counts?.[i] ? "button" : null, onclick: onPick && counts?.[i] ? () => onPick(i) : null, style: { "--i": i } },
       h("span.step-n", i + 1), h("span.step-l", phaseName(i)), counts ? h("b.step-c", fmtNum(counts[i])) : null))));
@@ -196,7 +215,11 @@ function planTab(ctx, X) {
       { key: "reportDue", label: t("apqr_report_due"), cls: "num nowrap", render: (p) => (p.daysToReportDue != null && p.daysToReportDue < 0 && !p.approved ? h("b.late", fmtDate(p.reportDue)) : fmtDate(p.reportDue)) },
       { key: "track", label: t("col_status"), render: (p) => dot(TRACK_COLOR[p.track], tv(p.track)) },
       { key: "act", label: "", render: recordBtn },
-    ], L, { pageSize: 40, onRow: (p) => openApqrProduct(ctx, p.key), searchText: (p) => `${p.name} ${p.code} ${p.refs.join(" ")}`, exportName: "apqr-plan" })),
+    ], L, { pageSize: 40, onRow: (p) => openApqrProduct(ctx, p.key), searchText: (p) => `${p.name} ${p.code} ${p.refs.join(" ")}`, exportName: "apqr-plan" }), {
+      actions: ctx.canEdit ? [
+        h("button.btn.compact", { type: "button", onclick: () => ctx.add("apqrPlan") }, icon("plus", 14), t("apqr_add_plan")),
+        h("button.btn.compact", { type: "button", onclick: () => openBulk(ctx, "apqrPlan", { title: `${t("bulk_insert")} · ${t("apqr_tab_plan")}` }) }, icon("upload", 14), t("bulk_insert")),
+        h("button.btn.compact.ghost", { type: "button", onclick: () => openBulk(ctx, "apqrSys", { title: `${t("bulk_insert")} · ${t("apqr_f_sys")}` }) }, icon("upload", 14), "Scigeniq")] : null }),
   ];
 }
 
@@ -240,7 +263,7 @@ export function taskCols() {
     { key: "stream", label: t("apqr_stream") },
     { key: "Task Title", label: t("col_title"), cls: "wrap" },
     { key: "Workflow Stage", label: t("col_stage") },
-    { key: "status", label: t("col_status"), sort: (x) => (x.done ? 2 : x.overdue ? 0 : 1), render: (x) => dot(x.done ? "var(--good)" : x.overdue ? "var(--critical)" : "var(--c1)", x.done ? tv("Completed") : x.overdue ? tv("Overdue") : tv("Open")) },
+    { key: "status", label: t("col_status"), sort: (x) => (x.done ? 2 : x.overdue ? 0 : 1), render: (x) => dot(x.done ? "var(--good)" : x.overdue ? "var(--critical)" : "var(--c1)", x.inferred ? tv("Closed (inferred)") : x.done ? tv("Completed") : x.overdue ? tv("Overdue") : tv("Open")) },
     { key: "Assigned User", label: t("col_owner"), cls: "nowrap", render: (x) => (x.unassigned ? h("span.warn-text", t("unassigned")) : x["Assigned User"]) },
     { key: "due", label: t("col_due"), cls: "num nowrap", render: (x) => (x.overdue ? h("b.late", fmtDate(x.due)) : fmtDate(x.due)) },
     { key: "daysToDue", label: t("days_left"), cls: "num", render: (x) => (x.daysToDue == null ? "" : x.daysToDue < 0 ? h("b.late", fmtNum(x.daysToDue)) : fmtNum(x.daysToDue)) },
@@ -267,7 +290,9 @@ function tasksTab(ctx, X) {
       kpi({ label: t("k_overdue"), value: fmtNum(L.filter((x) => x.overdue).length), accent: "var(--critical)" }),
       kpi({ label: t("ontime_closure"), value: (() => { const c = L.filter((x) => x.onTime != null); return c.length ? fmtPct(c.filter((x) => x.onTime).length / c.length) : "—"; })() }),
       kpi({ label: t("apqr_k_unassigned"), value: fmtNum(L.filter((x) => x.open && x.unassigned).length), accent: "var(--warning)" })),
-    card(`${t("apqr_tab_tasks")} · ${fmtNum(L.length)}`, dataTable(taskCols(), [...L].sort((a, b) => (a.done - b.done) || (a.due ?? 9e15) - (b.due ?? 9e15)), { pageSize: 30, onRow: (x) => openApqrProduct(ctx, x.key), searchText: (x) => `${x["Reference ID"]} ${x.Product} ${x["Task Title"]} ${x["Assigned User"]}`, exportName: "apqr-tasks" })),
+    card(`${t("apqr_tab_tasks")} · ${fmtNum(L.length)}`, dataTable(taskCols(), [...L].sort((a, b) => (a.done - b.done) || (a.due ?? 9e15) - (b.due ?? 9e15)), { pageSize: 30, onRow: (x) => openApqrProduct(ctx, x.key), searchText: (x) => `${x["Reference ID"]} ${x.Product} ${x["Task Title"]} ${x["Assigned User"]}`, exportName: "apqr-tasks" }),
+      { sub: t("apqr_tasks_open_sub"), actions: ctx.canEdit ? [h("button.btn.compact", { type: "button", onclick: () => openBulk(ctx, "apqrTasks", { title: `${t("bulk_insert")} · ${t("apqr_tab_tasks")}` }) }, icon("upload", 14), t("bulk_insert")),
+        h("button.btn.compact.ghost", { type: "button", onclick: () => ctx.openImport() }, icon("upload", 14), t("apqr_import_sci"))] : null }),
     card(t("apqr_workload"), dataTable([
       { key: "user", label: t("col_owner"), render: (u) => h("b", u.user) }, { key: "total", label: t("apqr_k_tasks"), cls: "num" }, { key: "completed", label: t("s_completed"), cls: "num" },
       { key: "open", label: t("k_open"), cls: "num" }, { key: "overdue", label: t("k_overdue"), cls: "num", render: (u) => (u.overdue ? h("b.late", u.overdue) : "0") },
@@ -297,50 +322,16 @@ function openTasks(ctx, title, list) {
 }
 
 /** Record the APQR decision for a programme product (period, CAPA decision, conclusion, approval). */
-function editRecord(ctx, p) {
+export function editRecord(ctx, p) {
   if (p.record?.__key) return ctx.edit("apqr", p.record.__key, `${p.name} · ${p.record.Period ?? ""}`);
   ctx.addWith("apqr", { Product: p.name, Period: p.period, "Period start": isoDay(p.start), "Period end": isoDay(p.end), "Due date": isoDay(p.reportDue), Owner: p.owner, Status: p.pct === 1 ? "Statistical analysis" : p.triggered ? "Data collection" : "Planned" }, p.name);
 }
 
+/** Open an APQR on its own page. */
 export function openApqrProduct(ctx, key) {
-  ctx.open.drawer(() => {
-    const p = ctx.m.x.apqrProg.products.find((x) => x.key === key);
-    if (!p) return h("p", t("none_found"));
-    const streams = [...new Set(p.tasks.map((x) => x.stream))].sort((a, b) => Object.keys(APQR_STREAMS).indexOf(a) - Object.keys(APQR_STREAMS).indexOf(b));
-    const lc = ctx.m.x.lifecycle.find((l) => p.name.toUpperCase().includes(l.name.toUpperCase()));
-    return [
-      h("div.d-head",
-        h("div.d-tags", h("span.tag", p.form), p.code ? h("span.tag.mono", p.code) : null, dot(TRACK_COLOR[p.track], tv(p.track)), p.triggered ? dot(RAG_COLOR[p.rag], tv(p.rag)) : null, p.duplicate ? h("span.tag.warn-tag", t("dup_short")) : null),
-        h("div.d-refrow", h("span.d-ref", p.refs.join(" · ") || t("apqr_not_triggered")), ctx.canEdit ? h("button.btn.compact", { type: "button", onclick: () => editRecord(ctx, p) }, icon(p.record ? "edit" : "plus", 15), t("apqr_record")) : null),
-        h("h2", p.name)),
-      h("div.apqr-prod-top",
-        h("div.apqr-prod-ring", ring(p.pct, { size: 96, color: RAG_COLOR[p.rag] ?? "var(--c1)" }), h("small", `${fmtNum(p.completed)} / ${fmtNum(p.total)} ${t("apqr_k_tasks").toLowerCase()}`)),
-        h("dl.deflist.compact",
-          h("dt", t("period_lbl")), h("dd", p.period || "—"),
-          h("dt", t("planned_lbl")), h("dd", p.planned != null ? fmtDate(p.planned).slice(3) : "—"),
-          h("dt", t("apqr_report_due")), h("dd", fmtDate(p.reportDue) || "—", p.daysToReportDue != null ? h("small.muted", ` (${p.daysToReportDue >= 0 ? "+" : ""}${p.daysToReportDue} ${t("d")})`) : null),
-          h("dt", t("apqr_owner")), h("dd", p.owner ?? "—"),
-          h("dt", t("col_due")), h("dd", fmtDate(p.wfDue) || "—"),
-          h("dt", t("apqr_prev_report")), h("dd.mono", p.prevReport ?? "—"))),
-      h("h3", t("apqr_phases")),
-      phaseStepper(null, null, p.phase),
-      p.record ? [h("h3", t("apqr_record")), h("dl.deflist",
-        [[t("col_status"), p.record.Status], [t("capa_required"), p.record["CAPA required"]], [t("apqr_prev_capa"), p.record["Previous CAPA status"]], [t("conclusion_lbl"), p.record.Conclusion], [t("approved_on"), fmtDate(p.record.approved)], ["Report", p.record["Report ref"]]]
-          .filter(([, v]) => v).flatMap(([k, v]) => [h("dt", k), h("dd", v)]))] : null,
-      streams.length ? h("h3", t("apqr_streams_title")) : null,
-      h("div.stream-cards", streams.map((st) => {
-        const xs = p.tasks.filter((x) => x.stream === st);
-        const state = p.streamState[st];
-        return h("section.stream-card", { style: { "--c": STATE_COLOR[state] ?? "var(--muted-mark)" } },
-          h("header", h("b", st), h("small", `${APQR_STREAMS[st]?.[0] ?? xs[0]?.dept ?? ""} · ${APQR_STREAMS[st]?.[1] ?? ""}`), APQR_STREAMS[st]?.[2]?.length ? h("span.tag", `§ ${APQR_STREAMS[st][2].join(", ")}`) : null),
-          h("ul", xs.map((x) => h("li", dot(x.done ? "var(--good)" : x.overdue ? "var(--critical)" : "var(--c1)", x["Task Title"]),
-            h("small", [x.unassigned ? t("unassigned") : x["Assigned User"], x["Workflow Stage"], x.done ? `${t("s_closed")} ${fmtDate(x.closed)}` : `${t("col_due")} ${fmtDate(x.due)}`].filter(Boolean).join(" · "))))));
-      })),
-      lc ? h("p", h("button.btn", { type: "button", onclick: () => { ctx.closeDrawer(); ctx.set("apqrProduct", lc.name); ctx.set("apqrTab", "report"); } }, icon("report", 15), t("apqr_open_builder"))) : null,
-    ];
-  });
+  ctx.closeDrawer();
+  ctx.go("apqr", { p: key });
 }
-
 // ---------- report builder (oncology products with batch data) ----------
 function reportBuilder(ctx) {
   const { m } = ctx;
