@@ -586,6 +586,7 @@ export function reconciliation(m) {
     ["Import_CC rows = Change Control rows in Quality Records", m.counts.cc, by("Change Control")],
     ["Import_CAPA rows = CAPA rows in Quality Records", m.counts.capa, by("CAPA")],
     ["Import_QE rows = Deviation rows in Quality Records", m.counts.qe, by("Deviation")],
+    ...(m.counts.find ? [["Audit Findings export rows = Audit Finding rows in Quality Records", m.counts.find, by("Audit Finding")]] : []),
     ["Open + Overdue + Completed + Canceled = all records", R.length, STATUSES.reduce((a, s) => a + R.filter((r) => r.status === s).length, 0)],
     ["Equipment room codes all exist in Rooms", 0, m.equip.filter((e) => e["Room code"] && !m.roomByCode.has(e["Room code"])).length],
     ["FMEA room codes all exist in Rooms", 0, m.fmea.filter((f) => f["Room code"] && !m.roomByCode.has(f["Room code"])).length],
