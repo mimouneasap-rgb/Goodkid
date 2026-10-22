@@ -55,7 +55,8 @@ export function stacks(rows, series, { absolute = true, showLegend = true } = {}
 }
 
 /** Monthly columns (one or two series side by side) plus an optional line, one shared axis. */
-export function columns(points, series, { line, height = 240, xFmt = fmtMonth } = {}) {
+export function columns(points, series, { line, height = 240, xFmt = fmtMonth, stacked, target, fmt = fmtNum, onClick } = {}) {
+  if (stacked) return stackedColumns(points, series, { height, xFmt, target, fmt, onClick });
   return h("div", legend([...series, ...(line ? [{ ...line, line: true }] : [])]), responsive((W) => {
     const H = height, L = 34, R = 8, T = 12, B = 28;
     const iw = W - L - R, ih = H - T - B;
@@ -88,6 +89,88 @@ export function columns(points, series, { line, height = 240, xFmt = fmtMonth } 
     svg.append(h("line.axis", { x1: L, x2: W - R, y1: T + ih, y2: T + ih }));
     return svg;
   }, height));
+}
+
+/** Stacked monthly / quarterly columns with an optional dashed target line. */
+function stackedColumns(points, series, { height, xFmt, target, fmt, onClick }) {
+  return h("div", legend([...series, ...(target != null ? [{ label: target.label, color: "var(--critical)", line: true }] : [])]), responsive((W) => {
+    const H = height, L = 38, R = 8, T = 12, B = 28;
+    const iw = W - L - R, ih = H - T - B;
+    const tot = (p) => series.reduce((a, s) => a + (p[s.key] ?? 0), 0);
+    const max = target?.pct ? 1 : niceMax(Math.max(1, ...points.map(tot), target?.value ?? 0));
+    const y = (v) => T + ih - (v / max) * ih;
+    const band = iw / points.length;
+    const bw = Math.max(2, Math.min(46, band * 0.62));
+    const svg = h("svg", { viewBox: `0 0 ${W} ${H}`, width: W, height: H, class: "svg-chart", role: "img" });
+    for (const v of ticks(max, target?.pct)) svg.append(h("line.grid", { x1: L, x2: W - R, y1: y(v), y2: y(v) }), h("text.tick", { x: L - 6, y: y(v) + 4, "text-anchor": "end" }, target?.pct ? fmtPct(v) : fmtNum(v)));
+    const every = Math.ceil(points.length / Math.max(2, Math.floor(iw / 56)));
+    points.forEach((p, i) => {
+      const x = L + i * band + (band - bw) / 2;
+      let acc = 0;
+      const visible = series.filter((s) => (p[s.key] ?? 0) > 0);
+      series.forEach((s) => {
+        const v = p[s.key] ?? 0;
+        if (v <= 0) return;
+        const top = s === visible.at(-1);
+        const y0 = y(acc), y1 = y(acc + v);
+        svg.append(h("path", { d: top ? roundTop(x, y1, bw, y0 - y1 - (acc ? 1 : 0), Math.min(3, bw / 2)) : `M${x},${y0}H${x + bw}V${y1 + 1}H${x}Z`, fill: s.color }));
+        acc += v;
+      });
+      svg.append(h("rect.hit", {
+        x: L + i * band, y: T, width: band, height: ih, fill: "transparent", style: onClick ? { cursor: "pointer" } : null, onclick: onClick ? () => onClick(p) : null,
+        "data-tip": tip(xFmt(p.x), [...series.map((s) => [s.label, fmt(p[s.key] ?? 0), s.color]), ...(series.length > 1 ? [[t("s_records"), fmt(tot(p))]] : [])]),
+      }));
+      if (i % every === 0) svg.append(h("text.tick", { x: L + i * band + band / 2, y: H - 8, "text-anchor": "middle" }, xFmt(p.x)));
+    });
+    if (target?.value != null) svg.append(h("line", { x1: L, x2: W - R, y1: y(target.value), y2: y(target.value), stroke: "var(--critical)", "stroke-width": 1.5, "stroke-dasharray": "5 4" }));
+    svg.append(h("line.axis", { x1: L, x2: W - R, y1: T + ih, y2: T + ih }));
+    return svg;
+  }, height));
+}
+
+/**
+ * Heat matrix: rows × columns of counts (HTML table). cell(r, c) → number; onCell(r, c) optional.
+ */
+export function matrix(rows, cols, cell, { onCell, rowLabel = (r) => r, colLabel = (c) => c, color = "var(--c1)" } = {}) {
+  const vals = rows.flatMap((r) => cols.map((c) => cell(r, c)));
+  const max = Math.max(1, ...vals);
+  return h("div.matrix-wrap", h("table.matrix",
+    h("thead", h("tr", h("th"), cols.map((c) => h("th", colLabel(c))), h("th.num", "Σ"))),
+    h("tbody", rows.map((r) => {
+      const sum = cols.reduce((a, c) => a + cell(r, c), 0);
+      return h("tr", h("th", { title: rowLabel(r) }, rowLabel(r)), cols.map((c) => {
+        const v = cell(r, c);
+        return h("td", {
+          class: v ? "on" : "", style: { "--a": v ? 0.12 + 0.88 * (v / max) : 0, "--mc": color },
+          "data-tip": v ? tip(`${rowLabel(r)} · ${colLabel(c)}`, [[t("s_count"), fmtNum(v)]]) : null,
+          onclick: v && onCell ? () => onCell(r, c) : null,
+        }, v || "");
+      }), h("td.num.sum", fmtNum(sum)));
+    }))));
+}
+
+/**
+ * Month-grid plan: items [{label, sub, start, end, color, status, tip, onclick}] over `months` from `from`.
+ */
+export function gantt(items, { from, months = 12, today } = {}) {
+  const ms = Array.from({ length: months }, (_, i) => { const d = new Date(from); return Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + i, 1); });
+  const end = (() => { const d = new Date(ms.at(-1)); return Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1); })();
+  const pos = (ts) => Math.max(0, Math.min(100, ((ts - ms[0]) / (end - ms[0])) * 100));
+  const names = t("col_month") === "Mois" ? ["J", "F", "M", "A", "M", "J", "J", "A", "S", "O", "N", "D"] : ["J", "F", "M", "A", "M", "J", "J", "A", "S", "O", "N", "D"];
+  const now = today != null && today >= ms[0] && today < end ? h("i.gantt-now", { style: { left: `${pos(today)}%` } }) : null;
+  if (!items.length) return h("div.empty", t("no_data"));
+  return h("div.gantt", { style: { "--cols": months } },
+    h("div.gantt-row.gantt-head", h("span"), h("div.gantt-months", ms.map((m) => h("span", names[new Date(m).getUTCMonth()] + (new Date(m).getUTCMonth() === 0 || m === ms[0] ? ` ${String(new Date(m).getUTCFullYear()).slice(2)}` : ""))), now?.cloneNode())),
+    items.map((it) => {
+      const s = it.start ?? it.end, e = Math.max(it.end ?? s, s) + 86400000 * 3;
+      const visible = s != null && e >= ms[0] && s < end;
+      return h(it.onclick ? "button.gantt-row" : "div.gantt-row", { type: it.onclick ? "button" : null, onclick: it.onclick },
+        h("span.gantt-label", { title: it.label }, it.label, it.sub ? h("small", it.sub) : null),
+        h("div.gantt-track",
+          now?.cloneNode(),
+          visible ? h("i.gantt-bar", { style: { left: `${pos(s)}%`, width: `${Math.max(1.2, pos(e) - pos(s))}%`, background: it.color }, "data-tip": it.tip ?? `<b>${esc(it.label)}</b>` }) : null,
+          it.mark != null && it.mark >= ms[0] && it.mark < end ? h("i.gantt-mark", { style: { left: `${pos(it.mark)}%` }, title: "✔" }) : null));
+    }));
 }
 
 /** Lines over months, optional control limits and signal markers. */

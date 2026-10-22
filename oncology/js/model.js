@@ -5,7 +5,7 @@
 const DAY = 86400000;
 const DASH = "-----";
 
-export const TYPES = ["Change Control", "CAPA", "Deviation"];
+export const TYPES = ["Change Control", "CAPA", "Deviation", "Audit Finding"];
 export const STATUSES = ["Open", "Overdue", "Completed", "Canceled"];
 export const AGE_BUCKETS = ["0–30", "31–60", "61–90", ">90"];
 export const TTC_BUCKETS = ["0–30", "31–60", "61–90", "91–180", ">180"];
@@ -84,6 +84,44 @@ export function bandFor(bands, v) {
 
 const num = (v) => (v == null || v === "" || isNaN(+v) ? null : +v);
 
+/** Department named in free text (audited area, audit title, folders). */
+export function deptFromText(s) {
+  const t = String(s ?? "").toLowerCase();
+  const map = [[/warehouse|magasin|stock/, "Warehouse"], [/engineering|maintenance|hvac|utilit/, "Engineering"], [/validation|qualification/, "Validation and Qualification"],
+    [/quality control|microbio|laborator|\bqc\b/, "Quality Control"], [/packag|blister|conditionnement/, "Packaging"], [/production|manufactur|fabrication/, "Manufacturing"],
+    [/\bit\b|informat|computer/, "IT"], [/hse|ehs|safety|environment/, "HSE"], [/r&d|research|development/, "R&D"], [/regulatory/, "Regulatory Affairs"],
+    [/supply chain|procurement|purchas/, "Supply Chain"], [/quality assurance|\bqa\b|documentation|gmp gap|cgmp/, "Quality Assurance"]];
+  return map.find(([re]) => re.test(t))?.[1] ?? "";
+}
+
+/** CC / CAPA / audit implementation actions (Scigeniq "Actions" export), linked to their parent record. */
+export function buildActions(wb, now, deptMap = new Map(), recordByRef = new Map()) {
+  return objects(wb.actions).filter((a) => clean(a["Reference Id"])).map((a) => {
+    const status = clean(a.Status);
+    const opened = toDay(clean(a["Creation Date"]));
+    const due = toDay(clean(a["End Date"]));
+    const closed = toDay(clean(a["Closing date"]));
+    const isOpen = status === "Open" || status === "Overdue";
+    const dRaw = clean(a.Department) || clean(a.Location);
+    const parentRef = clean(a["Parent ID Reference"]);
+    const parent = parentRef ? recordByRef.get(parentRef) : null;
+    const parentType = clean(a["Parent Type"]) || clean(a.Source) || (parentRef.startsWith("CC-") ? "Change Control" : parentRef.startsWith("CAPA-") ? "CAPA" : "");
+    return {
+      ref: clean(a["Reference Id"]), title: clean(a.Title), description: clean(a.Description), stage: clean(a.Stage), status, type: clean(a.Type),
+      opened, due, closed, owner: clean(a["Assigned User"]) || clean(a.Role),
+      department: dRaw ? deptMap.get(dRaw) ?? dRaw : parent?.department ?? "(Unassigned)",
+      parentRef, parentType, origin: clean(a["Parent Parent Source"]) || parentType, parentTitle: clean(a["Parent action"]).replace(/^Task\s*-\s*/i, ""),
+      tags: clean(a.Tags), isOpen,
+      daysLate: isOpen && due != null ? Math.max(0, daysBetween(due, now)) : 0,
+      overdue: status === "Overdue" || (isOpen && due != null && due < now),
+      daysToClose: closed != null && opened != null ? daysBetween(opened, closed) : null,
+      closedLate: closed != null && due != null ? (closed > due ? 1 : 0) : null,
+      month: opened == null ? "" : monthKey(opened),
+      __key: a.__key, __edit: a.__edit,
+    };
+  });
+}
+
 // ---------- build ----------
 
 /**
@@ -151,16 +189,18 @@ export function buildModel(wb, opts = {}) {
     ["Change Control", objects(wb.cc)],
     ["CAPA", objects(wb.capa)],
     ["Deviation", objects(wb.qe)],
+    ["Audit Finding", objects(wb.find)],
   ];
   const records = [];
   for (const [type, rows] of sources) {
     for (const r of rows) {
       if (!clean(r["Reference Id"])) continue;
-      const isCC = type === "Change Control", isCAPA = type === "CAPA", isQE = type === "Deviation";
+      const isCC = type === "Change Control", isCAPA = type === "CAPA", isQE = type === "Deviation", isAF = type === "Audit Finding";
       let classRaw = "";
       if (isCC) classRaw = clean(r["CC Classification"]);
       else if (isQE) classRaw = clean(r["Final Event Classification"]) || clean(r["Initial QE Class"]);
-      let deptRaw = isCC ? clean(r.Department) || clean(r.Location) : isCAPA ? clean(r["Responsible Department"]) : clean(r.Location);
+      else if (isAF) classRaw = clean(r.Classification);
+      let deptRaw = isCC ? clean(r.Department) || clean(r.Location) : isCAPA ? clean(r["Responsible Department"]) : isAF ? clean(r.Location) || deptFromText(`${clean(r["Audited Areas"])} ${clean(r["Parent action"])} ${clean(r.Folders)}`) : clean(r.Location);
       const deptFirst = deptRaw.split(",")[0].trim();
       const department = deptRaw === "" ? "(Unassigned)" : deptMap.get(deptFirst) ?? deptFirst;
       const rec = {
@@ -178,11 +218,14 @@ export function buildModel(wb, opts = {}) {
         due: toDay(clean(r["End Date"])),
         closed: toDay(clean(r["Closing date"])),
         owner: clean(r["Assigned User"]) || clean(r.Role),
-        parentRef: isCAPA ? clean(r["Parent ID Reference"]) : "",
+        parentRef: isCAPA || isAF ? clean(r["Parent ID Reference"]) : "",
         effCheck: isCAPA ? clean(r["Effectiveness Check required?"]) : "",
         capaRequired: isQE ? clean(r["CAPA Required_?"]) : "",
-        scope: isCC ? clean(r["Change Scope"]) : isQE ? clean(r["Quality Event Scope"]) : "",
-        source: isCAPA ? clean(r.Source) : "",
+        scope: isCC ? clean(r["Change Scope"]) : isQE ? clean(r["Quality Event Scope"]) : isAF ? clean(r["Finding Type"]) : "",
+        source: isCAPA ? clean(r.Source) : isAF ? clean(r["Audited Areas"]) : "",
+        tags: clean(r.Tags),
+        audit: isAF ? clean(r["Parent action"]).replace(/^Task\s*-\s*/i, "") : "",
+        supplier: isAF ? clean(r["Supplier Name"]) : "",
         initialClass: isQE ? clean(r["Initial QE Class"]) : "",
         finalClass: isQE ? clean(r["Final Event Classification"]) : "",
         folders: clean(r.Folders),
@@ -193,7 +236,7 @@ export function buildModel(wb, opts = {}) {
         justification: isCC ? clean(r.Justification) : "",
         createdBy: clean(r["Created By"]),
         raw: r,
-        srcTable: { "Change Control": "cc", CAPA: "capa", Deviation: "qe" }[type],
+        srcTable: { "Change Control": "cc", CAPA: "capa", Deviation: "qe", "Audit Finding": "find" }[type],
         srcKey: r.__key,
         edit: r.__edit,
       };
@@ -225,7 +268,7 @@ export function buildModel(wb, opts = {}) {
     r.ttcBucket = t == null ? "" : t <= 30 ? "0–30" : t <= 60 ? "31–60" : t <= 90 ? "61–90" : t <= 180 ? "91–180" : ">180";
     r.year = r.opened == null ? null : new Date(r.opened).getUTCFullYear();
     r.month = r.opened == null ? "" : monthKey(r.opened);
-    r.linkedCapas = r.type === "Deviation" ? childCount.get(r.ref) ?? 0 : null;
+    r.linkedCapas = r.type === "Deviation" || r.type === "Audit Finding" ? childCount.get(r.ref) ?? 0 : null;
     r.vqFolder = has(r.folders, "Validation and Qualification");
     r.daysToDue = r.isOpen && r.due != null ? daysBetween(now, r.due) : null;
     r.closedLate = r.closed != null && r.due != null ? (r.closed > r.due ? 1 : 0) : null;
@@ -318,7 +361,8 @@ export function buildModel(wb, opts = {}) {
     impr: objects(wb.impr).filter((i) => i.ID),
     approvals, links,
     mapGrid: wb.mapGrid ?? [],
-    counts: { cc: sources[0][1].filter((r) => clean(r["Reference Id"])).length, capa: sources[1][1].filter((r) => clean(r["Reference Id"])).length, qe: sources[2][1].filter((r) => clean(r["Reference Id"])).length },
+    counts: { cc: sources[0][1].filter((r) => clean(r["Reference Id"])).length, capa: sources[1][1].filter((r) => clean(r["Reference Id"])).length, qe: sources[2][1].filter((r) => clean(r["Reference Id"])).length, find: sources[3][1].filter((r) => clean(r["Reference Id"])).length },
+    actions: buildActions(wb, now, deptMap, recordByRef),
   };
 }
 

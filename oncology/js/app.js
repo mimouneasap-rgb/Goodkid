@@ -4,7 +4,7 @@
 import SCHEMA from "./schema.js";
 import * as M from "./model.js";
 import { openStore, applyEdits } from "./store.js";
-import { rowForm, changeLine, tableLabel, SPECS } from "./editing.js";
+import { rowForm, changeLine, tableLabel } from "./editing.js";
 import { initI18n, setLang, getLang, t, tv } from "./i18n.js";
 import { h, pill, typeTag, fmtDate, fmtNum, fmtPct, defList, dataTable } from "./ui.js";
 import { icon } from "./icons.js";
@@ -12,6 +12,11 @@ import * as O from "./views-overview.js";
 import * as S from "./views-site.js";
 import * as Q from "./views-qms.js";
 import { dataTables } from "./views-data.js";
+import * as QV from "./views-quality.js";
+import * as OP from "./views-ops.js";
+import * as PE from "./views-people.js";
+import { importFiles, COLS, emptyData } from "./importers.js";
+import { buildDomains } from "./domain.js";
 
 // ---------- per-viewer preferences (theme, language, filters) ----------
 const KEY = "okqa.";
@@ -37,7 +42,7 @@ const names = new Map(); // user id → display name, resolved on demand
 
 function build() {
   if (!data) return null;
-  const built = M.buildModel(data);
+  const built = buildDomains(M.buildModel(data), data, wsState.review);
   document.getElementById("assets-dl")?.remove();
   document.body.append(h("datalist#assets-dl", built.equip.map((e) => h("option", { value: e["Asset no"] }))));
   return built;
@@ -56,7 +61,7 @@ function who(id) {
 let renderQueued = false;
 function onWorkspace(s) {
   wsState = s;
-  data = s.base ? applyEdits(s.base, s.edits) : null;
+  data = s.base ? applyEdits(withAllTables(s.base), s.edits) : null;
   model = build();
   if (renderQueued) return;
   renderQueued = true;
@@ -69,19 +74,28 @@ function refresh() {
   render({ keepScroll: true });
   refreshDrawer();
 }
-const emptyData = () => ({ meta: {}, tr: SCHEMA.tr, mapGrid: [], ...Object.fromEntries(Object.entries(SCHEMA.cols).map(([k, cols]) => [k, { cols, rows: [] }])) });
+/** Tables added in later versions start empty in workspaces imported before them. */
+function withAllTables(base) {
+  const missing = Object.keys(COLS).filter((k) => !base[k]);
+  return missing.length ? { ...base, ...Object.fromEntries(missing.map((k) => [k, { cols: COLS[k], rows: [] }])) } : base;
+}
 
 // ---------- routes ----------
 const NAV = [
-  ["nav_overview", [["home", "home", "home"], ["dashboard", "dashboard", "dash_title"], ["review", "review", "mr_title"], ["spc", "spc", "spc_title"]]],
-  ["nav_ops", [["map", "map", "map_title"], ["rooms", "room", "rx_title"], ["equipment", "equipment", "eq_title"], ["products", "product", "pv_title"]]],
-  ["nav_qms", [["records", "records", "qr_title"], ["capa", "capa", "cd_title"], ["cc", "cc", "cc_title"], ["fmea", "fmea", "fm_title"], ["improvements", "improve", "im_title"], ["sops", "sop", "sop_title"]]],
+  ["nav_overview", [["home", "home", "home"], ["dashboard", "dashboard", "dash_title"], ["review", "review", "mr_title"], ["metrics", "target", "met_title"], ["spc", "spc", "spc_title"]]],
+  ["nav_events", [["deviations", "deviation", "nav_dev_t"], ["capa", "capa", "nav_capa_t"], ["cc", "cc", "nav_cc_t"], ["findings", "flag", "nav_find_t"], ["actions", "tasks", "nav_actions_t"], ["records", "records", "qr_title"]]],
+  ["nav_product", [["products", "product", "pv_title"], ["lifecycle", "cycle", "lc_title"], ["apqr", "report", "apqr_title"], ["wip", "layers", "wip_title"], ["suppliers", "truck", "sup_title"]]],
+  ["nav_ops", [["map", "map", "map_title"], ["rooms", "room", "rx_title"], ["equipment", "equipment", "eq_title"], ["calibration", "thermo", "cal_title"], ["validation", "badge", "val_title"]]],
+  ["nav_people", [["training", "cap", "trn_title"], ["fives", "sparkle", "fives_title"], ["activities", "calendar", "qaa_title"], ["sops", "sop", "sop_title"], ["fmea", "fmea", "fm_title"], ["improvements", "improve", "im_title"]]],
   ["nav_gov", [["data", "edit", "dt_title"], ["quality", "quality", "dq_title"]]],
 ];
 const VIEWS = {
-  home: O.home, dashboard: O.dashboard, review: O.review, spc: O.spc,
-  map: S.map, rooms: S.rooms, equipment: S.equipment, products: S.products,
-  records: Q.records, capa: Q.capa, cc: Q.cc, fmea: Q.fmea, improvements: Q.improvements, sops: Q.sops, quality: Q.quality, data: dataTables,
+  home: O.home, dashboard: O.dashboard, review: O.review, metrics: PE.metricsView, spc: O.spc,
+  deviations: QV.deviations, capa: QV.capaView, cc: QV.ccView, findings: QV.findings, actions: QV.actionsView, records: Q.records,
+  products: S.products, lifecycle: OP.lifecycle, apqr: OP.apqrView, wip: OP.wipView, suppliers: OP.suppliersView,
+  map: S.map, rooms: S.rooms, equipment: S.equipment, calibration: OP.calibration, validation: OP.validation,
+  training: PE.trainingView, fives: PE.fivesView, activities: PE.activitiesView, sops: Q.sops, fmea: Q.fmea, improvements: Q.improvements,
+  data: dataTables, quality: Q.quality,
 };
 
 function parseHash() {
@@ -123,6 +137,16 @@ const ctx = {
   who: (id) => who(id),
   edit: (table, key, title) => openEditor(table, key, title),
   add: (table, title) => openEditor(table, null, title),
+  /** New row with some fields filled in (e.g. a metric value for a given quarter). */
+  addWith: (table, defaults, title) => openEditor(table, null, title, defaults),
+  /** Save a row given as {column: value} (key null = new row); other columns are kept. */
+  saveObj: (table, key, obj) => saveObj(table, key, obj),
+  /** Apply the same change to several rows (e.g. record a calibration group as done). */
+  bulkUpdate: async (table, keys, patch) => {
+    try { for (const k of keys) await saveObj(table, k, patch, true); toast(t("saved_ok")); } catch (e) { toast(e.message, "warn"); }
+  },
+  openImport: () => openImport(),
+  closeDrawer: () => closeDrawer(),
   open: {
     record: (ref) => openRecord(ref),
     risk: (id) => openRisk(id),
@@ -130,8 +154,23 @@ const ctx = {
     asset: (no) => openAsset(no),
     sop: (code) => openSop(code),
     list: (title, list) => openList(title, list, "record"),
+    actions: (title, list) => openActions(title, list),
+    action: (ref) => openAction(ref),
+    table: (title, table, rows) => openTable(title, table, rows),
+    /** A custom form in the drawer (not re-rendered by data refreshes while open). */
+    drawer: (content) => { content.editor = true; showDrawer(content); },
   },
 };
+
+const newKey = () => `n-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+async function saveObj(table, key, obj, quiet) {
+  const tbl = data[table];
+  const i = key ? tbl.keys.indexOf(key) : -1;
+  const row = i >= 0 ? [...tbl.rows[i]] : tbl.cols.map(() => null);
+  for (const [c, v] of Object.entries(obj)) { const j = tbl.cols.indexOf(c); if (j >= 0) row[j] = v; }
+  await ws.saveRow(table, i >= 0 ? key : newKey(), row, me, tbl.importId);
+  if (!quiet) toast(t("saved_ok"));
+}
 
 // ---------- shell ----------
 const root = document.getElementById("app");
@@ -235,15 +274,19 @@ const editBtn = (table, key, title) => (ws?.canWrite && key ? h("button.btn.comp
 /** Lists of existing values offered as suggestions in the editor. */
 function suggestionLists() {
   const vals = (k) => model.records.map((r) => r[k]).filter(Boolean);
+  const y = new Date(model.now).getUTCFullYear();
   return {
-    users: vals("owner"), depts: [...vals("department").filter((d) => !d.startsWith("(")), ...model.records.map((r) => r.raw["Responsible Department"]).filter((x) => x && x !== "-----")],
+    users: [...vals("owner"), ...model.actions.map((a) => a.owner).filter(Boolean)], depts: [...vals("department").filter((d) => !d.startsWith("(")), ...model.records.map((r) => r.raw["Responsible Department"]).filter((x) => x && x !== "-----")],
     locations: model.records.map((r) => r.raw.Location).filter((x) => x && x !== "-----"),
     scopes: vals("scope"), rootcauses: vals("rootCause"), stages: vals("stage"),
+    refs: model.records.map((r) => r.ref), rooms: model.rooms.map((r) => r.Code), sops: model.sops.map((s) => s.Code),
+    assets: model.equip.map((e) => e["Asset no"]), products: model.products.map((p) => p.Product),
+    periods: [y - 1, y, y + 1].flatMap((yy) => [String(yy), ...[1, 2, 3, 4].map((q) => `${yy}-Q${q}`)]),
   };
 }
 
 /** Editor for one row of a workbook table (key null = new row). */
-function openEditor(table, key, title) {
+function openEditor(table, key, title, defaults) {
   const tbl = data[table];
   if (!tbl) return;
   const index = key ? tbl.keys.indexOf(key) : -1;
@@ -254,10 +297,10 @@ function openEditor(table, key, title) {
       h("h2", key ? (title || t("edit")) : t("add_row_title", tableLabel(table).toLowerCase()))),
     ws.mode === "shared" ? h("p.fine", t("edit_shared_note")) : h("p.fine", t("edit_local_note")),
     rowForm({
-      table, cols: tbl.cols, row, index, allRows: tbl.rows, lists: suggestionLists(),
+      table, cols: tbl.cols, row, index, allRows: tbl.rows, lists: suggestionLists(), defaults,
       rooms: model.rooms.map((r) => [r.Code, r.Name]),
       onSave: async (values) => {
-        const k = key ?? `n-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+        const k = key ?? newKey();
         await ws.saveRow(table, k, values, me, tbl.importId);
         toast(t("saved_ok"));
         stack.pop();
@@ -321,6 +364,7 @@ function openRecord(ref) {
         ["Data quality", r.dataQuality.length ? h("span.warn-text", r.dataQuality.join(" · ")) : null],
         [t("approval"), r.approval || null],
       ]),
+      r.actions?.length ? [h("h3", `${t("nav_actions")} · ${fmtNum(r.actions.filter((a) => a.isOpen).length)} ${t("s_open").toLowerCase()} / ${fmtNum(r.actions.length)}`), actionList(r.actions)] : null,
       r.current || r.proposed || r.justification ? [h("h3", t("cc_title")), defList([[t("current_state"), h("p.pre", r.current)], [t("proposed_state"), h("p.pre", r.proposed)], [t("justification"), h("p.pre", r.justification)]])] : null,
       linkForm(r),
       approvalForm(r),
@@ -437,6 +481,66 @@ function openList(title, list, kind) {
   ]);
 }
 
+const actionList = (list) => h("div.d-list", list.map((a) => h("button.d-item", { type: "button", onclick: () => openAction(a.ref) },
+  h("span.type-tag", { style: { "--dot": "var(--c4)" } }, "ACT"), h("span.d-item-t", h("b", a.ref), h("span", a.title)), pill(a.overdue && a.isOpen ? "Overdue" : a.status))));
+
+function openActions(title, list) {
+  showDrawer(() => [
+    h("div.d-head", h("span.d-ref", `${fmtNum(list.length)} ${t("rows")}`), h("h2", title)),
+    dataTable(QV.actionCols(), list, { pageSize: 30, onRow: (a) => openAction(a.ref), searchText: (a) => `${a.ref} ${a.title} ${a.parentRef} ${a.owner}`, exportName: "actions" }),
+  ]);
+}
+
+function openAction(ref) {
+  showDrawer(() => {
+    const a = model.actions.find((x) => x.ref === ref);
+    if (!a) return h("p", t("none_found"));
+    const parent = a.parentRef ? model.recordByRef.get(a.parentRef) : null;
+    const siblings = a.parentRef ? model.actions.filter((x) => x.parentRef === a.parentRef && x.ref !== a.ref) : [];
+    return [
+      h("div.d-head",
+        h("div.d-tags", h("span.type-tag", { style: { "--dot": "var(--c4)" } }, "ACT"), pill(a.overdue && a.isOpen ? "Overdue" : a.status), a.tags ? h("span.tag", a.tags) : null),
+        h("div.d-refrow", h("span.d-ref", a.ref), editBtn("actions", a.__key, `${a.ref} · ${a.title}`)),
+        h("h2", a.title || "—"),
+        changeLine(a.__edit, who)),
+      a.description ? h("p.pre", a.description) : null,
+      defList([
+        [t("col_stage"), a.stage], [t("col_dept"), tv(a.department)], [t("col_owner"), a.owner],
+        [t("col_opened"), fmtDate(a.opened)], [t("col_due"), fmtDate(a.due)], [t("s_closed"), fmtDate(a.closed)],
+        [t("col_late"), a.daysLate ? h("b.late", fmtNum(a.daysLate)) : null], [t("ttc_lbl"), a.daysToClose != null ? `${fmtNum(a.daysToClose)} ${t("d")}` : null],
+        [t("parent"), a.parentRef ? (parent ? linkBtn(`${parent.ref} · ${parent.title}`, () => openRecord(parent.ref)) : `${a.parentRef}${a.parentTitle ? " · " + a.parentTitle : ""}`) : t("standalone")],
+        [t("col_type"), a.parentType || a.type], [t("source"), a.origin],
+      ]),
+      siblings.length ? [h("h3", t("sibling_actions")), actionList(siblings)] : null,
+    ];
+  });
+}
+
+// Columns shown when a list of rows from one of the operational tables opens in the drawer.
+const DRAWER_COLS = {
+  calplan: ["Item", "Description", "location", "start:date", "done:date", "status"],
+  validation: ["Task ID", "Task", "Scope", "start:month", "done:date", "status"],
+  training: ["Training ID", "Program", "Type", "planned:month", "done:date", "status"],
+  wip: ["Product", "Batch", "Next step", "Status", "qty:num", "tf:date"],
+  rejections: ["Report no", "Product", "Batch", "kind", "Status", "qty:num"],
+  batches: ["Batch no", "productKey", "Batch type", "mfg:date", "stage", "release:date"],
+  fives: ["Audit ID", "week", "Area", "Auditor", "total:pct", "Action status"],
+  suppliers: ["API", "Manufacturer", "Finished product", "auditStatus"],
+  apqr: ["Product", "Period", "due:date", "status"],
+};
+const DRAWER_LABEL = { location: "col_room", start: "planned_lbl", planned: "planned_lbl", done: "completed_on", status: "col_status", tf: "hold_limit", kind: "col_type", productKey: "product", mfg: "mfg_lbl", stage: "stage", release: "released_lbl", week: "week_lbl", total: "score_lbl", auditStatus: "audit_lbl", due: "col_due", qty: "qty_lbl" };
+function openTable(title, table, rows) {
+  const cols = (DRAWER_COLS[table] ?? Object.keys(rows[0] ?? {}).filter((k) => !k.startsWith("__")).slice(0, 6)).map((spec) => {
+    const [key, kind] = spec.split(":");
+    const render = kind === "date" ? (r) => fmtDate(r[key]) : kind === "month" ? (r) => (r[key] != null ? fmtDate(r[key]).slice(3) : "—") : kind === "pct" ? (r) => fmtPct(r[key]) : kind === "num" ? (r) => fmtNum(r[key], 2) : key === "status" || key === "stage" || key === "auditStatus" ? (r) => tv(r[key]) : null;
+    return { key, label: DRAWER_LABEL[key] ? t(DRAWER_LABEL[key]) : key, cls: kind ? "num nowrap" : /ID|no$|Item|Batch/.test(key) ? "mono nowrap" : "wrap", render };
+  });
+  showDrawer(() => [
+    h("div.d-head", h("span.d-ref", `${tableLabel(table)} · ${fmtNum(rows.length)} ${t("rows")}`), h("h2", title)),
+    dataTable(cols, rows, { pageSize: 30, onRow: ws.canWrite ? (r) => openEditor(table, r.__key, title) : null, exportName: table }),
+  ]);
+}
+
 // ---------- search palette ----------
 const palette = h("dialog.palette", { "aria-label": t("search_short") });
 document.body.append(palette);
@@ -458,6 +562,10 @@ function openPalette() {
     add(t("n_eq"), model.equip.filter((e) => m(e["Asset no"]) || m(e.Description) || m(e.Serial)).map((e) => ({ label: `${e["Asset no"]} · ${e.Description}`, sub: e["Room code"] ?? "", icon: "equipment", act: () => openAsset(e["Asset no"]) })), 5);
     add(t("n_fm"), model.fmea.filter((f) => m(f["Risk ID"]) || m(f["Failure mode"]) || m(f["Process step"])).map((f) => ({ label: `${f["Risk ID"]} · ${f["Failure mode"]}`, sub: `RPN ${f.rpn ?? "—"}`, icon: "fmea", act: () => openRisk(f["Risk ID"]) })), 5);
     add(t("n_sop"), model.sops.filter((s) => m(s.Code) || m(s.Title)).map((s) => ({ label: `${s.Code} · ${s.Title}`, sub: s.Department ?? "", icon: "sop", act: () => openSop(s.Code) })), 5);
+    add(t("nav_actions"), model.actions.filter((a) => m(a.ref) || m(a.title) || m(a.parentRef)).map((a) => ({ label: `${a.ref} · ${a.title}`, sub: `${a.parentRef || t("standalone")} · ${tv(a.status)}`, icon: "tasks", act: () => openAction(a.ref) })), 5);
+    add(t("batches_lbl"), model.x.batches.filter((b) => m(b["Batch no"]) || m(b.Product)).map((b) => ({ label: `${b["Batch no"]} · ${b.Product}`, sub: tv(b.stage), icon: "cycle", act: () => go("lifecycle") })), 4);
+    add(t("trn_title"), model.x.training.filter((x) => m(x["Training ID"]) || m(x.Program) || m(x.Reference)).map((x) => ({ label: `${x["Training ID"] ?? ""} · ${x.Program}`, sub: tv(x.status), icon: "cap", act: () => go("training") })), 4);
+    add(t("qaa_title"), model.x.qaact.filter((a) => m(a.id) || m(a.activity) || m(a.reference)).map((a) => ({ label: `${a.id} · ${a.activity}`, sub: a.reference, icon: "calendar", act: () => go("activities") })), 4);
     const prods = [...new Set(model.products.map((p) => p.Product))];
     add(t("pv_title"), model.products.filter((p) => m(p.Product) || m(p.API)).filter((p, i, a) => a.findIndex((x) => x.Product === p.Product) === i).map((p) => ({ label: p.Product, sub: p.API ?? "", icon: "product", act: () => go("products", { product: p.Product }) })), prods.length);
     return out;
@@ -528,33 +636,27 @@ function toast(msg, kind = "ok") {
 }
 
 // ---------- import ----------
-/** Drop zone + status line that load .xlsx files into the app. */
+/** Drop zone + status line that load workbooks, exports and controlled Word forms into the app. */
 function dropZone(onDone) {
-  const input = h("input", { type: "file", accept: ".xlsx,.xlsm", multiple: true, hidden: true, onchange: (e) => handleFiles([...e.target.files]) });
-  const drop = h("button.dropzone", { type: "button", onclick: () => input.click() }, icon("upload", 28), h("b", t("import_drop")), h("small", "ElKendi_Oncology_QA_Master_Workbook.xlsx · allTasks_report.xlsx"));
+  const input = h("input", { type: "file", accept: ".xlsx,.xlsm,.docx", multiple: true, hidden: true, onchange: (e) => handleFiles([...e.target.files]) });
+  const drop = h("button.dropzone", { type: "button", onclick: () => input.click() }, icon("upload", 28), h("b", t("import_drop")), h("small", t("import_kinds")));
   drop.addEventListener("dragover", (e) => { e.preventDefault(); drop.classList.add("over"); });
   drop.addEventListener("dragleave", () => drop.classList.remove("over"));
   drop.addEventListener("drop", (e) => { e.preventDefault(); drop.classList.remove("over"); handleFiles([...e.dataTransfer.files]); });
   const status = h("div.import-status");
   async function handleFiles(files) {
+    if (!files.length) return;
     status.replaceChildren(h("span.spinner"), " …");
     try {
-      const XLSX = await loadXLSX();
-      // master workbooks first, so Scigeniq exports dropped together replace their lists afterwards
-      const books = [];
-      for (const file of files) books.push({ file, wb: XLSX.read(await file.arrayBuffer(), { cellDates: true, bookFiles: true }) });
-      books.sort((a, b) => isMaster(b.wb) - isMaster(a.wb));
-      // imports replace the imported workbook (not the edited view of it); edits to replaced lists are dropped
-      const next = structuredClone(wsState.base ?? emptyData());
-      delete next.tr;
-      const done = [], replaced = [];
-      for (const { file, wb } of books) done.push(`${file.name}: ${await importWorkbook(XLSX, wb, next, file, replaced)}`);
-      if (!next.rooms.rows.length) throw new Error(t("need_master"));
+      // imports replace the imported tables (not the edited view of them); edits to replaced tables are dropped
+      const { next, replaced, done } = await importFiles(files, wsState.base, { needMaster: wsState.base?.rooms?.rows?.length ? null : t("need_master") });
+      const report = h("ul", done.map(([name, msg]) => h("li", { class: msg.startsWith("✘") ? "warn-text" : "" }, h("b", name), " · ", msg)));
+      if (!replaced.length) { status.replaceChildren(h("div.warn-text", t("import_nothing")), report); return; }
       next.meta = { ...next.meta, importedAt: new Date().toISOString() };
       await ws.importBase(next, replaced, (n, total) => status.replaceChildren(h("span.spinner"), ` ${t("ws_saving")} ${n}/${total}`));
-      status.replaceChildren(h("div.ok-line", icon("check", 16), t("import_done")), h("ul", done.map((d) => h("li", d))));
+      status.replaceChildren(h("div.ok-line", icon("check", 16), t("import_done")), report);
       toast(t("import_done"));
-      onDone?.();
+      onDone?.(done.some(([, msg]) => msg.startsWith("✘")));
     } catch (err) {
       console.error(err);
       status.replaceChildren(h("div.warn-text", `${t("import_fail")}: ${err.message ?? err}`));
@@ -576,8 +678,8 @@ function welcome() {
         dropZone(),
         ws.localData() ? h("button.btn.glass", { type: "button", onclick: (e) => useDeviceData(e.currentTarget) }, icon("upload", 16), t("use_device_data")) : null,
         h("p.welcome-privacy", icon("quality", 16), ws.mode === "shared" ? t("welcome_privacy_shared") : t("welcome_privacy"))) : null),
-    h("div.welcome-grid", [["dashboard", "dash_title", "m_dash"], ["review", "mr_title", "m_mr"], ["map", "map_title", "m_map"], ["fmea", "fm_title", "m_fm"], ["capa", "cd_title", "m_cd"], ["spc", "spc_title", "m_spc"]]
-      .map(([ic, title, desc], i) => h("div.module.static", { style: { "--i": i } }, h("span.module-ico", icon(ic === "capa" ? "capa" : ic, 22)), h("span.module-t", t(title)), h("span.module-d", t(desc))))));
+    h("div.welcome-grid", [["dashboard", "dash_title", "m_dash"], ["deviation", "nav_dev_t", "m_dev"], ["target", "met_title", "m_met"], ["cap", "trn_title", "m_trn"], ["cycle", "lc_title", "m_lc"], ["sparkle", "fives_title", "m_5s"]]
+      .map(([ic, title, desc], i) => h("div.module.static", { style: { "--i": i } }, h("span.module-ico", icon(ic, 22)), h("span.module-t", t(title)), h("span.module-d", t(desc))))));
 }
 
 /** Move a workbook loaded by the earlier, device-only version into the shared workspace. */
@@ -587,7 +689,7 @@ async function useDeviceData(btn) {
     const local = ws.localData();
     const next = { ...local, meta: { ...local.meta, importedAt: new Date().toISOString() } };
     delete next.tr;
-    await ws.importBase(next, Object.keys(SCHEMA.cols), (n, total) => { btn.textContent = `${t("ws_saving")} ${n}/${total}`; });
+    await ws.importBase(next, Object.keys(COLS).filter((k) => next[k]), (n, total) => { btn.textContent = `${t("ws_saving")} ${n}/${total}`; });
     toast(t("import_done"));
   } catch (err) { toast(err.message, "warn"); btn.disabled = false; }
 }
@@ -599,140 +701,12 @@ function openImport() {
   importDlg.replaceChildren(
     h("div.modal-head", h("h2", t("import_title")), h("button.icon-btn", { type: "button", "aria-label": t("close"), onclick: () => importDlg.close() }, icon("close", 18))),
     h("p", t("import_body")),
+    h("ul.import-kinds", ["imp_k1", "imp_k2", "imp_k3", "imp_k4", "imp_k5"].map((k) => h("li", t(k)))),
     wsState.edits.size ? h("p.banner.info", icon("alert", 16), t("import_replaces_edits", fmtNum(wsState.edits.size))) : null,
-    ...(ws.canWrite ? dropZone(() => setTimeout(() => importDlg.close(), 900)) : [h("p.warn-text", t("welcome_readonly"))]),
+    ...(ws.canWrite ? dropZone((failed) => { if (!failed) setTimeout(() => importDlg.close(), 1400); }) : [h("p.warn-text", t("welcome_readonly"))]),
     h("div.modal-foot", clearButton(), h("span")));
   importDlg.onclick = (e) => { if (e.target === importDlg) importDlg.close(); };
   importDlg.showModal();
-}
-
-let xlsxPromise = null;
-function loadXLSX() {
-  if (window.XLSX) return Promise.resolve(window.XLSX);
-  xlsxPromise ??= new Promise((resolve, reject) => {
-    const s = document.createElement("script");
-    s.src = "vendor/xlsx.core.min.js"; // SheetJS 0.18.5 (Apache-2.0), loaded only when importing
-    s.onload = () => resolve(window.XLSX);
-    s.onerror = () => { xlsxPromise = null; reject(new Error("The spreadsheet reader could not be loaded")); };
-    document.head.append(s);
-  });
-  return xlsxPromise;
-}
-
-// Which sheet holds each table of the master workbook (header on row 3).
-const SHEETS = {
-  rooms: "Rooms", adj: "Rooms", equip: "Equipment", sop: "SOP Library", forms: "Logbooks & Forms", ccp: "CCP",
-  fmea: "FMEA", impr: "Improvements", appr: "Approvals Log", links: "Record Links", cc: "Import_CC", capa: "Import_CAPA", qe: "Import_QE",
-};
-const cellVal = (v) => (v instanceof Date ? (v.getHours() || v.getMinutes() ? v.toISOString().slice(0, 16) : `${v.getFullYear()}-${String(v.getMonth() + 1).padStart(2, "0")}-${String(v.getDate()).padStart(2, "0")}`) : typeof v === "string" ? (v.trim() || null) : v ?? null);
-
-function readTable(XLSX, ws, cols, headerRow, keep = () => true) {
-  const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null, raw: true, blankrows: true });
-  let hr = headerRow;
-  if (hr == null) hr = rows.findIndex((r) => r && r.includes(cols[0]) && r.includes(cols[1]));
-  if (hr < 0) return null;
-  const hdr = rows[hr].map((x) => (typeof x === "string" ? x.trim() : x));
-  let start = hdr.findIndex((x, i) => x === cols[0] && (cols.length < 2 || hdr[i + 1] === cols[1]));
-  if (start < 0) start = hdr.indexOf(cols[0]);
-  if (start < 0) return null;
-  const idx = cols.map((c) => { const i = hdr.indexOf(c, start); return i; });
-  const out = [];
-  for (const r of rows.slice(hr + 1)) {
-    if (!r) continue;
-    const rec = idx.map((i) => (i < 0 ? null : cellVal(r[i])));
-    if (rec.some((x) => x != null) && keep(rec)) out.push(rec);
-  }
-  return { cols, rows: out };
-}
-
-// Lists tables (header on row 1) and the column that must be filled for a row to count.
-const LISTS = { bands: 1, targets: 1, crit: 1, deptMap: 1, prio: 1, prod: 1 };
-const isMaster = (wb) => wb.SheetNames.includes("Import_CC") && wb.SheetNames.includes("Rooms");
-
-async function importWorkbook(XLSX, wb, next, file, replaced) {
-  const names = wb.SheetNames;
-  if (isMaster(wb)) {
-    let n = 0;
-    for (const [key, sheet] of Object.entries(SHEETS)) {
-      const ws = wb.Sheets[sheet];
-      if (!ws) continue;
-      const tbl = readTable(XLSX, ws, SCHEMA.cols[key], 2);
-      if (tbl) { next[key] = tbl; n++; replaced.push(key); }
-    }
-    if (wb.Sheets.Lists) {
-      for (const [key, need] of Object.entries(LISTS)) {
-        const tbl = readTable(XLSX, wb.Sheets.Lists, SCHEMA.cols[key], 0, (r) => r[need] != null && (key === "prod" || key === "deptMap" || key === "targets" || typeof r[need] === "number"));
-        if (tbl) { next[key] = tbl; n++; replaced.push(key); }
-      }
-    }
-    next.meta = { ...next.meta, ...readMeta(XLSX, wb) };
-    next.mapGrid = readGrid(XLSX, wb.Sheets["Facility Map"]);
-    next.meta.drawing = await readDrawing(wb) ?? next.meta.drawing ?? null;
-    return `${t("col_month") === "Mois" ? "classeur maître" : "master workbook"} · ${n} tables`;
-  }
-  if (!data && !next.rooms.rows.length) throw new Error(t("need_master"));
-  // Scigeniq export: find the sheet whose header has "Reference Id"
-  for (const name of names) {
-    const ws = wb.Sheets[name];
-    const probe = readTable(XLSX, ws, ["Creation Date", "Type"], null);
-    if (!probe || !probe.rows.length) continue;
-    const type = String(probe.rows[0][1] ?? "");
-    const key = /change/i.test(type) ? "cc" : /capa/i.test(type) ? "capa" : /quality event|deviation/i.test(type) ? "qe" : null;
-    if (!key) continue;
-    const tbl = readTable(XLSX, ws, SCHEMA.cols[key], null);
-    if (!tbl) continue;
-    next[key] = tbl;
-    replaced.push(key);
-    next.meta.asof = new Date(file.lastModified).toISOString().slice(0, 10);
-    return `${tv({ cc: "Change Control", capa: "CAPA", qe: "Deviation" }[key])} · ${tbl.rows.length} ${t("rows")}`;
-  }
-  throw new Error("No master-workbook tables or Scigeniq export found");
-}
-
-// Cell-level reads for the notes, settings and document control the views show.
-function readMeta(XLSX, wb) {
-  const v = (sheet, addr) => { const c = wb.Sheets[sheet]?.[addr]; return c == null || c.f ? null : cellVal(c.v); };
-  const rows = (sheet, from, to, cols) => {
-    const out = [];
-    for (let r = from; r <= to; r++) { const row = cols.map((c) => v(sheet, c + r)); if (row[0] != null) out.push(row); }
-    return out;
-  };
-  const settings = {};
-  for (const [k, val] of rows("Lists", 2, 10, ["BK", "BL"])) if (val != null) settings[k] = val;
-  return {
-    asof: v("Home", "C6"), generated: v("Home", "C7"),
-    docControl: rows("Home", 10, 16, ["H", "I"]),
-    history: rows("Home", 61, 65, ["B", "C"]),
-    assumptions: rows("Home", 39, 57, ["B", "C"]),
-    inconsistencies: rows("Data Quality", 97, 109, ["B", "C"]),
-    reconExpected: Object.fromEntries(rows("Data Quality", 24, 34, ["B", "K"])),
-    reviewPeriod: v("Management Review", "D6"),
-    annex01: rows("FMEA Risk", 84, 93, ["B", "E", "F", "G", "H", "I"]),
-    settings,
-  };
-}
-// Floor-plan grid: room codes in Facility Map!BI5:CP73.
-function readGrid(XLSX, ws) {
-  if (!ws) return [];
-  const out = [];
-  for (let r = 4; r <= 72; r++) {
-    const row = [];
-    for (let c = 60; c <= 93; c++) row.push(String(ws[XLSX.utils.encode_cell({ r, c })]?.v ?? ""));
-    out.push(row);
-  }
-  return out;
-}
-// The architectural layout is the only photo (.jpeg) embedded in the workbook.
-async function readDrawing(wb) {
-  const key = Object.keys(wb.files ?? {}).find((k) => /xl\/media\/.+\.jpe?g$/i.test(k));
-  const content = key && wb.files[key].content;
-  if (!content) return null;
-  return new Promise((resolve) => {
-    const fr = new FileReader();
-    fr.onload = () => resolve(fr.result);
-    fr.onerror = () => resolve(null);
-    fr.readAsDataURL(new Blob([new Uint8Array(content)], { type: "image/jpeg" }));
-  });
 }
 
 /** Remove all data (two clicks). In the shared workspace only the owner sees it. */

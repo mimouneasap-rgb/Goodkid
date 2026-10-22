@@ -222,6 +222,7 @@ export function equipment(ctx) {
   const by = (s) => E.filter((e) => e.calStatus === s).length;
   const withFreq = E.filter((e) => e.freq != null).length;
   const noDates = !E.some((e) => e.last != null);
+  const fromPlan = E.filter((e) => e.calPlan).length;
   const regs = [...new Set(E.map((e) => e.Register))].sort();
   const series = M.CAL_STATUSES.map((s) => ({ key: s, label: tv(s), color: CAL_COLOR[s] }));
   const regRows = regs.map((r) => ({ label: r, parts: Object.fromEntries(M.CAL_STATUSES.map((s) => [s, E.filter((e) => e.Register === r && e.calStatus === s).length])) }));
@@ -235,7 +236,8 @@ export function equipment(ctx) {
 
   return h("div.view",
     viewHeader(t("eq_title"), t("eq_sub"), ctx.canEdit ? h("button.btn.primary", { type: "button", onclick: () => ctx.add("equip") }, icon("plus", 16), t("add_asset")) : null),
-    noDates ? h("div.banner.warn", icon("alert", 18), t("eq_nodates")) : null,
+    noDates && fromPlan ? h("div.banner.info", icon("alert", 18), h("span", t("eq_from_plan", fmtNum(fromPlan)), " ", h("button.link", { type: "button", onclick: () => ctx.go("calibration") }, t("cal_title"))))
+      : noDates ? h("div.banner.warn", icon("alert", 18), t("eq_nodates")) : null,
     h("div.kpi-grid",
       kpi({ label: t("eq_k_all"), value: fmtNum(E.length), accent: "var(--c1)" }),
       kpi({ label: t("eq_k_freq"), value: fmtNum(withFreq) }),

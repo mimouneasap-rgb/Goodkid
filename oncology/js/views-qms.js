@@ -1,4 +1,4 @@
-// FMEA, CAPA & deviations, Change control, Improvements, SOP library, Data quality, Quality records.
+// FMEA, Improvements, SOP library, Data quality and the all-records list.
 import { h, card, kpi, viewHeader, select, segmented, dataTable, pill, typeTag, fmtDate, fmtNum, fmtPct, defList, STATUS_COLOR, LEVEL_COLOR, TYPE_COLOR } from "./ui.js";
 import { hbars, stacks, heatmap, legend } from "./charts.js";
 import { t, tv } from "./i18n.js";
@@ -66,95 +66,6 @@ export function fmea(ctx) {
         h("tbody", (m.meta.annex01 ?? []).map((r) => h("tr", h("td", r[0]), h("td.num", r[1]), h("td.num", r[2]), h("td.num", r[3] ? h("b.warn-text", r[3]) : r[3]), h("td.num", r[4]), h("td.wrap.muted", r[5])))))))));
 }
 
-// ---------- CAPA & DEVIATIONS ----------
-export function capa(ctx) {
-  const { m } = ctx;
-  const R = m.records;
-  const capas = R.filter((r) => r.type === "CAPA" && r.status !== "Canceled");
-  const devs = R.filter((r) => r.type === "Deviation" && r.status !== "Canceled");
-  const capaOpen = R.filter((r) => r.type === "CAPA" && r.isOpen);
-  const capaOd = R.filter((r) => r.type === "CAPA" && r.overdue);
-  const ttc = capas.filter((r) => r.daysToClose != null).map((r) => r.daysToClose);
-  const devReq = R.filter((r) => r.type === "Deviation" && r.capaRequired === "Yes");
-  const flagged = R.filter((r) => r.classFlags.length);
-  const statusSeries = ["Open", "Overdue", "Completed"].map((s) => ({ key: s, label: tv(s), color: STATUS_COLOR[s] }));
-  const deptRows = [...M.countBy(capas, "department")].sort((a, b) => b[1] - a[1]).map(([d]) => ({
-    label: tv(d), parts: Object.fromEntries(["Open", "Overdue", "Completed"].map((s) => [s, capas.filter((r) => r.department === d && r.status === s).length])),
-    onclick: () => ctx.open.list(`CAPA · ${tv(d)}`, capas.filter((r) => r.department === d)),
-  }));
-  const srcRows = [...M.countBy(capas, (r) => r.source || "—")].sort((a, b) => b[1] - a[1]).map(([s, n]) => ({ label: s, value: n, color: "var(--c2)", onclick: () => ctx.open.list(`CAPA · ${s}`, capas.filter((r) => (r.source || "—") === s)) }));
-  const rcRows = [...M.countBy(devs, (r) => r.rootCause || "(Not recorded)")].sort((a, b) => b[1] - a[1]).map(([s, n]) => ({ label: s, value: n, color: "var(--c3)" }));
-  const roomRows = [...M.countBy(devs.filter((r) => r.roomCode), "roomCode")].sort((a, b) => b[1] - a[1]).slice(0, 10).map(([s, n]) => ({ label: s, sub: m.roomByCode.get(s)?.Name, value: n, color: "var(--c3)", onclick: () => ctx.go("rooms", { room: s }) }));
-  const ttcRows = M.TTC_BUCKETS.map((b) => ({ label: `${b} ${t("d")}`, parts: Object.fromEntries(M.TYPES.map((ty) => [ty, R.filter((r) => r.ttcBucket === b && r.type === ty).length])) }));
-  const owners = [...new Set(R.filter((r) => r.owner).map((r) => r.owner))].map((o) => {
-    const xs = R.filter((r) => r.owner === o);
-    const open = xs.filter((r) => r.isOpen).length, od = xs.filter((r) => r.overdue).length;
-    return { owner: o, open, od, done: xs.filter((r) => r.status === "Completed").length, pct: open ? od / open : 0 };
-  }).filter((x) => x.open || x.od).sort((a, b) => b.od - a.od || b.open - a.open);
-  const flagLabel = { F1: t("cd_f1"), F2: t("cd_f2"), F3: t("cd_f3"), F4: t("cd_f4") };
-
-  return h("div.view",
-    viewHeader(t("cd_title"), t("cd_sub")),
-    h("div.kpi-grid",
-      kpi({ label: t("cd_k_capa"), value: fmtNum(capas.length), accent: TYPE_COLOR.CAPA, onclick: () => ctx.open.list(t("cd_k_capa"), capas) }),
-      kpi({ label: t("cd_k_capaod"), value: fmtNum(capaOd.length), accent: "var(--critical)", onclick: () => ctx.open.list(t("cd_k_capaod"), capaOd) }),
-      kpi({ label: t("cd_k_capaodp"), value: fmtPct(capaOpen.length ? capaOd.length / capaOpen.length : 0), status: M.rag(capaOpen.length ? capaOd.length / capaOpen.length : 0, m.targets.overdue, false) }),
-      kpi({ label: t("cd_k_ec"), value: fmtPct(capas.length ? capas.filter((r) => r.effCheck === "Yes").length / capas.length : 0), status: M.rag(capas.length ? capas.filter((r) => r.effCheck === "Yes").length / capas.length : 0, m.targets.capa_ec, true) }),
-      kpi({ label: t("cd_k_ttc"), value: ttc.length ? fmtNum(ttc.reduce((a, b) => a + b, 0) / ttc.length) : "—", unit: ` ${t("d")}` }),
-      kpi({ label: t("cd_k_dev"), value: fmtNum(devs.length), accent: TYPE_COLOR.Deviation, onclick: () => ctx.open.list(t("cd_k_dev"), devs) }),
-      kpi({ label: t("cd_k_link"), value: devReq.length ? fmtPct(devReq.filter((r) => r.linkedCapas > 0).length / devReq.length) : "—", status: devReq.length ? M.rag(devReq.filter((r) => r.linkedCapas > 0).length / devReq.length, m.targets.link, true) : 0 }),
-      kpi({ label: t("cd_k_incons"), value: fmtNum(flagged.length), accent: flagged.length ? "var(--warning)" : null })),
-    h("p.fine", t("cd_ec_note")),
-    h("div.grid.cols-2",
-      card(t("cd_c_dept"), stacks(deptRows, statusSeries)),
-      card(t("cd_c_src"), hbars(srcRows)),
-      card(t("cd_c_rc"), hbars(rcRows)),
-      card(t("cd_c_room"), roomRows.length ? hbars(roomRows) : h("div.empty", t("no_data"))),
-      card(t("cd_c_ttc"), stacks(ttcRows, M.TYPES.map((ty) => ({ key: ty, label: tv(ty), color: TYPE_COLOR[ty] })))),
-      card(t("cd_flags"), h("div", h("div.flag-sum", ["F1", "F2", "F3", "F4"].map((f) => h("div.flag", h("b", fmtNum(flagged.filter((r) => r.classFlags.includes(f)).length)), h("span", `${f} · ${flagLabel[f]}`)))),
-        dataTable([...recordCols(["ref", "status", "cls"]), { key: "classFlags", label: t("flags"), sort: (r) => r.classFlags.join(" "), render: (r) => r.classFlags.join(" · ") }, ...recordCols(["title"])], flagged, { search: false, onRow: (r) => ctx.open.record(r.ref) }))),
-      card(t("cd_owner"), dataTable([
-        { key: "owner", label: t("col_owner") }, { key: "open", label: t("k_open"), cls: "num" }, { key: "od", label: t("k_overdue"), cls: "num", render: (x) => (x.od ? h("b.late", x.od) : "0") },
-        { key: "done", label: t("col_completed"), cls: "num" }, { key: "pct", label: t("col_odpct"), render: (x) => pctBar(x.pct) },
-      ], owners, { pageSize: 12, onRow: (x) => ctx.open.list(x.owner, R.filter((r) => r.owner === x.owner && r.isOpen)) }), { span: 2 })));
-}
-
-// ---------- CHANGE CONTROL ----------
-export function cc(ctx) {
-  const { m } = ctx;
-  const C = m.records.filter((r) => r.type === "Change Control");
-  const open = C.filter((r) => r.isOpen);
-  const stageRows = M.CC_STAGES.map((s) => ({ label: s, value: C.filter((r) => r.stage === s).length, color: s === "Canceled" ? "var(--muted-mark)" : s === "Closed" ? "var(--good)" : "var(--c1)", onclick: () => ctx.open.list(`${t("cc_c_stage")} · ${s}`, C.filter((r) => r.stage === s)) }));
-  const others = C.filter((r) => !M.CC_STAGES.includes(r.stage));
-  if (others.length) stageRows.push({ label: "Other", value: others.length, color: "var(--muted-mark)" });
-  const ageRows = M.AGE_BUCKETS.map((b) => ({ label: `${b} ${t("d")}`, value: open.filter((r) => r.ageBucket === b).length, color: b === ">90" ? "var(--critical)" : "var(--c1)", onclick: () => ctx.open.list(`${t("cc_c_age")} · ${b}`, open.filter((r) => r.ageBucket === b)) }));
-  const scopes = [...M.countBy(C, (r) => r.scope || "—")].sort((a, b) => b[1] - a[1]).map(([s]) => ({
-    label: s, parts: { o: C.filter((r) => (r.scope || "—") === s && r.isOpen).length, c: C.filter((r) => (r.scope || "—") === s && r.status === "Completed").length },
-    onclick: () => ctx.open.list(`${t("col_scope")} · ${s}`, C.filter((r) => (r.scope || "—") === s)),
-  }));
-  const impacted = [...M.countBy(C.filter((r) => r.roomCode), "roomCode")].sort((a, b) => b[1] - a[1]).map(([code, n]) => ({ code, n, open: C.filter((r) => r.roomCode === code && r.isOpen).length, name: m.roomByCode.get(code)?.Name }));
-  const assets = [...M.countBy(C.filter((r) => r.assetNo), "assetNo")].sort((a, b) => b[1] - a[1]);
-  return h("div.view",
-    viewHeader(t("cc_title"), t("cc_sub")),
-    h("div.kpi-grid.six",
-      kpi({ label: t("cc_k_total"), value: fmtNum(C.length), accent: TYPE_COLOR["Change Control"] }),
-      kpi({ label: t("cc_k_open"), value: fmtNum(open.length), onclick: () => ctx.open.list(t("cc_k_open"), open) }),
-      kpi({ label: t("cc_k_od"), value: fmtNum(C.filter((r) => r.overdue).length), accent: "var(--critical)", onclick: () => ctx.open.list(t("cc_k_od"), C.filter((r) => r.overdue)) }),
-      kpi({ label: t("cc_k_90"), value: fmtNum(open.filter((r) => r.daysOpen > 90).length), status: M.rag(open.filter((r) => r.daysOpen > 90).length, m.targets.cc90, false), onclick: () => ctx.open.list(t("cc_k_90"), open.filter((r) => r.daysOpen > 90)) }),
-      kpi({ label: t("cc_k_major"), value: fmtNum(open.filter((r) => r.classification === "Major").length), accent: "var(--c2)" }),
-      kpi({ label: t("cc_k_noval"), value: fmtNum(C.filter((r) => r.vqGap).length), status: M.rag(C.filter((r) => r.vqGap).length, m.targets.ccvq, false) })),
-    card(t("cc_c_stage"), h("div.pipeline", stageRows.map((s, i) => h("button.pipe", { type: "button", onclick: s.onclick, style: { "--c": s.color, "--i": i } }, h("b", fmtNum(s.value)), h("span", s.label))))),
-    h("div.grid.cols-2",
-      card(t("cc_c_age"), hbars(ageRows)),
-      card(t("cc_c_scope"), stacks(scopes, [{ key: "o", label: t("s_open"), color: "var(--c1)" }, { key: "c", label: t("s_completed"), color: "var(--good)" }])),
-      card(t("cc_rooms"), dataTable([
-        { key: "code", label: t("col_room"), cls: "mono" }, { key: "name", label: t("col_name") }, { key: "n", label: t("col_count"), cls: "num" }, { key: "open", label: t("s_open"), cls: "num" },
-      ], impacted, { search: false, onRow: (x) => ctx.go("rooms", { room: x.code }) }), {
-        sub: assets.length ? `${t("col_asset")}: ${assets.slice(0, 6).map(([a, n]) => `${a} (${n})`).join(", ")}` : null,
-      }),
-      card(t("cc_oldest"), dataTable(recordCols(["ref", "stage", "opened", "days", "title"]), [...open].sort((a, b) => b.daysOpen - a.daysOpen), { pageSize: 10, onRow: (r) => ctx.open.record(r.ref) })),
-      card(t("cc_noval"), dataTable(recordCols(["ref", "status", "opened", "stage", "scope", "title"]), C.filter((r) => r.vqGap), { onRow: (r) => ctx.open.record(r.ref), exportName: "cc-without-vq" }), { span: 2 })));
-}
 
 // ---------- IMPROVEMENTS ----------
 export function improvements(ctx) {
@@ -250,7 +161,7 @@ export function records(ctx) {
   return h("div.view",
     viewHeader(t("qr_title"), t("qr_sub"), ctx.canEdit ? h("div.add-group",
       h("span", t("new_record")),
-      [["cc", "Change Control"], ["capa", "CAPA"], ["qe", "Deviation"]].map(([k, ty]) => h("button.btn", { type: "button", style: { "--dot": TYPE_COLOR[ty] }, onclick: () => ctx.add(k) }, h("i.dot"), tv(ty)))) : null),
+      [["cc", "Change Control"], ["capa", "CAPA"], ["qe", "Deviation"], ["find", "Audit Finding"]].map(([k, ty]) => h("button.btn", { type: "button", style: { "--dot": TYPE_COLOR[ty] }, onclick: () => ctx.add(k) }, h("i.dot"), tv(ty)))) : null),
     h("div.type-switch", types.map(([v, l]) => h("button", { type: "button", class: (f.type ?? M.ALL) === v ? "on" : "", style: { "--dot": TYPE_COLOR[v] ?? "var(--ink)" }, onclick: () => setF("type", v) },
       h("i"), l, h("b", fmtNum(v === M.ALL ? m.records.length : counts[v]))))),
     card(null, dataTable(recordCols(["ref", "type", "status", "cls", "dept", "opened", "due", "late", "owner", "room", "title"]), list, {

@@ -58,7 +58,7 @@ export function fmtMonth(key) {
 export const fmtValue = (v, unit) => (unit === "%" ? fmtPct(v) : unit === "d" ? (v == null ? "—" : `${fmtNum(v)} ${t("d")}`) : fmtNum(v));
 
 // ---------- semantic colours ----------
-export const TYPE_COLOR = { "Change Control": "var(--c1)", CAPA: "var(--c2)", Deviation: "var(--c3)" };
+export const TYPE_COLOR = { "Change Control": "var(--c1)", CAPA: "var(--c2)", Deviation: "var(--c3)", "Audit Finding": "var(--c7)" };
 export const STATUS_COLOR = { Open: "var(--c1)", Overdue: "var(--critical)", Completed: "var(--good)", Canceled: "var(--muted-mark)" };
 export const LEVEL_COLOR = { Low: "var(--good)", Medium: "var(--warning)", High: "var(--critical)" };
 export const CAL_COLOR = {
@@ -74,7 +74,7 @@ export function pill(value, kind = "status") {
   return h("span.pill", { style: { "--dot": color } }, h("i"), tv(value));
 }
 export function typeTag(type) {
-  const short = { "Change Control": "CC", CAPA: "CAPA", Deviation: "DEV" }[type] ?? type;
+  const short = { "Change Control": "CC", CAPA: "CAPA", Deviation: "DEV", "Audit Finding": "AF" }[type] ?? type;
   return h("span.type-tag", { style: { "--dot": TYPE_COLOR[type] }, title: tv(type) }, short);
 }
 

@@ -4,6 +4,7 @@ import { hbars, stacks, columns, lineChart, gauge, sparkline, legend } from "./c
 import { t, tv } from "./i18n.js";
 import { icon } from "./icons.js";
 import * as M from "./model.js";
+import { METRICS } from "./catalogs.js";
 
 const DAY = 86400000;
 
@@ -49,17 +50,34 @@ export function home(ctx) {
     ["gl_rh", fmtNum(v.rh), "fmea", "var(--c7)"],
     ["gl_cal", fmtPct(v.cal), "equipment", "var(--c3)"],
   ];
+  const X = m.x;
+  const typeCount = (ty, f) => m.records.filter((r) => r.type === ty && f(r)).length;
+  const fivesAvg = (() => { const xs = X.fives.filter((x) => x.date != null && x.date >= m.now - 84 * 86400000 && x.total != null).map((x) => x.total); return xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null; })();
+  const trnDue = X.training.filter((x) => x.planned != null && x.planned <= m.now && x.status !== "Cancelled");
   const modules = [
     ["dashboard", "dashboard", "dash_title", "m_dash", `${fmtNum(k.total)} ${t("s_records").toLowerCase()}`],
     ["review", "review", "mr_title", "m_mr", `${sc.rows.filter((r) => r.status === 1).length} × ${t("st_action")}`],
+    ["metrics", "target", "met_title", "m_met", `${fmtNum(METRICS.length)} KPI`],
+    ["deviations", "deviation", "nav_dev_t", "m_dev", `${fmtNum(typeCount("Deviation", (r) => r.isOpen))} ${t("s_open").toLowerCase()}`],
+    ["capa", "capa", "nav_capa_t", "m_cd", `${fmtNum(capaOd)} ${t("s_overdue").toLowerCase()}`],
+    ["cc", "cc", "nav_cc_t", "m_cc", `${fmtNum(v.cc90)} > 90 ${t("d")}`],
+    ["findings", "flag", "nav_find_t", "m_find", `${fmtNum(typeCount("Audit Finding", (r) => r.isOpen))} ${t("s_open").toLowerCase()}`],
+    ["actions", "tasks", "nav_actions_t", "m_act", `${fmtNum(m.actions.filter((a) => a.overdue && a.isOpen).length)} ${t("s_overdue").toLowerCase()}`],
+    ["training", "cap", "trn_title", "m_trn", trnDue.length ? `${fmtPct(trnDue.filter((x) => x.done != null).length / trnDue.length)} ${t("done_lbl")}` : `${fmtNum(X.training.length)}`],
+    ["fives", "sparkle", "fives_title", "m_5s", fivesAvg != null ? fmtPct(fivesAvg) : t("fives_start")],
+    ["activities", "calendar", "qaa_title", "m_qaa", `${fmtNum(X.qaact.filter((a) => a.status === "Overdue").length)} ${t("s_overdue").toLowerCase()}`],
+    ["lifecycle", "cycle", "lc_title", "m_lc", `${fmtNum(X.batches.length)} ${t("batches_lbl").toLowerCase()}`],
+    ["apqr", "report", "apqr_title", "m_apqr", "EU GMP 1.10"],
+    ["wip", "layers", "wip_title", "m_wip", `${fmtNum(X.wip.length)} ${t("lots_lbl")}`],
+    ["calibration", "thermo", "cal_title", "m_cal", `${fmtNum(X.calplan.filter((c) => c.status === "Overdue").length)} ${t("s_overdue").toLowerCase()}`],
+    ["validation", "badge", "val_title", "m_val", `${fmtNum(X.validation.length)}`],
+    ["suppliers", "truck", "sup_title", "m_sup", `${fmtNum(new Set(X.suppliers.map((s) => s.API)).size)} API`],
     ["spc", "spc", "spc_title", "m_spc", "c · p · run"],
     ["products", "product", "pv_title", "m_pv", `${new Set(m.products.map((p) => p.Product)).size} ${t("product").toLowerCase()}s`],
     ["rooms", "room", "rx_title", "m_rx", `${m.rooms.length} ${t("n_rooms").toLowerCase()}`],
     ["map", "map", "map_title", "m_map", "FFO-01 → FFO-35"],
     ["equipment", "equipment", "eq_title", "m_eq", `${fmtNum(m.equip.length)} ${t("n_eq").toLowerCase()}`],
     ["fmea", "fmea", "fm_title", "m_fm", `${m.fmea.length} ${t("n_fm").toLowerCase()}`],
-    ["capa", "capa", "cd_title", "m_cd", `${fmtNum(capaOd)} ${t("s_overdue").toLowerCase()}`],
-    ["cc", "cc", "cc_title", "m_cc", `${fmtNum(v.cc90)} > 90 ${t("d")}`],
     ["improvements", "improve", "im_title", "m_im", `${m.impr.length} ${t("n_imp").toLowerCase()}`],
     ["sops", "sop", "sop_title", "m_sop", `${m.sops.length} ${t("n_sop")}`],
     ["quality", "quality", "dq_title", "m_dq", `${M.reconciliation(m).filter((c) => c.ok).length}/${M.reconciliation(m).length} ✔`],
@@ -69,6 +87,9 @@ export function home(ctx) {
     ["n_rooms", m.rooms.length, "rooms"], ["n_eq", m.equip.length, "equipment"], ["n_qr", m.records.length, "records"],
     ["n_fm", m.fmea.length, "fmea"], ["n_sop", m.sops.length, "sops"], ["n_forms", m.forms.length, "sops"],
     ["n_ccp", m.ccp.length, "rooms"], ["n_imp", m.impr.length, "improvements"],
+    ["n_actions", m.actions.length, "actions"], ["n_batches", m.x.batches.length, "lifecycle"], ["n_training", m.x.training.length, "training"],
+    ["n_cal", m.x.calplan.length, "calibration"], ["n_val", m.x.validation.length, "validation"], ["n_wip", m.x.wip.length, "wip"],
+    ["n_fives", m.x.fives.length, "fives"], ["n_qaa", m.x.qaact.length, "activities"],
   ];
   const trendVals = M.trend(m.records, m.now, 12).map((p) => p.opened);
   return h("div.view.home",
