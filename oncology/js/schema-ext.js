@@ -40,9 +40,11 @@ export const EXT_COLS = {
     "Critical level", "Created by", "Parent action", "Last seen", "Comment"],
   // SOP library: the workbook's columns, then the Drive file it is read from and what reading the SOP found
   // (Distribution: department codes; References: SOP codes it cites; Indexed: the Drive modified date that was read;
-  // Folder: the current file's folder path; Revisions: every controlled revision found; Obsolete / Uncontrolled: copies found there)
+  // Folder: the current file's folder path; Revisions: every controlled revision found; Obsolete / Uncontrolled: copies found there;
+  // Summary: the SOP's résumé as JSON — extracted by the app, or written by Claude; Forms: its forms, templates and attachments as JSON)
   sop: ["Code", "Title", "Department", "Site", "Language", "Type", "Status", "Revision", "Effective date", "Next review", "Owner", "Linked rooms", "Linked equipment", "Source",
-    "Drive ID", "Drive file", "Drive modified", "Files", "Purpose", "Distribution", "References", "Change controls", "Indexed", "Folder", "Revisions", "Obsolete", "Uncontrolled"],
+    "Drive ID", "Drive file", "Drive modified", "Files", "Purpose", "Distribution", "References", "Change controls", "Indexed", "Folder", "Revisions", "Obsolete", "Uncontrolled",
+    "Summary", "Forms"],
   // Controlled documents other than SOPs found in the Drive library (batch records, orders, specifications, test methods,
   // assessment records, registers, indexes…), one row per document code; Comment is kept across syncs
   docs: ["Code", "Type", "Title", "Product", "Strength", "Product code", "Department", "Site", "Language", "Revision", "Revisions", "Status", "Folder",

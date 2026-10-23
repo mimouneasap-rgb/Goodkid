@@ -140,6 +140,7 @@ const NOISE = [/^QMex\s*\|/i, /^Document Type & Name/i, /^Document Nr\s+Document
  * related: [{code, title}], history: [{ver, date, text}], effective, refs: [codes], forms, changes, glossary, words }.
  */
 export function parseSopText(text) {
+  text = unfoldText(text);
   const header = sopHeader(text);
   const banner = header?.title ? new RegExp(`^.{0,40}${header.title.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s+\\d{2}\\/\\d{2}\\/\\d{4}$`) : null;
   const lines = String(text ?? "").replace(/\r/g, "").replace(/\\\./g, ".").split("\n").filter((l) => !NOISE.some((re) => re.test(l.trim())) && !(banner && banner.test(l.trim())));
@@ -191,6 +192,174 @@ export function parseSopText(text) {
     words: all.split(/\s+/).filter(Boolean).length,
   };
 }
+
+// ---------- bilingual SOPs: a two-column English | French table whose cells hold whole sections ----------
+const GLUED_HEADINGS = /(^|[.:;)\]a-z])(Introduction|Purpose|Objectives?|Scope|Health and Safety|Responsibilities|Related Tools(?: and Instruments)?|Related Materials|Glossary|Definitions|Related Documents|Associated Documents|Procedure|Distribution List|Training|References|SOP History|Annex(?:es)?)(?=[A-Z])/g;
+/** The English column of a bilingual SOP as paragraphs: headings and sentences that the export glued together are split again. */
+export function unfoldText(text) {
+  const out = [];
+  for (const line of String(text ?? "").replace(/\r/g, "").split("\n")) {
+    if (!(line.startsWith("|") && line.length > 600)) { out.push(line); continue; }
+    const cells = tableCells(line);
+    const main = cells.find((c) => c.length > 200) ?? cells.reduce((a, c) => (c.length > a.length ? c : a), "");
+    const x = main.replace(/\\\./g, ".").replace(GLUED_HEADINGS, "$1\n$2\n").replace(/([a-z0-9)\]%»"])([.:;])(?=[A-ZÉ])/g, "$1$2\n")
+      .replace(/(?<=[a-z]{3})(?=[A-Z][a-z]{2,}[\s:])/g, "\n"); // "two years periodData shall…"
+    out.push("", ...x.split("\n").map((l) => l.trim()).filter(Boolean).flatMap((l) => [l, ""]));
+  }
+  return out.join("\n");
+}
+
+// ---------- forms, templates and attachments of an SOP ----------
+// "AB0002F/Onc/FF01/02", "AB0001/Onc/T01/01", "AB0027/Onc/F01", also "AB0002F/FF01/Onc/02" as typed in some SOPs
+const FORM_CODE = /\b([A-Z]{2,3})(\d{3,4})([EF])?\s*\/\s*(?:(?:Onc|One)\s*\/\s*)?([A-Z]{1,3}\d{2})(?:\s*\/\s*(?:(?:Onc|One)\s*\/\s*)?(\d{2}))?(?![\w\/])/g;
+const ATTACH_HEAD = /^(fiche|form(ulaire)?|template|mod[eè]le|attach?ement|annex(e)?|appendix|logbook)\b[^|]{0,12}$/i;
+const PLACEHOLDER = /^[\s.…\/_☐-]*$|^(oui|non|yes|no|n\/a|na)$/i;
+/** Identity of a form across spellings and revisions: "AB0002F/Onc/FF01/03" → "AB2/FF01". */
+export const formKey = (code) => { const m = [...String(code ?? "").matchAll(FORM_CODE)][0]; return m ? `${m[1]}${+m[2]}/${m[4]}` : null; };
+/** What a form code is: an attachment (A01), a template (T01, TE01), a logbook or checklist (from its title), otherwise a form. */
+export function formKind(no, title = "") {
+  if (/log ?book|registre|journal/i.test(title)) return "logbook";
+  if (/check-?list|liste de (contr[ôo]le|v[ée]rification)/i.test(title)) return "checklist";
+  if (/^A\d/.test(no)) return "attachment";
+  if (/^TE?\d/.test(no)) return "template";
+  return "form";
+}
+const cleanLabel = (s) => String(s ?? "").replace(/\s*[:：]\s*$/, "").replace(/\s+/g, " ").trim();
+const titleAfter = (s) => s.match(/^\s*(?:\)|»)?\s*[:–-]?\s*[«"“]?\s*([^»"”\n|]{4,90}?)\s*(?:[»"”]|[.;]\s|$)/)?.[1]?.trim() ?? null;
+
+/**
+ * The forms, templates and attachments an SOP uses: the ones its related-documents table lists ("cited", with their
+ * titles and revisions), the ones attached at the end of the SOP file ("attached": a "Fiche Nr / Form Nr / Template No. /
+ * Attachment No." header then the code, followed by the form itself, of which the section titles, field labels and table
+ * columns are kept), and codes mentioned in the text. Returns [{ key, code, title, kind, citedRev, attachedRev, rev, cited,
+ * attached, mentions, sections, fields, columns }] in order of first appearance.
+ */
+export function sopForms(text) {
+  const lines = unfoldText(text).split("\n");
+  const by = new Map();
+  const get = (m) => {
+    const key = `${m[1]}${+m[2]}/${m[4]}`;
+    if (!by.has(key)) by.set(key, { key, code: `${m[1]}${m[2]}${m[3] ?? ""}/Onc/${m[4]}`, title: null, kind: null, citedRev: null, attachedRev: null, cited: false, attached: false, mentions: 0, sections: [], fields: [], columns: [] });
+    return by.get(key);
+  };
+  const codeOnly = (c) => { const m = [...c.matchAll(FORM_CODE)]; return m.length === 1 && c.replace(m[0][0], "").replace(/[\s|]/g, "").length === 0 ? m[0] : null; };
+  let current = null, prev = null;
+  const addTo = (list, v, max) => { const x = cleanLabel(v); if (x && x.length <= 70 && !PLACEHOLDER.test(x) && !list.includes(x) && list.length < max) list.push(x); };
+  for (const raw of lines) {
+    const line = raw.trim();
+    if (!line) { prev = null; continue; }
+    if (line.startsWith("|")) {
+      const cells = tableCells(line);
+      if (cells.every((c) => /^:?-*:?$/.test(c))) continue;
+      const filled = cells.filter((c) => c && !PLACEHOLDER.test(c));
+      const first = codeOnly(cells[0] ?? "");
+      // "| Fiche Nr | Avis de réception |" then "| AB0002F/Onc/FF01/03 |  |": the start of an attached form
+      if (first && prev && ATTACH_HEAD.test(prev[0] ?? "")) {
+        current = get(first);
+        current.attached = true; current.attachedRev = first[5] ?? current.attachedRev;
+        current.title = prev[1] && !codeOnly(prev[1]) ? cleanLabel(prev[1]) : current.title ?? (cells[1] ? cleanLabel(cells[1]) : null);
+        prev = cells; continue;
+      }
+      // "| AB0002F/Onc/FF01/02 | Avis de réception |": a related-documents row
+      if (first && cells[1] && !codeOnly(cells[1]) && !ATTACH_HEAD.test(prev?.[0] ?? "")) {
+        const f = get(first);
+        f.cited = true; f.citedRev = first[5] ?? f.citedRev; f.citedTitle ??= cleanLabel(cells[1]);
+        prev = cells; continue;
+      }
+      if (current && !ATTACH_HEAD.test(cells[0] ?? "")) {
+        const tableStart = !prev || prev.every((c) => !c || /^:?-*:?$/.test(c));
+        if (filled.length === 1 && filled[0].length <= 90) addTo(current.sections, filled[0], 10);
+        else if (filled.length >= (tableStart ? 2 : 3) && filled.every((c) => c.length <= 80 && !/:\s*$/.test(c)) && !current.columns.length) current.columns = filled.slice(0, 14).map(cleanLabel);
+        else for (const c of cells) if (/[:：]\s*$/.test(c) && c.length <= 60) addTo(current.fields, c, 18);
+      }
+      for (const m of line.matchAll(FORM_CODE)) get(m).mentions++;
+      prev = cells;
+      continue;
+    }
+    prev = null;
+    if (current && line.length <= 80 && /[:：]$/.test(line)) addTo(current.sections, line, 10);
+    for (const m of line.matchAll(FORM_CODE)) {
+      const f = get(m);
+      f.mentions++;
+      f.mentionTitle ??= titleAfter(line.slice(m.index + m[0].length));
+    }
+  }
+  return [...by.values()].map((f) => {
+    const title = f.title || f.citedTitle || f.mentionTitle || null;
+    const revs = [f.citedRev, f.attachedRev].filter(Boolean).sort();
+    const { citedTitle, mentionTitle, ...rest } = f;
+    return { ...rest, title, kind: formKind(f.key.split("/")[1], title ?? ""), rev: revs.at(-1) ?? null };
+  });
+}
+
+// ---------- the résumé of an SOP, extracted from its text ----------
+const ACTION = /^(?:v[ée]rifier|effectuer|utiliser|signaler|d[ée]charger|proc[ée]der|renseigner|transf[ée]rer|respecter|appliquer|attribuer|codifier|nettoyer|enregistrer|remplir|signer|s['’]assurer|assurer|contr[ôo]ler|pr[ée]lever|peser|identifier|[ée]tiqueter|documenter|informer|archiver|calibrer|[ée]talonner|mettre|placer|ranger|stocker|isoler|lancer|valider|approuver|cr[ée]er|r[ée]diger|envoyer|transmettre|ouvrir|fermer|ne pas|ne jamais|check|ensure|verify|record|fill|sign|clean|transfer|perform|use|inform|document|label|weigh|sample|review|approve|archive|calibrate|collect|send|open|close|register|store|update|prepare|complete|notify|submit|issue|assign|evaluate|investigate|define|identify|monitor|report|escalate|attach|retain|do not|never)\b/i;
+const OBLIGATION = /\b(doit|doivent|must|shall|is required|est tenu)\b/i;
+const CRITICAL = /\b(interdit|ne jamais|ne pas|never|must not|shall not|prohibited|not allowed|imm[ée]diatement|immediately|au plus tard|d[ée]lai|within|maximum|minimum|au moins|at least|no later than|ne doit)\b|\d+\s*(jours?|days?|h\b|heures?|hours?|min\b|minutes?|°C|%|mois|months?|ans\b|years?|ouvrables|working)/i;
+const clip = (s, n) => { const x = String(s ?? "").replace(/\s+/g, " ").trim(); return x.length > n ? `${x.slice(0, n - 1).replace(/\s+\S*$/, "")}…` : x; };
+// sentence ends, but not after an abbreviation ("réf. AB0002F…", "No. 3", "e.g. …")
+const SENTENCE_END = /(?<!\b(?:r[ée]f|ref|no|n°|nr|e\.g|i\.e|etc|vs|cf|art|fig|ex|approx)\.)(?<=[.!?;])\s+(?=[A-ZÉÀ«"(])/i;
+const firstSentence = (s) => String(s ?? "").split(SENTENCE_END)[0];
+
+/** Who does what, from a responsibilities paragraph ("Il est de la responsabilité du X de …", "The X is responsible for …", "X: …"). */
+function roleOf(p, next) {
+  const s = String(p).replace(/\s+/g, " ").trim();
+  const more = (d) => (/:\s*$/.test(d) && next ? `${d} ${firstSentence(next)}` : d);
+  let m = s.match(/^il est de la responsabilit[ée] (?:du|de la|de l['’]|des|d['’])\s*(.+?)\s+(?:de|d['’])\s*((?:s['’]|se\s)?[a-zéèêàâîôûç]+(?:er|ir|re|oir)\b.*)$/i);
+  if (m) return { role: clip(m[1], 60), duties: clip(more(m[2]), 170) };
+  m = s.match(/^(?:the\s+)?(.{3,60}?)\s+(?:is|are)\s+responsible\s+(?:for|to)\s+(.+)$/i) ?? s.match(/^(?:le|la|les|l['’])\s*(.{3,60}?)\s+(?:est|sont)\s+responsables?\s+(?:de|du|des|d['’])\s*(.+)$/i);
+  if (m) return { role: clip(m[1], 60), duties: clip(m[2], 170) };
+  m = s.match(/^(?:le|la|les|l['’]|the\s+)?\s*([A-ZÉ][^:]{2,60}?)\s+(?:doit|doivent|shall|must|should)\s+(.+)$/);
+  if (m) return { role: clip(m[1], 60), duties: clip(m[2], 170) };
+  m = s.match(/^([^:]{3,60}):\s*(.*)$/);
+  if (m && !/\d/.test(m[1])) return { role: clip(m[1], 60), duties: clip(m[2] || firstSentence(next ?? ""), 170) };
+  return null;
+}
+
+/**
+ * A short résumé of an SOP from its parsed text (parseSopText): purpose, scope, who does what, the key steps (grouped by
+ * the procedure's sub-headings, actions only) and the critical points (prohibitions, limits, time frames). Never the full text.
+ */
+export function sopDigest(doc) {
+  const sec = (id) => doc.sections.find((s) => s.id === id);
+  const paras = (id) => (sec(id)?.blocks ?? []).filter((b) => b.type !== "table").map((b) => unnumber(b.text)).filter(Boolean);
+  // paragraphs joined: a lead-in ("Cette procédure est pour but de", "The purpose is to:") runs on into what follows
+  const join = (xs, n) => { let s = ""; for (const x of xs) { if (s.length >= n) break; s = s ? `${s}${/[.;]$/.test(s) || /(?:\b(?:de|du|des|à|pour|to|of|is|are|est|sont)|:)$/i.test(s) ? " " : " — "}${x}` : x; } return s ? clip(s, n + 80) : null; };
+  const resp = paras("resp");
+  const roles = [];
+  for (let i = 0; i < resp.length && roles.length < 6; i++) {
+    const r = roleOf(resp[i], resp[i + 1]);
+    if (r && r.duties) roles.push(r);
+    if (r && /:\s*$/.test(resp[i])) i++;
+  }
+  const steps = [];
+  let phase = null;
+  const perPhase = new Map();
+  for (const b of sec("procedure")?.blocks ?? []) {
+    if (steps.length >= 14) break;
+    if (b.type === "h") { phase = clip(unnumber(b.text), 60); continue; }
+    if (b.type !== "p") continue;
+    const t = unnumber(b.text);
+    if (t.length <= 60 && /:\s*$/.test(t)) { phase = clip(cleanLabel(t), 60); continue; } // "Meeting Frequency:" heads what follows
+    if (!(ACTION.test(t) || OBLIGATION.test(t)) || t.length < 12) continue;
+    const n = perPhase.get(phase) ?? 0;
+    if (n >= 4 || steps.some((x) => x.do.slice(0, 45) === clip(firstSentence(t), 170).slice(0, 45))) continue;
+    perPhase.set(phase, n + 1);
+    steps.push({ phase, do: clip(firstSentence(t), 170), records: [...new Set([...t.matchAll(FORM_CODE)].map((m) => `${m[1]}${m[2]}${m[3] ?? ""}/Onc/${m[4]}`))] });
+  }
+  const critical = [];
+  const inSteps = (c) => steps.some((x) => x.do.slice(0, 40) === c.slice(0, 40));
+  for (const id of ["procedure", "safety", "scope"]) for (const p of paras(id)) {
+    if (critical.length >= 6) break;
+    for (const s of p.split(SENTENCE_END)) if (CRITICAL.test(s) && s.length >= 20 && critical.length < 6 && !inSteps(clip(s, 180)) && !critical.some((c) => c.slice(0, 40) === clip(s, 180).slice(0, 40))) critical.push(clip(s, 180));
+  }
+  return { by: "app", purpose: join(paras("purpose"), 220), scope: join(paras("scope"), 160), roles, steps, critical };
+}
+
+/** The stored résumé of an SOP (JSON in its Summary column), or null. */
+export const summaryOf = (s) => { try { const x = JSON.parse(s?.Summary || "null"); return x && typeof x === "object" ? x : null; } catch { return null; } };
+/** The stored forms of an SOP (JSON in its Forms column). */
+export const formsOf = (s) => { try { const x = JSON.parse(s?.Forms || "[]"); return Array.isArray(x) ? x : []; } catch { return []; } };
 
 /** Department names in a distribution list → the app's department codes. */
 export function deptCodes(names) {

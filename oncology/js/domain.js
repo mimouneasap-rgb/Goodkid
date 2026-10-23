@@ -4,7 +4,7 @@
 // register and the quarterly QMS metrics. Pure functions over the model + raw tables.
 import { objects, clean, toDay, addMonths, monthStart, monthKey, daysBetween, countBy } from "./model.js";
 import { METRICS, QA_ACTIVITIES, FIVES, FIVES_ITEMS, fivesKey, fivesRating, RISK_FREQUENCY, FREQUENCY_DAYS, APQR_PHASES, APQR_STREAMS, APQR_SECTIONS, SOP_TOPICS } from "./catalogs.js";
-import { sopKey, topicsOf } from "./sopkit.js";
+import { sopKey, topicsOf, summaryOf, formsOf, formKey, formKind } from "./sopkit.js";
 import { docKey, productOf as docProductOf, productCodeOf, strengthOf, entryAnomalies, TYPE_BY_ID, zoneOf } from "./dockit.js";
 
 const DAY = 86400000;
@@ -210,6 +210,7 @@ export function buildDomains(m, wb, review) {
   const apqrProg = buildApqrProgramme(m, wb, apqr);
   const sopx = buildSopLibrary(m, wb);
   const docx = buildDocControl(m, wb, sopx);
+  buildFormRegistry(m, sopx, docx);
 
   // ----- GMP activity register (catalogue + entries recorded in the app) -----
   const latest = (xs) => xs.filter((x) => x != null).reduce((a, b) => Math.max(a, b), -Infinity);
@@ -543,6 +544,55 @@ export function buildDocControl(m, wb, sopx) {
     byType: countBy(list, (d) => d.Type ?? "?"), byZone: countBy(list, (d) => d.zone) };
 }
 
+// ---------- forms, templates and attachments: one register across the SOPs that own and use them ----------
+/**
+ * Every form an SOP lists, attaches or mentions, merged by identity (AB0002F/Onc/FF01/02 and …/03 are one form): its owner
+ * SOP (same department and number), the SOPs that use it, its revisions as listed and as attached, what it records, the
+ * steps of the owner's résumé that fill it, the workbook's form register entry and a separate Drive file when there is one.
+ */
+export function buildFormRegistry(m, sopx, docx) {
+  const by = new Map();
+  const ownerOf = (key) => { const base = key.split("/")[0]; return sopx.byKey.get(`SOP${base}/ONC`) ?? sopx.byKey.get(`SOP${base}`) ?? null; };
+  const entry = (key, code) => {
+    if (!by.has(key)) by.set(key, { key, code, title: null, kind: null, owner: ownerOf(key), usedBy: [], attached: false, citedRev: null, attachedRev: null, rev: null,
+      sections: [], fields: [], columns: [], register: null, file: null, steps: [] });
+    return by.get(key);
+  };
+  for (const s of sopx.list) for (const f of s.forms) {
+    if (!f?.key) continue;
+    const e = entry(f.key, f.code);
+    const own = e.owner === s;
+    if (!own && !e.usedBy.includes(s)) e.usedBy.push(s);
+    // the owner's own record wins for title, revisions and contents
+    if (own || !e.title) e.title = f.title || e.title;
+    if (own || !e.attached) { e.citedRev = f.citedRev ?? e.citedRev; e.attachedRev = f.attachedRev ?? e.attachedRev; }
+    e.attached ||= Boolean(f.attached);
+    for (const k of ["sections", "fields", "columns"]) if ((own || !e[k].length) && f[k]?.length) e[k] = f[k];
+  }
+  for (const r of m.forms ?? []) {
+    const key = formKey(r["Form code"]);
+    if (!key) continue;
+    const e = entry(key, String(r["Form code"]).replace(/\/\d{2}$/, ""));
+    e.register = r; e.title ??= r.Title;
+  }
+  for (const d of docx.list) {
+    if (d.Type !== "TE") continue;
+    const key = formKey(String(d.Code).replace(/-/g, "/"));
+    if (key) { const e = entry(key, String(d.Code).replace(/-/g, "/")); e.file = d; e.title ??= d.Title; }
+  }
+  const REG_KIND = { checklist: "checklist", logbook: "logbook", template: "template", annex: "attachment", attachment: "attachment", form: "form" };
+  for (const e of by.values()) {
+    e.kind = REG_KIND[String(e.register?.Type ?? "").toLowerCase()] ?? formKind(e.key.split("/")[1], e.title ?? "");
+    e.rev = [e.citedRev, e.attachedRev].filter(Boolean).sort().at(-1) ?? null;
+    e.mismatch = Boolean(e.citedRev && e.attachedRev && e.citedRev !== e.attachedRev);
+    e.steps = (e.owner?.summary?.steps ?? []).map((st, i) => ({ ...st, n: i + 1 })).filter((st) => (st.records ?? []).some((c) => formKey(c) === e.key));
+    e.dept = e.key.match(/^[A-Z]+/)?.[0] ?? null;
+  }
+  sopx.forms = [...by.values()].sort((a, b) => a.code.localeCompare(b.code, undefined, { numeric: true }));
+  sopx.formsByKey = by;
+  return sopx.forms;
+}
+
 export function buildSopLibrary(m, wb) {
   const none = { cols: [], rows: [] };
   const links = objects(wb.sopLinks ?? none).filter((l) => l.Topic && l.SOP);
@@ -554,7 +604,8 @@ export function buildSopLibrary(m, wb) {
     const key = sopKey(s.Code);
     const refs = words(s.References);
     return { ...s, key, topics: topicsOf(s.Title, SOP_TOPICS), refs, refKeys: [...new Set(refs.map(sopKey).filter((k) => k && k !== key))], dist: words(s.Distribution),
-      changes: words(s["Change controls"]), inDrive: Boolean(s["Drive ID"]), indexed: Boolean(s.Indexed), files: +s.Files || (s["Drive ID"] ? 1 : 0), citedBy: [] };
+      changes: words(s["Change controls"]), inDrive: Boolean(s["Drive ID"]), indexed: Boolean(s.Indexed), files: +s.Files || (s["Drive ID"] ? 1 : 0), citedBy: [],
+      summary: summaryOf(s), forms: formsOf(s) };
   }).sort((a, b) => a.Code.localeCompare(b.Code));
   const byKey = new Map();
   for (const s of list) if (s.key && !byKey.has(s.key)) byKey.set(s.key, s);

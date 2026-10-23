@@ -1,7 +1,8 @@
 // Google Drive, as the viewer's own claude.ai connector (the page's `mcp` capability): crawl the library folder tree,
 // read an SOP's or an index's text and search inside the documents. Nothing here needs a token; a view without the
 // connector gets clear states.
-import { driveRows, parseSopText, deptCodes, sopKey } from "./sopkit.js";
+import { driveRows, parseSopText, deptCodes, sopKey, sopDigest, sopForms, summaryOf } from "./sopkit.js";
+export { summaryOf, formsOf } from "./sopkit.js";
 import { groupDocs, docRows, zoneOf, isSystemFile, parseIndexText, currentIndexes } from "./dockit.js";
 
 export const DRIVE = "Google Drive";
@@ -183,20 +184,29 @@ export async function readIndexes(ctx, docs, onProgress) {
   return st;
 }
 
-/** What reading one SOP's text tells the library. */
-export function indexFields(s, doc, today) {
+/** What reading one SOP's text tells the library (`text`: the raw text, for its forms and attachments). */
+export function indexFields(s, doc, today, text) {
   const self = sopKey(s.Code);
+  const src = s["Drive modified"] || today;
+  // a résumé Claude wrote for this very file stays; otherwise the app's own résumé of the text
+  const kept = summaryOf(s);
+  const history = doc.history.length ? doc.history.slice(-6).map((x) => ({ ver: x.ver, date: x.date, text: String(x.text ?? "").replace(/\s+/g, " ").slice(0, 160) })) : kept?.history ?? null;
+  const summary = kept?.by === "claude" && kept.src === src ? { ...kept, history }
+    : { ...sopDigest(doc), history, lang: /French/i.test(s.Language ?? "") ? "FR" : "EN", src, rev: s.Revision ?? doc.header?.rev ?? null, at: today };
+  const forms = text != null ? sopForms(text).map(({ key, code, title, kind, citedRev, attachedRev, rev, cited, attached, mentions, sections, fields, columns }) =>
+    ({ key, code, title, kind, citedRev, attachedRev, rev, cited, attached, mentions, sections, fields, columns })) : null;
   return {
     Code: s.Code, Purpose: doc.purpose ? doc.purpose.slice(0, 400) : s.Purpose ?? null, Distribution: deptCodes(doc.distribution).join(" ") || null,
     References: doc.refs.filter((c) => sopKey(c) !== self).join(" ") || null, "Change controls": doc.changes.join(" ") || null,
     "Effective date": doc.effective ?? s["Effective date"] ?? null, "Next review": doc.validity ?? s["Next review"] ?? null,
     Title: s.Title || doc.header?.title || null, Revision: s.Revision || doc.header?.rev || null, Indexed: s["Drive modified"] || today,
+    Summary: JSON.stringify(summary), ...(forms ? { Forms: JSON.stringify(forms) } : {}),
   };
 }
 
 /** Read every SOP whose Drive file changed since it was last read; saves the findings in batches. `stop()` ends it early. */
 export async function indexLibrary(ctx, list, onProgress) {
-  const todo = list.filter((s) => s["Drive ID"] && s.Indexed !== (s["Drive modified"] || null) && !/obsolete/i.test(s.Status ?? ""));
+  const todo = list.filter((s) => s["Drive ID"] && (s.Indexed !== (s["Drive modified"] || null) || !s.Summary) && !/obsolete/i.test(s.Status ?? ""));
   const st = { total: todo.length, done: 0, failed: [], current: null, stopped: false, stop() { this.stopped = true; } };
   job.index = st;
   const today = new Date().toISOString().slice(0, 10);
@@ -207,7 +217,7 @@ export async function indexLibrary(ctx, list, onProgress) {
     st.current = s.Code; onProgress?.(st);
     try {
       const p = await readFile(s["Drive ID"]);
-      batch.push(indexFields(s, parseSopText(p?.fileContent ?? ""), today));
+      batch.push(indexFields(s, parseSopText(p?.fileContent ?? ""), today, p?.fileContent ?? ""));
     } catch (e) {
       st.failed.push({ code: s.Code, problem: driveProblem(e), message: e?.message ?? "" });
       if (FATAL.includes(driveProblem(e))) { st.stopped = true; st.fatal = driveProblem(e); }

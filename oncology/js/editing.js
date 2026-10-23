@@ -62,7 +62,7 @@ export const SPECS = {
     fields: [["Code", "text"], ["Title", "text"], ["Department", "pick", V.sopDepts], ["Site", "pick", V.sopSites], ["Language", "pick", V.languages], ["Type", "suggest", "col"],
       ["Status", "suggest", "col"], ["Revision", "text"], ["Effective date", "date"], ["Next review", "date"], ["Owner", "suggest", "col"],
       ["Linked rooms", "text"], ["Linked equipment", "text"], ["Source", "text"], ["Purpose", "long"], ["Distribution", "text"], ["References", "long"], ["Change controls", "text"],
-      ["Drive ID", "text"], ["Drive file", "text"], ["Drive modified", "date"], ["Files", "number"], ["Indexed", "date"], ["Folder", "text"], ["Revisions", "text"], ["Obsolete", "number"], ["Uncontrolled", "number"]],
+      ["Drive ID", "text"], ["Drive file", "text"], ["Drive modified", "date"], ["Files", "number"], ["Indexed", "date"], ["Folder", "text"], ["Revisions", "text"], ["Obsolete", "number"], ["Uncontrolled", "number"], ["Summary", "long"], ["Forms", "long"]],
   },
   docs: {
     label: ["Controlled document", "Document maîtrisé"], id: "Code", title: "Title",
