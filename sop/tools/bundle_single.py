@@ -19,16 +19,17 @@ import re
 from pathlib import Path
 
 APP = Path(__file__).resolve().parent.parent
-MODULES = [("model", "js/model.js"), ("store", "js/store.js"), ("demo", "js/demo-data.js")]
+MODULES = [("model", "js/model.js"), ("store", "js/store.js"), ("edits", "js/edits.js"), ("demo", "js/demo-data.js")]
 IMPORT_RE = re.compile(r'^import\s+(.+?)\s+from\s+"\./([\w-]+)\.js";\s*$', re.M | re.S)
 EXPORT_RE = re.compile(r"^export\s+(?:async\s+)?(?:function\*?|const|let|class)\s+(\w+)", re.M)
 
 
 def module_var(path):
-    return "__" + {"model": "model", "store": "store", "demo-data": "demo"}[path]
+    return "__" + {"model": "model", "store": "store", "edits": "edits", "demo-data": "demo"}[path]
 
 
 def wrap_module(name, code):
+    code = unwrap_imports(code)
     names = EXPORT_RE.findall(code)
     code = re.sub(r"^export\s+", "", code, flags=re.M)
     return f"const __{name} = (() => {{\n{code}\nreturn {{ {', '.join(names)} }};\n}})();\n"

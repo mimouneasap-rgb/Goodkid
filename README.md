@@ -95,6 +95,14 @@ linked library that works offline.
   - Entries are kept with time and author.
   - Entries are voided with a reason, never deleted.
   - Export entries as CSV, or print the record blank or filled in (wide logbooks print landscape).
+- **Editing:** every SOP has an **Edit** button and the library has **New SOP**. The editor covers:
+  - details, dates, text sections, lists, glossary and revision history;
+  - linked SOPs, and each attachment's code, title, type and fields.
+
+  Each save needs a reason and a name, and goes into the SOP's **Changes** tab and the change log. Edits are kept separately from the
+  library file: you can revert an SOP, restore a removed one, export the edited library as JSON and
+  export the change log as CSV. In a claude.ai page edits are shared with everyone who opens the
+  page; elsewhere they are saved in the browser.
 - **Relationship map:** a zoomable map of how SOPs reference each other, coloured by department.
 - **Library data:**
   - Import the library file.
@@ -142,6 +150,7 @@ signed paper record or the validated system remains the GMP record.
 | `sop/js/model.js` | Pure library logic: indexing, linking, search, statistics, graph layout, CSV |
 | `sop/js/main.js` | Views, routing, command palette, digital records and printing |
 | `sop/js/store.js` | IndexedDB storage for the library and entries |
+| `sop/js/edits.js` | Where edits are kept: the page database on claude.ai, otherwise this browser |
 | `sop/js/demo-data.js` | Fictional demo library |
 | `sop/tools/build_library.py` | Builds `sop-library.json` from a folder of SOP files |
 | `sop/tools/bundle_single.py` | Packs the app into one HTML file (`--embed` for a claude.ai page: no printing, saves via the page's download prompt) |

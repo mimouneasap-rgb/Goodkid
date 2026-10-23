@@ -510,3 +510,172 @@ export function formatDate(iso) {
   if (Number.isNaN(d.getTime())) return iso;
   return d.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
 }
+
+// ---------- editing ----------
+
+/** Fields the editor may change; anything else in a patch is ignored. */
+export const EDITABLE_FIELDS = [
+  "code", "dept", "num", "lang", "site", "version", "title", "status", "effectiveDate", "reviewDate", "issueDate",
+  "purpose", "scope", "intro", "hse", "training", "responsibilities", "tools", "materials", "outline",
+  "distribution", "references", "glossary", "history", "sopRefs", "attachments", "preparedBy", "approvedBy",
+];
+
+const SOP_CODE_RE = /^SOP([A-Z]{2,3})(\d{4})([EF]?)$/;
+const ATT_CODE_RE = /^([A-Z]{2,3}\d{4}[EF]?)(\/Onc)?\/([A-Z]{1,2})(\d{1,2})(?:\/(\d{2}))?$/i;
+
+/** Split "SOPQA0016E" into department, number and language. */
+export function parseSopCode(code) {
+  const m = String(code || "").trim().toUpperCase().match(SOP_CODE_RE);
+  return m ? { code: m[0], dept: m[1], num: m[2], lang: m[3] || null } : null;
+}
+
+/** Read an attachment code such as "QA0016/Onc/AF01/02"; null if it is not one. */
+export function parseAttachmentCode(code) {
+  const m = String(code || "").trim().match(ATT_CODE_RE);
+  if (!m) return null;
+  const [base, kind, num, version] = [m[1].toUpperCase(), m[3].toUpperCase(), Number(m[4]), m[5] || null];
+  const canonical = `${base}${m[2] ? "/Onc" : ""}/${kind}${String(num).padStart(2, "0")}${version ? `/${version}` : ""}`;
+  return { code: canonical, base, site: m[2] ? "Onc" : null, kind, num, version };
+}
+
+/** Attachment type from its kind letters (F form, T template, A annex) and title. */
+export function attachmentType(kind, title = "") {
+  if (/\b(log ?book|registre|register|log)\b/i.test(title)) return "logbook";
+  return { T: "template", A: "annex" }[String(kind || "F")[0]] || "form";
+}
+
+/** Family codes ("SOPQA0001") from free text listing SOP codes. */
+export function sopRefsFrom(text) {
+  const out = [];
+  for (const m of String(text || "").toUpperCase().matchAll(/SOP\s?([A-Z]{2,3})\s?(\d{4})/g)) {
+    const code = `SOP${m[1]}${m[2]}`;
+    if (!out.includes(code)) out.push(code);
+  }
+  return out;
+}
+
+export const linesToList = (text) => String(text || "").split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+
+/** "Term: definition" per line. */
+export function parseGlossary(text) {
+  return linesToList(text).map((l) => {
+    const i = l.search(/\s*[:=–—]\s/);
+    return i > 0 ? { term: l.slice(0, i).trim(), def: l.slice(i).replace(/^\s*[:=–—]\s*/, "").trim() } : { term: l, def: "" };
+  });
+}
+export const glossaryToText = (g) => (g || []).map((x) => (x.def ? `${x.term}: ${x.def}` : x.term)).join("\n");
+
+/** "ver | yyyy-mm-dd | summary" per line; the date may be empty. */
+export function parseHistory(text) {
+  return linesToList(text).map((l) => {
+    const [ver, date, ...rest] = l.split("|").map((x) => x.trim());
+    const v = String(ver || "").replace(/^v/i, "");
+    return { ver: /^\d+$/.test(v) ? v.padStart(2, "0") : v, date: /^\d{4}-\d{2}-\d{2}$/.test(date || "") ? date : null, summary: rest.join(" | ") };
+  });
+}
+export const historyToText = (h) => (h || []).map((x) => `${x.ver} | ${x.date || ""} | ${x.summary || ""}`).join("\n");
+
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+/** Problems that block saving an edited SOP. */
+export function validateSop(s) {
+  const errors = [];
+  if (!parseSopCode(s.code)) errors.push("Code must look like SOPQA0016E (SOP, department, four digits, optional E/F).");
+  if (!String(s.title || "").trim()) errors.push("Give the SOP a title.");
+  if (s.version && !/^\d{1,3}$/.test(s.version)) errors.push("Version is a number, for example 02.");
+  for (const k of ["effectiveDate", "reviewDate", "issueDate"]) {
+    if (s[k] && !ISO_DATE.test(s[k])) errors.push(`${k} must be a date.`);
+  }
+  const seen = new Set();
+  for (const a of (s.attachments || []).filter((x) => x.own)) {
+    if (!parseAttachmentCode(a.code)) errors.push(`Attachment code "${a.code || "(empty)"}" must look like QA0016/Onc/FE01/02.`);
+    else {
+      const key = attachmentKey(a);
+      if (seen.has(key)) errors.push(`Two attachments share the number ${a.code}.`);
+      seen.add(key);
+    }
+  }
+  return errors;
+}
+
+const same = (a, b) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+
+/**
+ * The patch that turns `base` into `edited`: only editable fields that differ.
+ * Patches are always relative to the original file, so dropping one reverts the SOP.
+ */
+export function diffSop(base, edited) {
+  const patch = {};
+  for (const k of EDITABLE_FIELDS) {
+    const b = base ? base[k] : undefined;
+    const e = edited[k];
+    const empty = (v) => v === undefined || v === null || v === "" || (Array.isArray(v) && !v.length);
+    if (empty(b) && empty(e)) continue;
+    if (!same(b, e)) patch[k] = e;
+  }
+  return patch;
+}
+
+/** Human labels for changed fields in the change log. */
+export const FIELD_LABELS = {
+  code: "Code", dept: "Department", num: "Number", lang: "Language", site: "Site", version: "Version", title: "Title",
+  status: "File status", effectiveDate: "Effective date", reviewDate: "Review date", issueDate: "Issue date",
+  purpose: "Purpose", scope: "Scope", intro: "Introduction", hse: "HSE", training: "Training",
+  responsibilities: "Responsibilities", tools: "Tools", materials: "Materials", outline: "Procedure outline",
+  distribution: "Distribution", references: "References", glossary: "Glossary", history: "History",
+  sopRefs: "Referenced SOPs", attachments: "Attachments", preparedBy: "Prepared by", approvedBy: "Approved by",
+};
+
+/**
+ * Library with edits applied. `edits` is a list of
+ * { sopId, patch, deleted?, created?, updatedAt?, updatedBy? }.
+ */
+export function applyEdits(raw, edits = []) {
+  const byId = new Map();
+  for (const e of edits) if (e && e.sopId) byId.set(e.sopId, e);
+  if (!byId.size) return raw;
+  const sops = [];
+  for (const s of raw.sops || []) {
+    const e = byId.get(s.id);
+    if (!e) { sops.push(s); continue; }
+    byId.delete(s.id);
+    if (e.deleted) continue;
+    sops.push(mergePatch(s, e));
+  }
+  for (const e of byId.values()) {
+    if (e.created && !e.deleted) sops.push(mergePatch({ id: e.sopId, status: "current", site: "General", attachments: [], sopRefs: [], extraction: "manual" }, e));
+  }
+  return { ...raw, sops };
+}
+
+function mergePatch(s, e) {
+  const patch = {};
+  for (const k of EDITABLE_FIELDS) if (k in (e.patch || {})) patch[k] = e.patch[k];
+  const out = { ...s, ...patch, _edited: true, _created: !!e.created, _editedAt: e.updatedAt || null, _editedBy: e.updatedBy || null };
+  if ("dept" in patch || "num" in patch) out.family = `${out.dept}${out.num}`;
+  if ("history" in patch && !("effectiveDate" in patch)) {
+    const dated = (out.history || []).filter((h) => h.date);
+    if (dated.length) out.lastEffectiveDate = dated[dated.length - 1].date;
+  }
+  return out;
+}
+
+/** The SOP minus derived and private fields, as written back to a library file. */
+export function exportableSop(s) {
+  const out = {};
+  for (const [k, v] of Object.entries(s)) {
+    if (k.startsWith("_") || ["links", "missing", "backlinks", "foreign", "reviewState", "reviewDays"].includes(k)) continue;
+    out[k] = v;
+  }
+  return out;
+}
+
+export function changesToCsv(changes) {
+  const esc = (v) => {
+    const s = String(v ?? "");
+    return /[",\n;]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+  const head = ["When", "By", "SOP", "Action", "Fields", "Reason"];
+  const rows = changes.map((c) => [c.at, c.by, c.code, c.action, (c.fields || []).map((f) => FIELD_LABELS[f] || f).join(" | "), c.reason]);
+  return [head, ...rows].map((r) => r.map(esc).join(",")).join("\r\n");
+}

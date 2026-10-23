@@ -2,7 +2,7 @@
 // App files are served from cache and refreshed in the background; bump
 // VERSION to drop old caches after a large change. The library itself lives
 // in IndexedDB, so data/ is never cached here.
-const VERSION = "sop-v1";
+const VERSION = "sop-v2";
 const APP_SHELL = [
   "./",
   "index.html",
@@ -11,6 +11,7 @@ const APP_SHELL = [
   "js/main.js",
   "js/model.js",
   "js/store.js",
+  "js/edits.js",
   "js/demo-data.js",
   "icons/icon.svg",
   "icons/icon-192.png",

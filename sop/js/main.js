@@ -3,8 +3,11 @@ import {
   TYPE_META, TYPES, LANGS, STATUS_META, fold, tokens, attachmentKey, displayCode,
   indexLibrary, filterSops, filterAttachments, quickFind, sortSops, stats, reviewTimeline,
   graphData, layoutGraph, recordColumns, validateRecord, recordsToCsv, libraryToCsv, formatDate,
+  applyEdits, diffSop, validateSop, parseSopCode, parseAttachmentCode, attachmentType, sopRefsFrom,
+  linesToList, parseGlossary, glossaryToText, parseHistory, historyToText, exportableSop, changesToCsv, FIELD_LABELS,
 } from "./model.js";
 import * as store from "./store.js";
+import { openEdits } from "./edits.js";
 import { DEMO_LIBRARY } from "./demo-data.js";
 
 // ---------- DOM helpers ----------
@@ -83,6 +86,8 @@ const ICON_PATHS = {
   rows: "M4 6h16M4 12h16M4 18h16",
   trash: "M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3",
   arrow: "M5 12h14M13 6l6 6-6 6",
+  edit: "M4 20h4L19 9l-4-4L4 16zM13.5 6.5l4 4",
+  undo: "M9 14L4 9l5-5M4 9h10a6 6 0 0 1 0 12h-3",
   back: "M15 18l-6-6 6-6",
   shield: "M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z",
   layers: "M12 3l9 5-9 5-9-5zM3 13l9 5 9-5",
@@ -219,10 +224,26 @@ async function loadRecords() {
 }
 
 function setLibrary(raw, origin) {
-  state.lib = indexLibrary(raw);
+  state.base = raw;
   state.origin = origin;
   state.map.selected = null;
+  rebuildLibrary();
+}
+
+/** Index the library file with every saved edit applied. */
+function rebuildLibrary() {
+  state.lib = indexLibrary(applyEdits(state.base, state.edits ? state.edits.list() : []));
+  if (state.map.selected && !state.lib.byId.has(state.map.selected)) state.map.selected = null;
   graphCache = null;
+}
+
+const canEdit = () => !!state.edits && state.edits.canWrite !== false;
+
+function onEditsChanged() {
+  rebuildLibrary();
+  renderRail();
+  // Never redraw an open editor under the person typing in it.
+  if (state.route.view !== "edit" || !state.editorMounted) route();
 }
 
 // ---------- routing ----------
@@ -249,9 +270,10 @@ function parseHash() {
 function route() {
   if (!state.lib) return;
   const r = parseHash();
-  const views = { overview: renderOverview, library: renderLibrary, sop: renderSop, records: renderRecords, att: renderAtt, map: renderMap, data: renderData };
+  const views = { overview: renderOverview, library: renderLibrary, sop: renderSop, records: renderRecords, att: renderAtt, map: renderMap, data: renderData, edit: renderEdit };
   if (!views[r.view]) { go("#/overview"); return; }
   const changed = r.view !== state.route.view || r.parts.join("/") !== state.route.parts.join("/");
+  state.editorMounted = false;
   state.route = r;
   document.querySelectorAll(".view").forEach((v) => v.classList.toggle("active", v.id === `view-${r.view}`));
   renderNav();
@@ -274,7 +296,7 @@ function mount(id, ...children) {
 // ---------- rail ----------
 
 function renderNav() {
-  const active = { sop: "library", att: "records" }[state.route.view] || state.route.view;
+  const active = { sop: "library", att: "records", edit: "library" }[state.route.view] || state.route.view;
   put(document.getElementById("nav"), ...NAV.map((n) => {
     const c = n.count?.();
     return el("a", { class: `nav-item${active === n.view ? " active" : ""}`, href: `#/${n.view}`, "aria-current": active === n.view ? "page" : null },
@@ -501,6 +523,7 @@ function renderLibrary() {
 
   const toolbar = el("div", { class: "toolbar" },
     el("label", { class: "search-box" }, icon("search"), search),
+    canEdit() ? el("a", { class: "btn primary", href: "#/edit/new" }, icon("plus"), "New SOP") : null,
     select("lang", [["", "All languages"], ...Object.entries(LANGS)], "Language"),
     select("site", [["", "All sites"], ["Onc", "Oncology (Onc)"], ["General", "General"]], "Site"),
     select("review", [["", "Any review state"], ...Object.entries(REVIEW_META).map(([k, v]) => [k, v.label])], "Review state"),
@@ -563,6 +586,7 @@ function sopCard({ sop: s, snippet }, q) {
       el("span", { class: "code" }, highlight(displayCode(s), q)),
       el("span", { class: "lang" }, s.lang || "—"),
       s.status !== "current" ? el("span", { class: "chip" }, STATUS_META[s.status]) : null,
+      s._edited ? el("span", { class: "chip state-pending", title: "Changed in this app" }, s._created ? "New" : "Edited") : null,
       el("span", { class: "spacer" }),
       s.reviewState !== "unknown" ? el("span", { class: `state-${s.reviewState}`, title: REVIEW_META[s.reviewState].label }, el("i", { class: "dot" })) : null),
     el("h3", {}, highlight(s.title || s.file, q)),
@@ -632,11 +656,14 @@ function renderSop() {
     el("div", { class: "card-top" }, deptBadge(s.dept), el("span", { class: "code" }, displayCode(s)),
       s.status !== "current" ? el("span", { class: "chip" }, STATUS_META[s.status]) : el("span", { class: "chip state-ok" }, el("i", { class: "dot" }), "Current file"),
       s.pendingRevision ? el("span", { class: "chip state-pending" }, el("i", { class: "dot" }), `Revision ${s.pendingRevision} pending`) : null,
-      s.extraction === "metadata" ? el("span", { class: "chip state-due" }, "Content not extracted") : null),
+      s.extraction === "metadata" ? el("span", { class: "chip state-due" }, "Content not extracted") : null,
+      s._edited ? el("span", { class: "chip state-pending", title: s._editedAt ? `Last change ${new Date(s._editedAt).toLocaleString("en-GB")}` : "" },
+        el("i", { class: "dot" }), s._created ? "Added in this app" : `Edited${s._editedBy ? ` by ${s._editedBy}` : ""}`) : null),
     el("h2", {}, s.title || s.file),
     s.purpose ? el("p", { class: "purpose" }, s.purpose) : null,
     el("div", { class: "detail-actions" },
-      s.driveUrl ? el("a", { class: "btn primary", href: s.driveUrl, target: "_blank", rel: "noopener" }, icon("external"), "Open source document") : null,
+      canEdit() ? el("a", { class: "btn primary", href: `#/edit/${s.id}` }, icon("edit"), "Edit") : null,
+      s.driveUrl ? el("a", { class: `btn${canEdit() ? "" : " primary"}`, href: s.driveUrl, target: "_blank", rel: "noopener" }, icon("external"), "Open source document") : null,
       CAN_PRINT ? btn("Print summary", () => printSopSummary(s, own), { icon: "print" }) : null,
       CAN_PRINT && own.length ? btn(`Print all blank forms (${own.length})`, () => printBlank(own), { icon: "print" }) : null,
       !EMBED ? btn("Copy link", () => copyLink(), { icon: "link", cls: "ghost" }) : null),
@@ -651,6 +678,8 @@ function renderSop() {
     ["glossary", "Glossary", s.glossary.length],
     ["text", "Full text", s.text ? null : 0],
   ];
+  const sopChanges = state.edits ? state.edits.changes().filter((c) => c.sopId === s.id) : [];
+  if (sopChanges.length) tabs.push(["changes", "Changes", sopChanges.length]);
   if (!tabs.some(([k]) => k === state.sopTab)) state.sopTab = "overview";
   const body = el("div");
   const tabBar = el("div", { class: "tabs", role: "tablist" }, tabs.map(([k, label, n]) => el("button", {
@@ -669,6 +698,7 @@ function renderSop() {
     glossary: () => s.glossary.length ? el("dl", { class: "gloss" }, s.glossary.map((g) => el("div", {}, el("dt", {}, g.term), el("dd", {}, g.def))))
       : emptyNote("No definitions section in this SOP."),
     text: () => sopText(s),
+    changes: () => changeList(sopChanges, false),
   };
   body.append(sections[state.sopTab]());
 
@@ -939,7 +969,8 @@ function renderAtt() {
       CAN_PRINT ? btn("Print blank", () => printBlank([a]), { cls: "primary", icon: "print" }) : null,
       CAN_PRINT && records.length ? btn("Print with entries", () => printFilled(a, cols, records), { icon: "print" }) : null,
       records.length ? btn("Export CSV", () => download(`${safeName(a.code)}-${todayIso()}.csv`, recordsToCsv(a, cols, records)), { icon: "download" }) : null,
-      sop.driveUrl ? el("a", { class: "btn ghost", href: sop.driveUrl, target: "_blank", rel: "noopener" }, icon("external"), "Source SOP") : null));
+      sop.driveUrl ? el("a", { class: "btn ghost", href: sop.driveUrl, target: "_blank", rel: "noopener" }, icon("external"), "Source SOP") : null,
+      canEdit() ? el("a", { class: "btn ghost", href: `#/edit/${sop.id}/attachments` }, icon("edit"), "Edit fields") : null));
 
   const fieldsPanel = el("div", { class: "panel" },
     el("div", { class: "panel-head" }, el("h2", {}, "Fields"), el("span", { class: "hint" }, a.fields.length ? "As listed in the SOP" : "Generic layout")),
@@ -1241,7 +1272,7 @@ function renderData() {
     el("div", { class: "grid span-5", style: { alignContent: "start" } },
       el("div", { class: "panel" }, el("div", { class: "panel-head" }, el("span", { class: "state-ok" }, icon("shield")), el("h2", {}, "Privacy")),
         el("p", { class: "hint" }, "The app has no server and no account. Your library and entries are stored in this browser (IndexedDB) and work offline. Clearing site data removes them.")),
-      recordsPanel, issues)));
+      editsPanel(), recordsPanel, issues)));
 }
 
 function formsCsv(lib) {
@@ -1386,6 +1417,309 @@ function printSopSummary(s, own) {
         el("tbody", {}, own.map((a) => el("tr", {}, el("td", {}, a.code), el("td", {}, TYPE_META[a.type].label), el("td", {}, a.title)))))) : null,
     s.links.length ? sec("Related SOPs", s.links.map((id) => { const t = state.lib.byId.get(id); return `${t.code} — ${t.title}`; })) : null,
     printFoot(s)));
+}
+
+// ---------- editing ----------
+
+const LIST_FIELDS = [
+  ["responsibilities", "Responsibilities"], ["tools", "Tools & equipment"], ["materials", "Materials"],
+  ["outline", "Procedure outline"], ["distribution", "Distribution"], ["references", "References"],
+];
+const TEXT_FIELDS = [["purpose", "Purpose", 3], ["scope", "Scope", 3], ["intro", "Introduction", 3], ["hse", "Health, safety & environment", 2], ["training", "Training", 2]];
+
+function renderEdit() {
+  const [id, section] = state.route.parts;
+  const isNew = id === "new";
+  if (!state.edits) {
+    setTitle("Library", "Edit SOP");
+    mount("edit", el("div", { class: "loading" }, el("div", { class: "spinner" }), el("span", {}, "Opening the editor…")));
+    return;
+  }
+  if (!canEdit()) {
+    setTitle("Library", "Edit SOP");
+    mount("edit", el("div", { class: "empty" }, icon("edit"), el("h3", {}, "You can view this library but not change it"),
+      el("p", {}, "Ask the owner of this page for edit access."), el("a", { class: "btn", href: isNew ? "#/library" : `#/sop/${id}` }, "Back")));
+    return;
+  }
+  const current = isNew ? null : state.lib.byId.get(id);
+  if (!isNew && !current) {
+    setTitle("Library", "SOP not found");
+    mount("edit", el("div", { class: "empty" }, icon("file"), el("h3", {}, "This SOP is not in the library"), el("a", { class: "btn primary", href: "#/library" }, "Back to library")));
+    return;
+  }
+  const base = isNew ? null : (state.base.sops || []).find((x) => x.id === id) || null;
+  const prev = isNew ? null : state.edits.list().find((e) => e.sopId === id) || null;
+  const s = current || { code: "SOP", version: "01", site: "Onc", status: "current", title: "", attachments: [], sopRefs: [] };
+  setTitle(isNew ? "Library" : displayCode(s), isNew ? "New SOP" : `Edit ${s.code}`);
+
+  // Each field remembers the text it opened with, so untouched fields keep their exact original value.
+  const initial = new Map();
+  const control = (key, value, opts = {}) => {
+    const id2 = `ed-${key}`;
+    let input;
+    if (opts.options) input = el("select", { id: id2 }, opts.options.map(([v, t]) => el("option", { value: v, selected: v === value }, t)));
+    else if (opts.rows) input = el("textarea", { id: id2, rows: opts.rows, value: value ?? "", placeholder: opts.placeholder });
+    else input = el("input", { id: id2, type: opts.type || "text", value: value ?? "", placeholder: opts.placeholder, inputmode: opts.inputmode });
+    initial.set(key, input.value);
+    return el("label", { class: `field${opts.wide ? " wide" : ""}` }, el("span", {}, opts.label), input, opts.hint ? el("small", { class: "hint" }, opts.hint) : null);
+  };
+  const section_ = (title, hint, ...body) => el("section", { class: "panel" },
+    el("div", { class: "panel-head" }, el("h2", {}, title), hint ? el("span", { class: "hint" }, hint) : null), ...body);
+
+  const refsText = (s.sopRefs || []).map((c) => {
+    const t = state.lib.families.get(c)?.[0];
+    return t ? `${c} — ${t.title}` : c;
+  }).join("\n");
+
+  const ownAtts = (s.attachments || []).filter((a) => a.own);
+  const attList = el("div", { class: "att-edit-list" });
+  const attRow = (a = {}) => {
+    const row = el("div", { class: "att-edit-row" },
+      el("label", { class: "field" }, el("span", {}, "Code"), el("input", { type: "text", class: "a-code", value: a.code || "", placeholder: "QA0016/Onc/FE01/01" })),
+      el("label", { class: "field" }, el("span", {}, "Title"), el("input", { type: "text", class: "a-title", value: a.title || "" })),
+      el("label", { class: "field" }, el("span", {}, "Type"), el("select", { class: "a-type" }, TYPES.map((t) => el("option", { value: t, selected: (a.type || "form") === t }, TYPE_META[t].label)))),
+      el("button", { class: "btn ghost sm icon-btn", type: "button", title: "Remove attachment", "aria-label": "Remove attachment", onclick: () => row.remove() }, icon("trash")),
+      el("label", { class: "field wide" }, el("span", {}, "Fields, one per line"), el("textarea", { class: "a-fields", rows: Math.min(8, Math.max(3, (a.fields || []).length + 1)), value: (a.fields || []).join("\n") })));
+    return row;
+  };
+  ownAtts.forEach((a) => attList.append(attRow(a)));
+  const attSignature = () => JSON.stringify([...attList.querySelectorAll(".att-edit-row")].map((r) => [
+    r.querySelector(".a-code").value.trim(), r.querySelector(".a-title").value.trim(), r.querySelector(".a-type").value, r.querySelector(".a-fields").value.trim()]));
+  const attStart = attSignature();
+  const nextAttCode = () => {
+    const pc = parseSopCode(document.getElementById("ed-code")?.value) || { dept: s.dept || "QA", num: s.num || "0000", lang: s.lang || "E" };
+    const lang = pc.lang || "E";
+    const site = document.getElementById("ed-site")?.value === "Onc" ? "/Onc" : "";
+    const used = [...attList.querySelectorAll(".a-code")].map((i) => parseAttachmentCode(i.value)?.num || 0);
+    const n = String(Math.max(0, ...used) + 1).padStart(2, "0");
+    return `${pc.dept}${pc.num}${lang}${site}/F${lang}${n}/01`;
+  };
+
+  const errorsBox = el("div", { class: "form-errors", role: "alert", hidden: true });
+  const reason = el("textarea", { id: "ed-reason", rows: 3, placeholder: "For example: periodic review, new form FE04 added" });
+  const who = el("input", { id: "ed-who", type: "text", value: state.user, placeholder: "Name or initials" });
+
+  const collect = () => {
+    const v = (k) => document.getElementById(`ed-${k}`).value.trim();
+    const changed = (k) => document.getElementById(`ed-${k}`).value !== initial.get(k);
+    const code = v("code").toUpperCase();
+    const pc = parseSopCode(code);
+    const out = {};
+    for (const k of EDITED_SCALARS) out[k] = changed(k) ? (v(k) || null) : (s[k] ?? null);
+    out.code = changed("code") ? code : s.code;
+    if (changed("version") && /^\d$/.test(out.version || "")) out.version = out.version.padStart(2, "0");
+    out.dept = pc ? pc.dept : s.dept;
+    out.num = pc ? pc.num : s.num;
+    out.lang = pc ? pc.lang : s.lang;
+    for (const [k] of TEXT_FIELDS) out[k] = changed(k) ? v(k) : (s[k] ?? "");
+    for (const [k] of LIST_FIELDS) out[k] = changed(k) ? linesToList(v(k)) : (s[k] || []);
+    out.glossary = changed("glossary") ? parseGlossary(v("glossary")) : (s.glossary || []);
+    out.history = changed("history") ? parseHistory(v("history")) : (s.history || []);
+    out.sopRefs = changed("refs") ? sopRefsFrom(v("refs")).filter((c) => c !== `SOP${out.dept}${out.num}`) : (s.sopRefs || []);
+    if (attSignature() === attStart) out.attachments = s.attachments || [];
+    else {
+      const own = [...attList.querySelectorAll(".att-edit-row")].map((r) => {
+        const codeIn = r.querySelector(".a-code").value.trim();
+        const p = parseAttachmentCode(codeIn);
+        const title = r.querySelector(".a-title").value.trim();
+        return { code: p ? p.code : codeIn, base: p?.base, kind: p?.kind, num: p?.num, version: p?.version || null,
+          title, type: r.querySelector(".a-type").value || attachmentType(p?.kind, title),
+          fields: linesToList(r.querySelector(".a-fields").value), own: true, defined: true };
+      });
+      out.attachments = [...own, ...(s.attachments || []).filter((a) => !a.own)];
+    }
+    return out;
+  };
+
+  const showErrors = (list) => {
+    errorsBox.hidden = !list.length;
+    put(errorsBox, list.length ? el("ul", {}, list.map((e) => el("li", {}, e))) : null);
+    if (list.length) errorsBox.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  };
+
+  const save = async (ev) => {
+    ev?.preventDefault();
+    const edited = collect();
+    const errs = validateSop(edited);
+    if (!reason.value.trim()) errs.push("Give a reason for the change.");
+    if (!who.value.trim()) errs.push("Enter your name or initials.");
+    showErrors(errs);
+    if (errs.length) return;
+    const by = who.value.trim();
+    state.user = by;
+    store.setPref("user", by);
+    const created = isNew || !!prev?.created;
+    const patch = diffSop(created ? null : base, edited);
+    const fields = Object.keys(isNew ? patch : diffSop(s, edited));
+    const at = new Date().toISOString();
+    const sopId = isNew ? `new-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}` : id;
+    const change = { sopId, code: edited.code, at, by, reason: reason.value.trim(), action: isNew ? "created" : "edited", fields };
+    try {
+      if (!fields.length && !isNew) { toast("Nothing changed."); return; }
+      if (!created && !Object.keys(patch).length) {
+        await state.edits.remove(sopId, { ...change, action: "reverted" });   // edited back to the original file
+      } else {
+        await state.edits.save({ sopId, patch, created, deleted: false, updatedAt: at, updatedBy: by, reason: change.reason }, change);
+      }
+      toast(isNew ? `${edited.code} added` : `Changes to ${edited.code} saved`);
+      go(`#/sop/${sopId}`);
+    } catch (err) {
+      showErrors([saveError(err)]);
+    }
+  };
+
+  const askReason = (title, text, confirm) => ask({ title, text, input: "Reason", confirm, danger: true });
+  const revert = async () => {
+    const why = await askReason(`Revert ${s.code} to the library file?`, "All edits made in this app to this SOP are removed. The change log keeps a record.", "Revert");
+    if (!why) return;
+    try {
+      await state.edits.remove(id, { sopId: id, code: s.code, at: new Date().toISOString(), by: state.user || "—", reason: why, action: "reverted", fields: Object.keys(prev.patch || {}) });
+      toast(`${s.code} reverted`);
+      go(`#/sop/${id}`);
+    } catch (err) { showErrors([saveError(err)]); }
+  };
+  const remove = async () => {
+    const why = await askReason(`Remove ${s.code} from the library?`, prev?.created ? "This SOP was added in this app and will be deleted." : "It disappears from the library here; the source file is not touched. Restore it from Library Data.", "Remove");
+    if (!why) return;
+    const at = new Date().toISOString();
+    const change = { sopId: id, code: s.code, at, by: state.user || "—", reason: why, action: "removed", fields: [] };
+    try {
+      if (prev?.created) await state.edits.remove(id, change);
+      else await state.edits.save({ sopId: id, patch: prev?.patch || {}, created: false, deleted: true, updatedAt: at, updatedBy: state.user || "—", reason: why }, change);
+      toast(`${s.code} removed`);
+      go("#/library");
+    } catch (err) { showErrors([saveError(err)]); }
+  };
+
+  const form = el("form", { class: "edit-layout", onsubmit: save },
+    el("div", { class: "grid", style: { alignContent: "start" } },
+      section_("Identification", "Department, number and language come from the code",
+        el("div", { class: "entry-form" },
+          control("code", s.code, { label: "SOP code", placeholder: "SOPQA0016E" }),
+          control("version", s.version, { label: "Version", inputmode: "numeric", placeholder: "02" }),
+          control("site", s.site, { label: "Site", options: [["Onc", "Oncology (Onc)"], ["General", "General"]] }),
+          control("status", s.status, { label: "File status", options: Object.entries(STATUS_META) }),
+          control("title", s.title, { label: "Title", wide: true }))),
+      section_("Dates & approval", "The next review date drives the review calendar",
+        el("div", { class: "entry-form" },
+          control("effectiveDate", s.effectiveDate, { label: "Effective date", type: "date" }),
+          control("reviewDate", s.reviewDate, { label: "Next review", type: "date" }),
+          control("issueDate", s.issueDate, { label: "Issue date", type: "date" }),
+          control("preparedBy", s.preparedBy, { label: "Prepared by" }),
+          control("approvedBy", s.approvedBy, { label: "Approved by" }))),
+      section_("Content", null, el("div", { class: "entry-form" },
+        TEXT_FIELDS.map(([k, label, rows]) => control(k, s[k], { label, rows, wide: true })))),
+      section_("Lists", "One item per line", el("div", { class: "entry-form" },
+        LIST_FIELDS.map(([k, label]) => control(k, (s[k] || []).join("\n"), { label, rows: 4, wide: true })))),
+      section_("Linked SOPs", "One SOP code per line; text after the code is ignored",
+        el("div", { class: "entry-form" }, control("refs", refsText, { label: "This SOP refers to", rows: 5, wide: true, placeholder: "SOPQA0001E — Document control" }))),
+      el("section", { class: "panel", id: "ed-attachments-panel" },
+        el("div", { class: "panel-head" }, el("h2", {}, "Forms, templates, logbooks & annexes"),
+          el("span", { class: "hint" }, "Changing a code starts a new digital record for it")),
+        attList,
+        el("div", { class: "entry-actions" }, btn("Add attachment", () => {
+          const row = attRow({ code: nextAttCode(), type: "form" });
+          attList.append(row);
+          row.querySelector(".a-title").focus();
+        }, { icon: "plus" }))),
+      section_("Glossary", "Term: definition, one per line",
+        el("div", { class: "entry-form" }, control("glossary", glossaryToText(s.glossary), { label: "Definitions", rows: 5, wide: true }))),
+      section_("Revision history", "version | yyyy-mm-dd | summary, oldest first",
+        el("div", { class: "entry-form" }, control("history", historyToText(s.history), { label: "History", rows: 5, wide: true, placeholder: "03 | 2026-10-23 | Periodic review" })))),
+    el("aside", { class: "panel save-panel" },
+      el("h2", {}, isNew ? "Add to the library" : "Save changes"),
+      el("p", { class: "hint" }, state.edits.mode === "shared"
+        ? "Saved changes are shared with everyone who opens this page."
+        : "Saved changes are kept in this browser. Export the edited library from Library Data to share them."),
+      errorsBox,
+      el("label", { class: "field" }, el("span", {}, "Reason for change"), reason),
+      el("label", { class: "field" }, el("span", {}, "Your name or initials"), who),
+      el("button", { class: "btn primary", type: "submit" }, icon("check"), isNew ? "Add SOP" : "Save changes"),
+      el("a", { class: "btn ghost", href: isNew ? "#/library" : `#/sop/${id}` }, "Cancel"),
+      prev && !prev.created ? btn("Revert to library file", revert, { cls: "ghost", icon: "undo" }) : null,
+      !isNew ? btn("Remove SOP", remove, { cls: "ghost danger", icon: "trash" }) : null,
+      base ? el("p", { class: "hint" }, "Edits sit on top of the imported library file and are never written into it.") : null));
+
+  mount("edit",
+    el("nav", { class: "crumbs", "aria-label": "Breadcrumb" }, el("a", { href: "#/library" }, "Library"), "›",
+      isNew ? el("span", {}, "New SOP") : [el("a", { href: `#/sop/${id}` }, s.code), "›", el("span", {}, "Edit")]),
+    form);
+  state.editorMounted = true;
+  if (section === "attachments") document.getElementById("ed-attachments-panel")?.scrollIntoView({ block: "start" });
+  else if (isNew) document.getElementById("ed-code")?.focus();
+}
+
+const EDITED_SCALARS = ["version", "site", "status", "title", "effectiveDate", "reviewDate", "issueDate", "preparedBy", "approvedBy"];
+
+function saveError(err) {
+  if (state.edits && state.edits.canWrite === false) return "You do not have permission to change this library.";
+  if (err?.code === "quota_exceeded") return "The page's storage is full. Export the edited library, then discard old edits.";
+  return `Could not save: ${err?.message || "try again"}`;
+}
+
+const ACTION_META = { created: ["Added", "state-ok"], edited: ["Edited", "state-pending"], reverted: ["Reverted", "state-unknown"], removed: ["Removed", "state-overdue"], restored: ["Restored", "state-ok"] };
+
+function changeList(changes, showSop) {
+  if (!changes.length) return el("p", { class: "hint" }, "No changes yet.");
+  return el("ol", { class: "history" }, changes.map((c) => {
+    const [label, cls] = ACTION_META[c.action] || [c.action, "state-unknown"];
+    const sop = state.lib.byId.get(c.sopId);
+    return el("li", {}, el("span", { class: "node" }),
+      el("div", { class: "when" },
+        el("span", { class: `chip ${cls}` }, el("i", { class: "dot" }), label),
+        showSop ? (sop ? el("a", { class: "code", href: `#/sop/${sop.id}` }, c.code) : el("span", { class: "code" }, c.code)) : null,
+        el("b", {}, new Date(c.at).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" })),
+        el("span", { class: "muted" }, c.by || "—")),
+      c.fields?.length ? el("p", { class: "hint" }, c.fields.map((f) => FIELD_LABELS[f] || f).join(" · ")) : null,
+      el("p", { class: "sum" }, c.reason || ""));
+  }));
+}
+
+function editsPanel() {
+  const head = el("div", { class: "panel-head" }, el("span", { class: "state-pending" }, icon("edit")), el("h2", {}, "Edits"));
+  if (!state.edits) return el("div", { class: "panel" }, head, el("p", { class: "hint" }, "Opening edits…"));
+  const edits = state.edits.list();
+  const name = (e) => state.lib.byId.get(e.sopId)?.code || e.patch?.code || (state.base.sops || []).find((x) => x.id === e.sopId)?.code || e.sopId;
+  const undo = async (e) => {
+    const restoring = e.deleted && !e.created;
+    const why = await ask({ title: restoring ? `Restore ${name(e)}?` : `Discard the edits to ${name(e)}?`,
+      text: restoring ? "The SOP comes back as it is in the library file." : e.created ? "This SOP was added in this app and will be deleted." : "The SOP goes back to the library file.",
+      input: "Reason", confirm: restoring ? "Restore" : "Discard", danger: !restoring });
+    if (!why) return;
+    try {
+      await state.edits.remove(e.sopId, { sopId: e.sopId, code: name(e), at: new Date().toISOString(), by: state.user || "—", reason: why,
+        action: restoring ? "restored" : e.created ? "removed" : "reverted", fields: Object.keys(e.patch || {}) });
+      toast("Done");
+    } catch (err) { toast(saveError(err)); }
+  };
+  const discardAll = async () => {
+    const why = await ask({ title: "Discard every edit?", text: `All ${edits.length} edited, added or removed SOPs go back to the library file. Export the edited library first if you want to keep a copy.`, input: "Reason", confirm: "Discard all", danger: true });
+    if (!why) return;
+    try { await state.edits.clear(); toast("All edits discarded"); } catch (err) { toast(saveError(err)); }
+  };
+  const exportEdited = () => {
+    const raw = applyEdits(state.base, edits);
+    download(`sop-library-edited-${todayIso()}.json`, JSON.stringify({ ...raw, generatedAt: new Date().toISOString(), sops: raw.sops.map(exportableSop) }), "application/json");
+  };
+  return el("div", { class: "panel" }, head,
+    el("p", { class: "hint" }, state.edits.mode === "shared"
+      ? "Edits are saved in this page and shared with everyone who opens it."
+      : "Edits are saved in this browser only."),
+    !canEdit() ? el("p", { class: "hint" }, "You can read this library but not change it.") : null,
+    edits.length ? el("div", { class: "link-list", style: { marginTop: "12px" } }, edits.map((e) => {
+      const sop = state.lib.byId.get(e.sopId);
+      const label = e.deleted ? "Removed" : e.created ? "Added" : `${Object.keys(e.patch || {}).length} fields edited`;
+      return el("div", { class: "link-row", style: { cursor: "default" } },
+        el("span", { class: `chip ${e.deleted ? "state-overdue" : e.created ? "state-ok" : "state-pending"}` }, label),
+        el("span", { class: "title" }, sop ? el("a", { href: `#/sop/${sop.id}` }, el("b", {}, name(e)), ` ${sop.title}`) : el("b", {}, name(e))),
+        canEdit() ? el("button", { class: "btn ghost sm", type: "button", onclick: () => undo(e) }, e.deleted && !e.created ? "Restore" : "Discard") : null);
+    })) : el("p", { class: "hint", style: { marginTop: "8px" } }, "No SOP has been changed yet. Open an SOP and choose Edit."),
+    el("div", { class: "detail-actions" },
+      btn("Edited library (JSON)", exportEdited, { cls: "sm", icon: "download" }),
+      state.edits.changes().length ? btn("Change log (CSV)", () => download(`sop-change-log-${todayIso()}.csv`, changesToCsv(state.edits.changes())), { cls: "sm", icon: "download" }) : null,
+      canEdit() && edits.length ? btn("Discard all edits", discardAll, { cls: "sm danger", icon: "trash" }) : null),
+    state.edits.changes().length ? el("div", { style: { marginTop: "16px" } }, el("span", { class: "label" }, "Latest changes"),
+      el("div", { style: { marginTop: "10px" } }, changeList(state.edits.changes().slice(0, 8), true))) : null);
 }
 
 // ---------- dialog ----------
@@ -1548,6 +1882,10 @@ async function start() {
   renderRail();
   window.addEventListener("hashchange", route);
   route();
+  openEdits(() => { if (state.edits) onEditsChanged(); }).then((backend) => {
+    state.edits = backend;
+    onEditsChanged();
+  }).catch((err) => console.warn("Edits could not be opened", err));
 
   if (EMBED) document.querySelector('.rail-btn[href="../"]')?.remove();
   else if ("serviceWorker" in navigator && location.protocol !== "file:") {
