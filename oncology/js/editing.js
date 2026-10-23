@@ -3,7 +3,7 @@
 import { h, fmtDate } from "./ui.js";
 import { t, tv, getLang } from "./i18n.js";
 import { STATUSES, CC_STAGES, IMPR_STAGES, toDay } from "./model.js";
-import { VOCAB as V, METRICS, APQR_SECTIONS } from "./catalogs.js";
+import { VOCAB as V, METRICS, APQR_SECTIONS, SOP_TOPICS } from "./catalogs.js";
 
 const FR = () => getLang() === "FR";
 const YN = ["Yes", "No"];
@@ -60,7 +60,16 @@ export const SPECS = {
     label: ["SOP", "Procédure"], id: "Code", title: "Title",
     fields: [["Code", "text"], ["Title", "text"], ["Department", "pick", V.sopDepts], ["Site", "pick", V.sopSites], ["Language", "pick", V.languages], ["Type", "suggest", "col"],
       ["Status", "suggest", "col"], ["Revision", "text"], ["Effective date", "date"], ["Next review", "date"], ["Owner", "suggest", "col"],
-      ["Linked rooms", "text"], ["Linked equipment", "text"], ["Source", "text"]],
+      ["Linked rooms", "text"], ["Linked equipment", "text"], ["Source", "text"], ["Purpose", "long"], ["Distribution", "text"], ["References", "long"], ["Change controls", "text"],
+      ["Drive ID", "text"], ["Drive file", "text"], ["Drive modified", "date"], ["Files", "number"], ["Indexed", "date"]],
+  },
+  sopSources: {
+    label: ["SOP folder in Google Drive", "Dossier de procédures Google Drive"], id: "Folder", title: "Name",
+    fields: [["Folder", "text"], ["Name", "text"], ["Site", "pick", V.sopSites], ["Review years", "pick", ["1", "2", "3", "4", "5"]], ["Last sync", "date"], ["Files", "number"], ["Comment", "long"]],
+  },
+  sopLinks: {
+    label: ["Page ↔ SOP link", "Lien page ↔ procédure"], id: "Topic", title: "SOP",
+    fields: [["Topic", "pick", SOP_TOPICS.map(([id]) => id)], ["SOP", "suggest", "sopCodes"], ["Comment", "long"]],
   },
   impr: {
     label: ["Improvement", "Amélioration"], id: "ID", title: "Title", prefix: "IMP-",

@@ -180,6 +180,56 @@ export const QA_ACTIVITIES = [
   ["QA-46", "Quality culture / quality circle meetings", "People", "ICH Q10 §2.1; SOPGS0011/Onc", 3, null],
 ];
 
+// ---------- SOPs governing each part of the app ----------
+// [id, English, French, words in an SOP title that make it a governing procedure for that topic]
+export const SOP_TOPICS = [
+  ["review", "Management review", "Revue de direction", /management review|revue de direction/i],
+  ["metrics", "Quality metrics", "Indicateurs qualité", /quality metrics|mesure du syst[eè]me qualit|kpi/i],
+  ["pqs", "Quality system & site master file", "Système qualité et SMF", /quality unit|site master file|quality manual|manuel qualit/i],
+  ["deviations", "Deviations / quality events", "Déviations / événements qualité", /quality events?|deviation|d[ée]viation/i],
+  ["oos", "OOS / OOT", "OOS / OOT", /out of specification|out of trend|\boos\b|\boot\b/i],
+  ["capa", "CAPA", "CAPA", /corrective action|preventive action|\bcapa\b/i],
+  ["cc", "Change control", "Maîtrise des changements", /change control|\bccr\b|ma[iî]trise des changements/i],
+  ["audits", "Audits & self-inspection", "Audits et auto-inspection", /internal audit|self.?inspection|audit interne|inspection readiness/i],
+  ["complaints", "Complaints", "Réclamations", /complaint|r[ée]clamation|plainte/i],
+  ["recall", "Recall", "Rappel", /\brecall\b|rappel/i],
+  ["apqr", "Product quality review (APQR)", "Revue qualité produit (RQP)", /product quality review|\bapqr\b|\bpqr\b/i],
+  ["batches", "Batch records & release", "Dossiers de lot et libération", /batch record|batch assessment|release|lib[ée]ration|dossiers? de lots?|numbering|repackaging|in.process.control|\bipc\b/i],
+  ["lifecycle", "Product lifecycle & technology transfer", "Cycle de vie produit et transfert", /technology transfer|transfert de technologie|process validation prerequisites/i],
+  ["wip", "Hold times, rework & reprocessing", "Délais, retraitement", /time frame|hold.?time|rework|reprocess/i],
+  ["rejections", "Rejections", "Rejets", /\brejet|\breject/i],
+  ["suppliers", "Suppliers & materials", "Fournisseurs et matières", /supplier|fournisseur|raw material|mati[eè]re premi[eè]re|reference samples|retest|specifications|quality agreement|technical agreement|r[ée]ception|reception of materials|articles de conditionnement|[ée]chantillonnage|outils de pr[ée]l[eè]vement|sampling activity/i],
+  ["training", "Training", "Formation", /training|formation/i],
+  ["gowning", "Containment, flows & gowning", "Confinement, flux et habillage", /habillage|gowning|hygi[eè]ne|protective equipment|containment|produits dangereux|highly potent|flux (personnel|mati[eè]res)|vide de (ligne|zone)|entr[ée]es et sorties/i],
+  ["fives", "5S & housekeeping", "5S et rangement", /\b5s\b|housekeeping|nettoyage des (locaux|surfaces)|fr[ée]quences de nettoyage|cleaning of (the )?premises/i],
+  ["calibration", "Calibration & metrology", "Étalonnage et métrologie", /calibration|calibrator|[ée]talonnage|v[ée]rification p[ée]riodique|m[ée]trolog|weights|instruments? de r[ée]f[ée]rence|balances?|operating procedure of|proc[ée]dure op[ée]ratoire|tachometer|flowmeter|d[ée]bitm[eè]tre|lux ?meter|punches/i],
+  ["maintenance", "Preventive maintenance", "Maintenance préventive", /preventive maintenance|maintenance pr[ée]ventive/i],
+  ["validation", "Qualification & validation", "Qualification et validation", /qualification|validation (practice|master|des temp|(du )?processus|du proc[ée]d[ée] de fabrication)|process validation|\burs\b|user requirement|acceptance (test|criteria)|\bfat\b|impact assessment|continued process verification|phasing.out|drawings/i],
+  ["spc", "Statistical tools & trending", "Outils statistiques et tendances", /statistical|\btrend|tendance/i],
+  ["cleaning", "Cleaning validation", "Validation du nettoyage", /cleaning (validation|analytical)|validation du proc[ée]d[ée] de nettoyage/i],
+  ["environment", "Environmental monitoring & HVAC", "Surveillance environnementale et CTA", /hvac|temperature|humidity|humidit[ée]|pressure|particulate|airflow|air volume|hepa|compressed air|environment|cartographie|atmosph[eè]re|data logger|cleanroom|flux laminaire|water/i],
+  ["csv", "Computerized systems & data integrity", "Systèmes informatisés et intégrité des données", /computeri[sz]ed|data integrity|int[ée]grit[ée] des donn[ée]es|audit trail|spreadsheet|excel|\bcsv\b/i],
+  ["fmea", "Quality risk management", "Gestion du risque qualité", /quality risk|risk management|risk assessment|analyse de risque/i],
+  ["sops", "Documents, SOPs & logbooks", "Documents, procédures et registres", /standard operating procedure|document control|document management|\bdms\b|archiv|logbook|signatures?|reference numbers|labell?ing|label/i],
+  ["lab", "Laboratory practice", "Pratiques de laboratoire", /laboratory|laboratoire|analytical|method validation|stability|microbi|reagents|working standards|dissolution|columns|glassware|isolator|spectromet|ftir|incubator|pass.box|water bath|sampling|testing method|test method|\bstms?\b|quality control|operating and cleaning/i],
+];
+// Topics shown under each page header (route → topics)
+export const ROUTE_TOPICS = {
+  review: ["review", "pqs"], metrics: ["metrics"], dashboard: ["metrics"], deviations: ["deviations", "oos"], capa: ["capa"], cc: ["cc"], findings: ["audits"],
+  actions: ["capa", "cc"], records: ["deviations", "capa", "cc"], products: ["batches"], lifecycle: ["batches", "lifecycle"], apqr: ["apqr", "spc"], wip: ["wip", "rejections"],
+  suppliers: ["suppliers"], map: ["environment"], rooms: ["environment", "gowning"], equipment: ["calibration", "maintenance"], calibration: ["calibration", "maintenance"],
+  validation: ["validation", "cleaning", "csv", "environment"], training: ["training"], fives: ["fives"], fmea: ["fmea"], improvements: ["capa"], quality: ["csv"], spc: ["spc"],
+};
+// GMP activity register → topics of its governing SOPs
+export const ACTIVITY_TOPICS = {
+  "QA-01": ["review"], "QA-02": ["metrics"], "QA-03": ["pqs"], "QA-04": ["apqr"], "QA-05": ["validation", "spc"], "QA-06": ["batches"], "QA-07": ["lab"], "QA-08": ["deviations"],
+  "QA-09": ["capa"], "QA-10": ["cc"], "QA-11": ["oos"], "QA-12": ["complaints"], "QA-13": ["recall"], "QA-14": ["audits"], "QA-15": ["suppliers"], "QA-16": ["suppliers"],
+  "QA-17": ["suppliers"], "QA-18": ["training"], "QA-19": ["training"], "QA-20": ["training"], "QA-21": ["gowning"], "QA-22": ["fives"], "QA-23": ["calibration"],
+  "QA-24": ["validation"], "QA-25": ["environment"], "QA-26": ["environment"], "QA-27": ["environment"], "QA-28": ["validation"], "QA-29": ["cleaning"], "QA-30": ["cleaning"],
+  "QA-31": ["gowning"], "QA-32": ["environment", "spc"], "QA-33": [], "QA-34": ["csv"], "QA-35": ["csv"], "QA-36": ["csv"], "QA-37": ["csv"], "QA-38": ["sops"], "QA-39": ["sops"],
+  "QA-40": ["lab"], "QA-41": ["suppliers"], "QA-42": ["wip"], "QA-43": ["rejections"], "QA-44": ["fmea"], "QA-45": ["audits"], "QA-46": ["pqs"],
+};
+
 // ---------- 5S weekly QA audit checklist ----------
 export const FIVES = [
   ["sort", "Sort (Seiri)", "Trier (Seiri)", [

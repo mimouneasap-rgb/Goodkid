@@ -16,6 +16,7 @@ import * as QV from "./views-quality.js";
 import * as OP from "./views-ops.js";
 import * as PE from "./views-people.js";
 import * as AP from "./views-apqr.js";
+import * as SV from "./views-sop.js";
 import * as FV from "./views-fives.js";
 import { importFiles, COLS, emptyData, upsertRows } from "./importers.js";
 import { buildDomains } from "./domain.js";
@@ -96,7 +97,7 @@ const VIEWS = {
   deviations: QV.deviations, capa: QV.capaView, cc: QV.ccView, findings: QV.findings, actions: QV.actionsView, records: Q.records,
   products: S.products, lifecycle: OP.lifecycle, apqr: AP.apqrView, wip: OP.wipView, suppliers: OP.suppliersView,
   map: S.map, rooms: S.rooms, equipment: S.equipment, calibration: OP.calibration, validation: OP.validation,
-  training: PE.trainingView, fives: FV.fivesView, activities: PE.activitiesView, sops: Q.sops, fmea: Q.fmea, improvements: Q.improvements,
+  training: PE.trainingView, fives: FV.fivesView, activities: PE.activitiesView, sops: SV.sopsView, fmea: Q.fmea, improvements: Q.improvements,
   data: dataTables, quality: Q.quality,
 };
 
@@ -173,7 +174,7 @@ const ctx = {
     risk: (id) => openRisk(id),
     risks: (title, list) => openList(title, list, "risk"),
     asset: (no) => openAsset(no),
-    sop: (code) => openSop(code),
+    sop: (code) => { closeDrawer(); go("sops", { code }); },
     list: (title, list) => openList(title, list, "record"),
     actions: (title, list) => openActions(title, list),
     action: (ref) => openAction(ref),
@@ -253,6 +254,9 @@ function render({ keepScroll } = {}) {
   }
   let view;
   try { view = VIEWS[route](ctx); } catch (e) { console.error(e); view = h("div.view", h("div.banner.warn", icon("alert", 18), String(e.message ?? e))); }
+  // the SOPs that govern this page, under its header
+  const strip = params.code || params.p ? null : SV.sopStrip(ctx, route);
+  if (strip) view.querySelector(".view-head")?.after(strip);
   view.append(h("footer.page-foot", `${t("print_footer")}QA-WB-ONC-001 · ${t("last_refreshed")} ${fmtDate(model.asof)}`));
   main.replaceChildren(view);
   document.title = `${t(NAV.flatMap((g) => g[1]).find((x) => x[0] === route)?.[2] ?? "home")} · El Kendi Oncology QA`;
@@ -303,7 +307,7 @@ function suggestionLists() {
     refs: model.records.map((r) => r.ref), rooms: model.rooms.map((r) => r.Code), sops: model.sops.map((s) => s.Code),
     assets: model.equip.map((e) => e["Asset no"]), products: [...model.products.map((p) => p.Product), ...model.x.apqrProg.products.map((p) => p.name)],
     periods: [y - 1, y, y + 1].flatMap((yy) => [String(yy), ...[1, 2, 3, 4].map((q) => `${yy}-Q${q}`)]),
-    areas: model.x.fivesX.areas.map((a) => a.Area),
+    areas: model.x.fivesX.areas.map((a) => a.Area), sopCodes: model.sops.map((s) => s.Code),
   };
 }
 
@@ -477,20 +481,6 @@ function openAsset(no) {
   });
 }
 
-function openSop(code) {
-  showDrawer(() => {
-    const s = model.sops.find((x) => x.Code === code);
-    if (!s) return h("p", t("none_found"));
-    return [
-      h("div.d-head", h("div.d-tags", h("span.tag", s.Type), h("span.tag", tv(s.reviewStatus))), h("div.d-refrow", h("span.d-ref", s.Code), editBtn("sop", s.__key, `${s.Code} · ${s.Title ?? ""}`)), h("h2", s.Title), changeLine(s.__edit, who)),
-      defList([[t("col_dept"), s.Department], ["Site", s.Site], ["Language", s.Language], [t("col_status"), s.Status], [t("col_rev"), s.Revision],
-        ["Effective date", fmtDate(M.toDay(s["Effective date"]))], [t("col_nextrev"), fmtDate(s.next)], [t("col_owner"), s.Owner],
-        ["Linked rooms", s["Linked rooms"]], ["Linked equipment", s["Linked equipment"]], [t("source"), s.Source],
-        ["Data quality", s.dataQuality.length ? h("span.warn-text", s.dataQuality.join(" · ")) : null]]),
-    ];
-  });
-}
-
 const recList = (list) => h("div.d-list", list.map((r) => h("button.d-item", { type: "button", onclick: () => openRecord(r.ref) },
   typeTag(r.type), h("span.d-item-t", h("b", r.ref), h("span", r.title)), pill(r.overdue && r.status === "Open" ? "Overdue" : r.status))));
 
@@ -583,7 +573,7 @@ function openPalette() {
     add(t("n_rooms"), model.rooms.filter((r) => m(r.Code) || m(r.Name)).map((r) => ({ label: `${r.Code} · ${r.Name}`, sub: r.Area, icon: "room", act: () => go("rooms", { room: r.Code }) })), 5);
     add(t("n_eq"), model.equip.filter((e) => m(e["Asset no"]) || m(e.Description) || m(e.Serial)).map((e) => ({ label: `${e["Asset no"]} · ${e.Description}`, sub: e["Room code"] ?? "", icon: "equipment", act: () => openAsset(e["Asset no"]) })), 5);
     add(t("n_fm"), model.fmea.filter((f) => m(f["Risk ID"]) || m(f["Failure mode"]) || m(f["Process step"])).map((f) => ({ label: `${f["Risk ID"]} · ${f["Failure mode"]}`, sub: `RPN ${f.rpn ?? "—"}`, icon: "fmea", act: () => openRisk(f["Risk ID"]) })), 5);
-    add(t("n_sop"), model.sops.filter((s) => m(s.Code) || m(s.Title)).map((s) => ({ label: `${s.Code} · ${s.Title}`, sub: s.Department ?? "", icon: "sop", act: () => openSop(s.Code) })), 5);
+    add(t("n_sop"), model.sops.filter((s) => m(s.Code) || m(s.Title)).map((s) => ({ label: `${s.Code} · ${s.Title}`, sub: s.Department ?? "", icon: "sop", act: () => go("sops", { code: s.Code }) })), 5);
     add(t("nav_actions"), model.actions.filter((a) => m(a.ref) || m(a.title) || m(a.parentRef)).map((a) => ({ label: `${a.ref} · ${a.title}`, sub: `${a.parentRef || t("standalone")} · ${tv(a.status)}`, icon: "tasks", act: () => openAction(a.ref) })), 5);
     add(t("batches_lbl"), model.x.batches.filter((b) => m(b["Batch no"]) || m(b.Product)).map((b) => ({ label: `${b["Batch no"]} · ${b.Product}`, sub: tv(b.stage), icon: "cycle", act: () => go("lifecycle") })), 4);
     add(t("trn_title"), model.x.training.filter((x) => m(x["Training ID"]) || m(x.Program) || m(x.Reference)).map((x) => ({ label: `${x["Training ID"] ?? ""} · ${x.Program}`, sub: tv(x.status), icon: "cap", act: () => go("training") })), 4);

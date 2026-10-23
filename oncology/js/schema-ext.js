@@ -38,6 +38,14 @@ export const EXT_COLS = {
   // (Last seen: date of the latest Scigeniq export that listed the task; Comment is kept across re-imports)
   apqrTasks: ["Reference ID", "Product", "Dosage Form", "Site", "Department", "Data Stream", "Task Type", "Task Title", "Workflow Stage", "Status", "Assigned User", "Created", "Start", "Due", "Closed On", "Closure",
     "Critical level", "Created by", "Parent action", "Last seen", "Comment"],
+  // SOP library: the workbook's columns, then the Drive file it is read from and what reading the SOP found
+  // (Distribution: department codes; References: SOP codes it cites; Indexed: the Drive modified date that was read)
+  sop: ["Code", "Title", "Department", "Site", "Language", "Type", "Status", "Revision", "Effective date", "Next review", "Owner", "Linked rooms", "Linked equipment", "Source",
+    "Drive ID", "Drive file", "Drive modified", "Files", "Purpose", "Distribution", "References", "Change controls", "Indexed"],
+  // Google Drive folders the SOP library is synced from
+  sopSources: ["Folder", "Name", "Site", "Review years", "Last sync", "Files", "Comment"],
+  // Module ↔ SOP links that override the automatic match on SOP titles
+  sopLinks: ["Topic", "SOP", "Comment"],
   // Progress of each EU GMP Ch.1.10 review section within one product's APQR
   apqrSections: ["Product", "Section", "Status", "Owner", "Due", "Evidence", "Comment", "Updated"],
   // QA activity register entries (override / extend the built-in GMP activity catalogue)

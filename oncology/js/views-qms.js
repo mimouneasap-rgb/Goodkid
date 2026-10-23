@@ -1,11 +1,11 @@
-// FMEA, Improvements, SOP library, Data quality and the all-records list.
+// FMEA, Improvements, Data quality and the all-records list.
 import { h, card, kpi, viewHeader, select, segmented, dataTable, pill, typeTag, fmtDate, fmtNum, fmtPct, defList, STATUS_COLOR, LEVEL_COLOR, TYPE_COLOR } from "./ui.js";
 import { hbars, stacks, heatmap, legend } from "./charts.js";
 import { t, tv } from "./i18n.js";
 import { icon } from "./icons.js";
 import * as M from "./model.js";
 import { recordCols, recordSearch } from "./views-overview.js";
-import { equipCols, fmeaCols, sopCols } from "./views-site.js";
+import { equipCols, fmeaCols } from "./views-site.js";
 
 const pctBar = (v) => h("span.pct-bar", h("i", { style: { width: `${Math.round((v ?? 0) * 100)}%` } }), fmtPct(v));
 
@@ -94,34 +94,6 @@ export function improvements(ctx) {
 }
 
 // ---------- SOP LIBRARY ----------
-export function sops(ctx) {
-  const { m } = ctx;
-  const S = m.sops;
-  const by = (s) => S.filter((x) => x.reviewStatus === s).length;
-  const depts = [...M.countBy(S, (s) => s.Department || "—")].sort((a, b) => b[1] - a[1]).map(([d]) => ({
-    label: d, parts: Object.fromEntries([...new Set(S.map((s) => s.Site || "—"))].map((site) => [site, S.filter((s) => (s.Department || "—") === d && (s.Site || "—") === site).length])),
-  }));
-  const sites = [...new Set(S.map((s) => s.Site || "—"))].map((site, i) => ({ key: site, label: site, color: `var(--c${[1, 2, 3, 7][i % 4]})` }));
-  const langs = [...M.countBy(S, (s) => s.Language || "Unknown")].map(([l, n]) => ({ label: l, value: n, color: l === "Unknown" ? "var(--muted-mark)" : "var(--c1)" }));
-  return h("div.view",
-    viewHeader(t("sop_title"), t("sop_sub"), ctx.canEdit ? h("button.btn.primary", { type: "button", onclick: () => ctx.add("sop") }, icon("plus", 16), t("add_sop")) : null),
-    h("div.banner.warn", icon("alert", 18), t("sop_banner")),
-    h("div.kpi-grid",
-      kpi({ label: t("sop_k_n"), value: fmtNum(S.length), accent: "var(--c1)" }),
-      kpi({ label: t("sop_k_onc"), value: fmtNum(S.filter((s) => /Onc/i.test(s.Code) || s.Site === "Oncology").length) }),
-      kpi({ label: t("sop_k_od"), value: fmtNum(by("Overdue")), status: M.rag(by("Overdue"), m.targets.sop_od, false) }),
-      kpi({ label: t("sop_k_90"), value: fmtNum(by("Due ≤90 d")) }),
-      kpi({ label: t("sop_k_nodate"), value: fmtNum(by("No review date")), accent: "var(--muted-mark)" }),
-      kpi({ label: t("sop_k_nolink"), value: fmtNum(S.filter((s) => !s["Linked rooms"] && !s["Linked equipment"]).length) }),
-      kpi({ label: t("sop_k_forms"), value: fmtNum(m.forms.length) })),
-    h("div.grid.cols-2",
-      card(t("sop_c_dept"), stacks(depts, sites)),
-      card(t("sop_c_lang"), hbars(langs)),
-      card(t("sop_due"), dataTable(sopCols(), S.filter((s) => s.reviewStatus === "Overdue" || s.reviewStatus === "Due ≤90 d"), { search: false, onRow: (s) => ctx.open.sop(s.Code) }), { span: 2 }),
-      card(t("n_sop"), dataTable([...sopCols(), { key: "Type", label: t("col_type") }, { key: "Site", label: "Site" }, { key: "Source", label: t("source"), cls: "muted" }], S, { pageSize: 20, onRow: (s) => ctx.open.sop(s.Code), exportName: "sop-library" }), { span: 2 }),
-      card(t("n_forms"), dataTable([{ key: "Form code", label: t("col_code"), cls: "mono" }, { key: "Type", label: t("col_type") }, { key: "Linked SOP", label: t("col_linksop"), cls: "mono" }, { key: "Linked room", label: t("col_room"), cls: "mono" }, { key: "Status", label: t("col_status") }, { key: "Title", label: t("col_title"), cls: "wrap" }], m.forms, { search: false }), { span: 2 })));
-}
-
 // ---------- DATA QUALITY ----------
 export function quality(ctx) {
   const { m } = ctx;

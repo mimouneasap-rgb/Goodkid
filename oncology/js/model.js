@@ -339,15 +339,18 @@ export function buildModel(wb, opts = {}) {
   });
 
   // ----- SOPs & forms -----
+  // next review: the validity date when the SOP carries one, otherwise the effective date plus the review period of its source
+  const reviewYears = +(objects(wb.sopSources ?? null).map((x) => x["Review years"]).find((v) => +v > 0) ?? 3);
   const sops = objects(wb.sop).filter((s) => s.Code).map((s) => {
-    const next = toDay(s["Next review"]);
+    const eff = toDay(s["Effective date"]);
+    const next = toDay(s["Next review"]) ?? (eff != null ? addMonths(eff, 12 * reviewYears) : null);
     const dtr = next != null ? daysBetween(now, next) : null;
     const reviewStatus = next == null ? "No review date" : dtr < 0 ? "Overdue" : dtr <= 90 ? "Due ≤90 d" : "In date";
     const dq = [];
     if (next == null) dq.push("No review date");
     if (!s["Linked rooms"] && !s["Linked equipment"]) dq.push("No linked room/equipment");
     if (!s.Language) dq.push("Language unknown");
-    return { ...s, next, daysToReview: dtr, reviewStatus, dataQuality: dq };
+    return { ...s, eff, next, nextFromEffective: next != null && toDay(s["Next review"]) == null, daysToReview: dtr, reviewStatus, dataQuality: dq };
   });
   const forms = objects(wb.forms).filter((f) => f["Form code"]).map((f) => ({
     ...f, dataQuality: [!f["Linked room"] && "No linked room", !f.Revision && "No revision"].filter(Boolean),

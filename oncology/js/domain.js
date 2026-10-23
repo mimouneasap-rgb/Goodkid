@@ -3,7 +3,8 @@
 // lifecycle and cycle times, WIP and rejections, APQR, 5S audits, the GMP activity
 // register and the quarterly QMS metrics. Pure functions over the model + raw tables.
 import { objects, clean, toDay, addMonths, monthStart, monthKey, daysBetween, countBy } from "./model.js";
-import { METRICS, QA_ACTIVITIES, FIVES, FIVES_ITEMS, fivesKey, fivesRating, RISK_FREQUENCY, FREQUENCY_DAYS, APQR_PHASES, APQR_STREAMS, APQR_SECTIONS } from "./catalogs.js";
+import { METRICS, QA_ACTIVITIES, FIVES, FIVES_ITEMS, fivesKey, fivesRating, RISK_FREQUENCY, FREQUENCY_DAYS, APQR_PHASES, APQR_STREAMS, APQR_SECTIONS, SOP_TOPICS } from "./catalogs.js";
+import { sopKey, topicsOf } from "./sopkit.js";
 
 const DAY = 86400000;
 const num = (v) => (v == null || v === "" || isNaN(+v) ? null : +v);
@@ -206,6 +207,7 @@ export function buildDomains(m, wb, review) {
   const fivesX = buildFives(m, wb);
   const fives = fivesX.audits;
   const apqrProg = buildApqrProgramme(m, wb, apqr);
+  const sopx = buildSopLibrary(m, wb);
 
   // ----- GMP activity register (catalogue + entries recorded in the app) -----
   const latest = (xs) => xs.filter((x) => x != null).reduce((a, b) => Math.max(a, b), -Infinity);
@@ -243,7 +245,7 @@ export function buildDomains(m, wb, review) {
   // ----- manual metric values -----
   const metricValues = objects(wb.metrics).filter((x) => x.Metric && x.Period);
 
-  m.x = { training, calplan, validation, suppliers, rejections, batches, wip, lifecycle, apqr, apqrProg, fives, fivesX, qaact, metricValues };
+  m.x = { training, calplan, validation, suppliers, rejections, batches, wip, lifecycle, apqr, apqrProg, sopx, fives, fivesX, qaact, metricValues };
   return m;
 }
 
@@ -421,6 +423,41 @@ export function apqrUsers(tasks) {
     return { user: u, total: xs.length, completed: xs.length - open.length, open: open.length, overdue: xs.filter((t) => t.overdue).length, pct: xs.length ? (xs.length - open.length) / xs.length : 0,
       earliest: open.map((t) => t.due).filter((d) => d != null).sort((a, b) => a - b)[0] ?? null };
   }).sort((a, b) => b.overdue - a.overdue || b.open - a.open);
+}
+
+// ---------- SOP library ----------
+/** Drive folder id from a folder URL ("…/drive/folders/<id>") or the id itself. */
+export const folderIdOf = (v) => String(v ?? "").match(/folders\/([\w-]{10,})/)?.[1] ?? (String(v ?? "").trim().match(/^[\w-]{10,}$/)?.[0] ?? null);
+
+/**
+ * The SOP library with what the app knows about each SOP: the topics (pages) it governs — from its title, or from an
+ * explicit link — the SOPs it cites and is cited by, its departments, and its Drive file. Returns
+ * { list, byKey, byTopic: Map(topic → SOPs), sources, links }.
+ */
+export function buildSopLibrary(m, wb) {
+  const none = { cols: [], rows: [] };
+  const links = objects(wb.sopLinks ?? none).filter((l) => l.Topic && l.SOP);
+  const sources = objects(wb.sopSources ?? none).filter((x) => x.Folder).map((x) => ({ ...x, folderId: folderIdOf(x.Folder) }));
+  const words = (v) => String(v ?? "").split(/[\s,;]+/).filter(Boolean);
+  const LANG = { EN: "English", ENG: "English", FR: "French", FRA: "French", AR: "Arabic" };
+  const list = m.sops.map((x) => {
+    const s = { ...x, Language: LANG[String(x.Language ?? "").toUpperCase()] ?? x.Language };
+    const key = sopKey(s.Code);
+    const refs = words(s.References);
+    return { ...s, key, topics: topicsOf(s.Title, SOP_TOPICS), refs, refKeys: [...new Set(refs.map(sopKey).filter((k) => k && k !== key))], dist: words(s.Distribution),
+      changes: words(s["Change controls"]), inDrive: Boolean(s["Drive ID"]), indexed: Boolean(s.Indexed), files: +s.Files || (s["Drive ID"] ? 1 : 0), citedBy: [] };
+  }).sort((a, b) => a.Code.localeCompare(b.Code));
+  const byKey = new Map();
+  for (const s of list) if (s.key && !byKey.has(s.key)) byKey.set(s.key, s);
+  for (const s of list) for (const k of s.refKeys) byKey.get(k)?.citedBy.push(s);
+  // an explicit link replaces the title match for its topic
+  const linked = new Map();
+  for (const l of links) { const s = byKey.get(sopKey(l.SOP)) ?? list.find((x) => x.Code === l.SOP); if (s) { if (!linked.has(l.Topic)) linked.set(l.Topic, []); linked.get(l.Topic).push({ sop: s, link: l }); } }
+  const byTopic = new Map(SOP_TOPICS.map(([id]) => [id, linked.has(id) ? linked.get(id).map((x) => x.sop) : list.filter((s) => s.topics.includes(id))]));
+  for (const [id, xs] of linked) for (const { sop } of xs) if (!sop.topics.includes(id)) sop.topics = [...sop.topics, id];
+  const rank = (s) => (s.Site === "Oncology" ? 0 : 1) * 2 + (s.inDrive ? 0 : 1);
+  for (const xs of byTopic.values()) xs.sort((a, b) => rank(a) - rank(b) || a.Code.localeCompare(b.Code));
+  return { list, byKey, byTopic, sources, links, linkedTopics: new Set(linked.keys()) };
 }
 
 // ---------- process statistics (APQR) ----------

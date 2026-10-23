@@ -6,6 +6,7 @@ import { icon } from "./icons.js";
 import * as M from "./model.js";
 import { METRICS, METRIC_GROUPS } from "./catalogs.js";
 import { quarters, yearPeriod, metricValue, metricStatus } from "./domain.js";
+import { activitySops, sopHref } from "./views-sop.js";
 
 const DAY = 86400000;
 const ALL = M.ALL;
@@ -203,6 +204,9 @@ export function activitiesView(ctx) {
     { key: "activity", label: t("activity_lbl"), cls: "wrap", render: (a) => h("span", h("b", a.activity), a.link && LINK_ROUTE[a.link] ? h("button.link.small", { type: "button", onclick: (e) => { e.stopPropagation(); ctx.go(LINK_ROUTE[a.link]); } }, " → ", t("open_view")) : null) },
     { key: "category", label: t("col_cat") },
     { key: "reference", label: t("guideline_ref"), cls: "wrap small-text" },
+    { key: "sops", label: t("site_sop"), cls: "wrap", sort: (a) => activitySops(ctx, a.id).length, render: (a) => { const xs = activitySops(ctx, a.id); return xs.length
+      ? h("span.sop-mini", xs.slice(0, 3).map((x) => h("a.tag.mono", { href: sopHref(x.Code), title: x.Title ?? "", onclick: (e) => e.stopPropagation() }, x.Code)), xs.length > 3 ? h("small.muted", ` +${xs.length - 3}`) : null)
+      : h("span.muted", "—"); } },
     { key: "freq", label: t("freq_lbl"), cls: "nowrap", render: (a) => freqLabel(a.freq) },
     { key: "last", label: t("last_performed"), cls: "num nowrap", render: (a) => (a.last != null ? h("span", fmtDate(a.last), a.lastSource === "auto" ? h("sup.src-auto", { title: t("auto_from_data") }, "A") : null) : "—") },
     { key: "nextDue", label: t("next_due"), cls: "num nowrap", render: (a) => (a.status === "Overdue" ? h("b.late", fmtDate(a.nextDue)) : fmtDate(a.nextDue)) },
@@ -231,6 +235,6 @@ export function activitiesView(ctx) {
       card(t("qaa_due_month"), columns(Array.from({ length: 12 }, (_, i) => { const mo = M.addMonths(M.monthStart(m.now), i); const k = M.monthKey(mo); return { x: k, n: A.filter((a) => a.nextDue != null && M.monthKey(Math.max(a.nextDue, M.monthStart(m.now))) === k).length }; }), [{ key: "n", label: t("due_lbl"), color: "var(--c1)" }])),
       card(t("qaa_calendar"), next12.length ? gantt(next12.slice(0, 40).map((a) => ({ label: `${a.id} · ${a.activity}`, sub: freqLabel(a.freq), start: Math.max(a.nextDue, M.monthStart(m.now)), end: Math.max(a.nextDue, M.monthStart(m.now)) + 4 * DAY, color: ACT_COLOR[a.status], mark: a.last,
         tip: `<b>${esc(a.activity)}</b><div class="tip-row"><span>${esc(t("next_due"))}</span><b>${fmtDate(a.nextDue)}</b></div><div class="tip-row"><span>${esc(t("guideline_ref"))}</span><b>${esc(a.reference)}</b></div>`, onclick: ctx.canEdit ? () => editA(a) : null })), { from: M.monthStart(m.now), months: 12, today: m.now }) : h("div.empty", t("no_data")), { span: 2, sub: t("qaa_calendar_sub") })),
-    card(`${t("qaa_title")} · ${fmtNum(L.length)}`, dataTable(cols, L, { pageSize: 50, onRow: (a) => (a.link && LINK_ROUTE[a.link] ? ctx.go(LINK_ROUTE[a.link]) : ctx.canEdit ? editA(a) : null), searchText: (a) => `${a.id} ${a.activity} ${a.reference} ${a.category}`, exportName: "qa-activity-register" }), { sub: t("qaa_table_sub") }),
+    card(`${t("qaa_title")} · ${fmtNum(L.length)}`, dataTable(cols, L, { pageSize: 50, onRow: (a) => (a.link && LINK_ROUTE[a.link] ? ctx.go(LINK_ROUTE[a.link]) : ctx.canEdit ? editA(a) : null), searchText: (a) => `${a.id} ${a.activity} ${a.reference} ${a.category} ${activitySops(ctx, a.id).map((x) => x.Code).join(" ")}`, exportName: "qa-activity-register" }), { sub: t("qaa_table_sub") }),
     h("p.fine", t("qaa_refs")));
 }
