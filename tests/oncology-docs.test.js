@@ -100,8 +100,8 @@ test("the register model: index check, documents an index misses, product dossie
   const wb = {
     ...empty, meta: { asof: "2026-10-20", settings: {} }, tr: SCHEMA.tr, mapGrid: [],
     sop: table("sop", [sop("SOPXY0001E/Onc", "01"), sop("SOPXY0002E/Onc", "03", { Revisions: "01 03", "Effective date": "2025-06-01" }), sop("SOPXY0004/Onc", null, { "Drive ID": null, Status: "Listed" }),
-      sop("SOPXY0007/Onc", "01"), sop("SOPXY0008/Onc", "01", { Status: "Obsolete" })]),
-    docIndex: table("docIndex", [ix("SOPXY0001E/Onc", "01", "2023-12-20", "2026-12-20"), ix("SOPXY0002E/Onc", "02", "2024-05-23", "2027-05-23"), ix("SOPXY0004/Onc", "01", "2024-04-02", "2027-04-02"),
+      sop("SOPXY0007/Onc", "01"), sop("SOPXY0008/Onc", "01", { Status: "Obsolete" }), sop("SOPXY0009/Onc", "01", { Status: "Uncontrolled copy" })]),
+    docIndex: table("docIndex", [ix("SOPXY0001E/Onc", "01", "2023-12-20", "2026-12-20"), ix("SOPXY0002E/Onc", "02", "2024-05-23", "2027-05-23"), ix("SOPXY0004/Onc", "01", "2024-04-02", "2027-04-02"), ix("SOPXY0009/Onc", "01", "2024-04-02", "2027-04-02"),
       ix("FPS901/Onc", "01", "2024-12-22", null, "IndQC/Onc-FPS25", "FPS", "QC")]),
     docs: table("docs", [doc("FPS901-Onc", "FPS", "Demoxa 50 mg tablets"), doc("FPS902-Onc", "FPS", "Demoxa 100 mg tablets"), doc("BMR0901F-Onc", "BMR", "DEMOXA 50 mg", { "Product code": "TB901" }),
       doc("OF-Onc-TB905", "OF", "NOVADEM 25 mg comprimés", { "Product code": "TB905" }), doc("BMR0905F-Onc", "BMR", "Novadem 25 mg", { "Product code": "TB905" })]),
@@ -110,7 +110,7 @@ test("the register model: index check, documents an index misses, product dossie
   const m = buildDomains(buildModel(wb, { today: toDay("2026-10-21") }), wb, null);
   const X = m.x.docx, S = m.x.sopx;
   const state = (code) => X.checks.find((c) => c.code === code)?.state;
-  assert.deepEqual([state("SOPXY0001E/Onc"), state("SOPXY0002E/Onc"), state("SOPXY0004/Onc"), state("FPS901/Onc")], ["match", "drive-newer", "missing", "match"]);
+  assert.deepEqual([state("SOPXY0001E/Onc"), state("SOPXY0002E/Onc"), state("SOPXY0004/Onc"), state("SOPXY0009/Onc"), state("FPS901/Onc")], ["match", "drive-newer", "missing", "missing", "match"]);
   assert.equal(X.checks.find((c) => c.code === "SOPXY0002E/Onc").hasListedRev, false); // Drive holds 01 and 03, the index lists 02
   assert.deepEqual(X.unlisted.map((d) => d.code).sort(), ["FPS902-Onc", "SOPXY0007/Onc"]); // the obsolete SOP is not expected in the index
   const s1 = S.list.find((s) => s.Code === "SOPXY0001E/Onc");

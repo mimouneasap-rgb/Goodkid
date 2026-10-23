@@ -513,7 +513,8 @@ export function buildDocControl(m, wb, sopx) {
       listedKeys.add(key);
       const d = docBy.get(key);
       const rev = e.Revision;
-      const state = !d || (d.kind === "sop" && !d.ref.inDrive) ? "missing" : /obsolete/i.test(d.status ?? "") ? "obsolete" : d.rev == null || rev == null ? "match" : +d.rev === +rev ? "match" : +d.rev > +rev ? "drive-newer" : "drive-older";
+      // an uncontrolled copy is not the controlled document the index lists
+      const state = !d || (d.kind === "sop" && !d.ref.inDrive) || /uncontrolled/i.test(d.status ?? "") ? "missing" : /obsolete/i.test(d.status ?? "") ? "obsolete" : d.rev == null || rev == null ? "match" : +d.rev === +rev ? "match" : +d.rev > +rev ? "drive-newer" : "drive-older";
       const validity = day(e["Validity date"]);
       const c = { index: ix.id, dept: ix.dept, scope: ix.scope, code: e.Code, key, rev, effective: day(e["Effective date"]), validity, doc: d ?? null, state,
         hasListedRev: d ? (d.revs.length ? d.revs.some((r) => +r === +rev) : +d.rev === +rev) : false,
