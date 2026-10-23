@@ -158,8 +158,32 @@ function toast(msg) {
   toast.timer = setTimeout(() => t.classList.remove("show"), 2600);
 }
 
-function download(name, content, type = "text/csv;charset=utf-8") {
-  const blob = new Blob([type.startsWith("text/csv") ? "﻿" : "", content], { type });
+// Set by the single-file build that runs inside a claude.ai page. That frame cannot
+// print, start downloads or register a service worker, so those paths change.
+const EMBED = globalThis.SOP_EMBED === true;
+const CAN_PRINT = !EMBED;
+
+let downloadsCap;
+function downloadsCapability() {
+  if (downloadsCap === undefined) {
+    downloadsCap = window.claude?.use ? window.claude.use("downloads").catch(() => null) : Promise.resolve(null);
+  }
+  return downloadsCap;
+}
+
+async function download(name, content, type = "text/csv;charset=utf-8") {
+  const blob = new Blob([type.startsWith("text/csv") ? "\uFEFF" : "", content], { type });
+  const saver = await downloadsCapability();
+  if (saver) {
+    try {
+      await saver.save({ filename: name, data: blob });
+      toast(`Saved ${name}`);
+    } catch (err) {
+      if (err?.code !== "declined") toast(`Could not save ${name}: ${err?.message || "saving is unavailable here"}`);
+    }
+    return;
+  }
+  if (EMBED) { toast("Saving files is not available in this view."); return; }
   const a = el("a", { href: URL.createObjectURL(blob), download: name });
   document.body.append(a);
   a.click();
@@ -613,9 +637,9 @@ function renderSop() {
     s.purpose ? el("p", { class: "purpose" }, s.purpose) : null,
     el("div", { class: "detail-actions" },
       s.driveUrl ? el("a", { class: "btn primary", href: s.driveUrl, target: "_blank", rel: "noopener" }, icon("external"), "Open source document") : null,
-      btn("Print summary", () => printSopSummary(s, own), { icon: "print" }),
-      own.length ? btn(`Print all blank forms (${own.length})`, () => printBlank(own), { icon: "print" }) : null,
-      btn("Copy link", () => copyLink(), { icon: "link", cls: "ghost" })),
+      CAN_PRINT ? btn("Print summary", () => printSopSummary(s, own), { icon: "print" }) : null,
+      CAN_PRINT && own.length ? btn(`Print all blank forms (${own.length})`, () => printBlank(own), { icon: "print" }) : null,
+      !EMBED ? btn("Copy link", () => copyLink(), { icon: "link", cls: "ghost" }) : null),
     el("dl", { class: "facts" }, facts.map(([k, v]) => el("div", { class: "fact" }, el("dt", { class: "label" }, k), el("dd", { class: "v", style: { margin: 0 } }, v)))));
 
   const tabs = [
@@ -712,7 +736,7 @@ function attCard(a, opts = {}) {
     a.usedBy.length ? el("p", { class: "hint" }, `Also used by ${plural(a.usedBy.length, "other SOP")}`) : null,
     el("div", { class: "actions" },
       el("a", { class: "btn sm primary", href: `#/att/${a.id}` }, icon(a.type === "logbook" ? "logbook" : "form"), a.type === "logbook" ? "Open logbook" : "Fill in"),
-      btn("Print blank", () => printBlank([a]), { cls: "sm", icon: "print" })));
+      CAN_PRINT ? btn("Print blank", () => printBlank([a]), { cls: "sm", icon: "print" }) : null));
 }
 
 function sopForms(s, own, foreign) {
@@ -816,7 +840,9 @@ function sopText(s) {
   paint();
   return el("div", { class: "grid", style: { gap: "12px" } },
     el("div", { class: "toolbar", style: { margin: 0 } }, el("label", { class: "search-box" }, icon("search"), input), count,
-      btn("Copy text", async () => { await navigator.clipboard?.writeText(s.text); toast("Text copied"); }, { cls: "sm", icon: "copy" })), pre);
+      btn("Copy text", async () => {
+        try { await navigator.clipboard.writeText(s.text); toast("Text copied"); } catch { toast("Copying is not allowed here; select the text instead."); }
+      }, { cls: "sm", icon: "copy" })), pre);
 }
 
 async function copyLink() {
@@ -910,8 +936,8 @@ function renderAtt() {
     el("h2", {}, a.title || "Untitled attachment"),
     el("p", { class: "purpose" }, "Controlled by ", el("a", { href: `#/sop/${sop.id}` }, el("b", {}, displayCode(sop)), ` · ${sop.title}`)),
     el("div", { class: "detail-actions" },
-      btn("Print blank", () => printBlank([a]), { cls: "primary", icon: "print" }),
-      records.length ? btn("Print with entries", () => printFilled(a, cols, records), { icon: "print" }) : null,
+      CAN_PRINT ? btn("Print blank", () => printBlank([a]), { cls: "primary", icon: "print" }) : null,
+      CAN_PRINT && records.length ? btn("Print with entries", () => printFilled(a, cols, records), { icon: "print" }) : null,
       records.length ? btn("Export CSV", () => download(`${safeName(a.code)}-${todayIso()}.csv`, recordsToCsv(a, cols, records)), { icon: "download" }) : null,
       sop.driveUrl ? el("a", { class: "btn ghost", href: sop.driveUrl, target: "_blank", rel: "noopener" }, icon("external"), "Source SOP") : null));
 
@@ -1479,7 +1505,7 @@ async function start() {
     raw = await store.getValue("library");
     origin = (await store.getValue("origin")) || "imported";
   } catch { raw = null; }
-  if (!raw || origin === "hosted") {
+  if (!EMBED && location.protocol !== "file:" && (!raw || origin === "hosted")) {
     const hosted = await fetchHosted();
     if (hosted && Array.isArray(hosted.sops)) {
       if (!raw || raw.generatedAt !== hosted.generatedAt) {
@@ -1502,7 +1528,8 @@ async function start() {
   window.addEventListener("hashchange", route);
   route();
 
-  if ("serviceWorker" in navigator && location.protocol !== "file:") {
+  if (EMBED) document.querySelector('.rail-btn[href="../"]')?.remove();
+  else if ("serviceWorker" in navigator && location.protocol !== "file:") {
     navigator.serviceWorker.register("sw.js").catch(() => {});
   }
 }

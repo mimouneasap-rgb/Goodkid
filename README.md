@@ -144,6 +144,7 @@ signed paper record or the validated system remains the GMP record.
 | `sop/js/store.js` | IndexedDB storage for the library and entries |
 | `sop/js/demo-data.js` | Fictional demo library |
 | `sop/tools/build_library.py` | Builds `sop-library.json` from a folder of SOP files |
+| `sop/tools/bundle_single.py` | Packs the app into one HTML file (`--embed` for a claude.ai page: no printing, saves via the page's download prompt) |
 | `sop/manifest.webmanifest`, `sop/sw.js`, `sop/icons/` | Installable offline app |
 
 ## Notes
