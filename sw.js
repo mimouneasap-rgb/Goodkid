@@ -27,7 +27,7 @@ self.addEventListener("install", (event) => {
 self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches.keys()
-      .then((keys) => Promise.all(keys.filter((k) => k !== VERSION && k !== FONT_CACHE).map((k) => caches.delete(k))))
+      .then((keys) => Promise.all(keys.filter((k) => k.startsWith("qrm-") && k !== VERSION && k !== FONT_CACHE).map((k) => caches.delete(k))))
       .then(() => self.clients.claim()),
   );
 });
@@ -51,6 +51,8 @@ self.addEventListener("fetch", (event) => {
   }
 
   if (url.origin !== self.location.origin) return;
+  // The SOP Library in sop/ has its own service worker and private data.
+  if (url.pathname.startsWith(new URL("sop/", self.registration.scope).pathname)) return;
 
   // Page navigations: network first so updates arrive, cached shell when offline.
   if (request.mode === "navigate") {

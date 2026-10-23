@@ -1,2 +1,9 @@
 node_modules/
 .DS_Store
+
+# SOP library data is confidential: never commit it
+sop/data/*
+!sop/data/README.md
+*.sop-library.json
+sop-library.json
+__pycache__/

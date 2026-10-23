@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>SOP Library</title>
+  <meta name="description" content="SOP library with linked forms, templates, logbooks and annexes, digital records, review calendar and relationship map.">
+  <meta name="theme-color" content="#0f1531">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="SOP Library">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+  <link rel="stylesheet" href="css/sop.css">
+</head>
+<body>
+<div class="shell">
+  <!-- Rail: brand, navigation, departments, library source -->
+  <aside class="rail">
+    <a class="brand" href="#/overview" aria-label="SOP Library home">
+      <svg class="brand-mark" viewBox="0 0 36 36" aria-hidden="true">
+        <defs>
+          <linearGradient id="bm" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="#8b5cf6"/><stop offset="1" stop-color="#14b8a6"/>
+          </linearGradient>
+        </defs>
+        <rect x="2" y="2" width="32" height="32" rx="9" fill="url(#bm)"/>
+        <path d="M11 9.5h10l5 5V26a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 10 26V11a1.5 1.5 0 0 1 1-1.5z" fill="#fff" opacity=".95"/>
+        <path d="M21 9.5V14a.5.5 0 0 0 .5.5H26" fill="none" stroke="#c4b5fd" stroke-width="1.4"/>
+        <rect x="13" y="17" width="9" height="1.6" rx=".8" fill="#7a4cf5"/>
+        <rect x="13" y="20.4" width="7" height="1.6" rx=".8" fill="#0b9e9d"/>
+        <rect x="13" y="23.8" width="5" height="1.6" rx=".8" fill="#e2900b"/>
+      </svg>
+      <span class="brand-text">
+        <span class="brand-name">SOP Library</span>
+        <span class="brand-sub">Document control</span>
+      </span>
+    </a>
+
+    <nav class="nav" id="nav" aria-label="Main"></nav>
+
+    <div class="rail-section">
+      <span class="label" style="padding:0 6px;color:var(--rail-muted)">Departments</span>
+      <div class="rail-depts" id="rail-depts"></div>
+    </div>
+
+    <div class="rail-foot">
+      <div class="source-card" id="source-card"></div>
+      <button class="rail-btn" id="theme-btn" type="button"></button>
+      <a class="rail-btn" href="../">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
+        Quality Risk Manager
+      </a>
+    </div>
+  </aside>
+
+  <div class="main-col">
+    <header class="page-head">
+      <div class="page-title">
+        <span class="eyebrow" id="page-eyebrow"></span>
+        <h1 id="page-title">SOP Library</h1>
+      </div>
+      <button class="search-trigger" id="search-trigger" type="button" aria-label="Search SOPs, forms and logbooks">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+        <span>Find an SOP, form or logbook…</span>
+        <kbd id="kbd-hint">Ctrl K</kbd>
+      </button>
+    </header>
+
+    <main id="main">
+      <div class="loading" id="loading"><div class="spinner"></div><span>Opening the library…</span></div>
+      <section class="view" id="view-overview" aria-label="Overview"></section>
+      <section class="view" id="view-library" aria-label="Library"></section>
+      <section class="view" id="view-sop" aria-label="SOP"></section>
+      <section class="view" id="view-records" aria-label="Forms and records"></section>
+      <section class="view" id="view-att" aria-label="Record"></section>
+      <section class="view" id="view-map" aria-label="Relationship map"></section>
+      <section class="view" id="view-data" aria-label="Library data"></section>
+    </main>
+  </div>
+</div>
+
+<div id="palette-root"></div>
+<dialog id="dialog"></dialog>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<div id="print-area"></div>
+<input type="file" id="file-input" accept=".json,application/json" hidden>
+
+<script type="module" src="js/main.js"></script>
+</body>
+</html>

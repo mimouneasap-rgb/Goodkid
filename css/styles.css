@@ -209,7 +209,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
   color: var(--rail-muted); padding: 6px 8px; border-radius: var(--radius-sm); cursor: pointer; font-size: 13px;
 }
 .theme-toggle svg { width: 16px; height: 16px; fill: currentColor; }
-.theme-toggle:hover { color: var(--rail-ink); }
+.theme-toggle:hover { color: var(--rail-ink); text-decoration: none; }
 
 .main-col { min-width: 0; display: flex; flex-direction: column; }
 .page-head {
