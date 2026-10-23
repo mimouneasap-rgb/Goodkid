@@ -1,6 +1,7 @@
 // Pure data model: rebuilds every calculated column of the El Kendi QA master
 // workbook from its raw tables. Mirrors the Excel formulas (tQR, tEquip, tFMEA,
 // tRooms, tSOP …) so the app and the workbook agree. No DOM access here.
+import { sopKey } from "./sopkit.js";
 
 const DAY = 86400000;
 const DASH = "-----";
@@ -340,17 +341,24 @@ export function buildModel(wb, opts = {}) {
 
   // ----- SOPs & forms -----
   // next review: the validity date when the SOP carries one, otherwise the effective date plus the review period of its source
+  // (dates the SOP itself does not carry come from its entry in the latest master document index; obsolete SOPs need no review)
   const reviewYears = +(objects(wb.sopSources ?? null).map((x) => x["Review years"]).find((v) => +v > 0) ?? 3);
+  const listed = new Map();
+  for (const e of objects(wb.docIndex ?? null)) { const k = sopKey(e.Code); const o = k && listed.get(k); if (k && (!o || +(e.Year ?? 0) >= +(o.Year ?? 0))) listed.set(k, e); }
   const sops = objects(wb.sop).filter((s) => s.Code).map((s) => {
-    const eff = toDay(s["Effective date"]);
-    const next = toDay(s["Next review"]) ?? (eff != null ? addMonths(eff, 12 * reviewYears) : null);
+    // (the index's dates belong to the revision it lists: they apply when that is the SOP's revision, or the SOP has no dates of its own)
+    const ix0 = listed.get(sopKey(s.Code));
+    const ix = ix0 && (!s.Revision || !ix0.Revision || +ix0.Revision === +s.Revision || toDay(s["Effective date"]) == null) ? ix0 : null;
+    const eff = toDay(s["Effective date"]) ?? toDay(ix?.["Effective date"]);
+    const next = toDay(s["Next review"]) ?? toDay(ix?.["Validity date"]) ?? (eff != null ? addMonths(eff, 12 * reviewYears) : null);
     const dtr = next != null ? daysBetween(now, next) : null;
-    const reviewStatus = next == null ? "No review date" : dtr < 0 ? "Overdue" : dtr <= 90 ? "Due ≤90 d" : "In date";
+    const reviewStatus = /^obsolete$/i.test(s.Status ?? "") ? "Obsolete" : next == null ? "No review date" : dtr < 0 ? "Overdue" : dtr <= 90 ? "Due ≤90 d" : "In date";
     const dq = [];
     if (next == null) dq.push("No review date");
     if (!s["Linked rooms"] && !s["Linked equipment"]) dq.push("No linked room/equipment");
     if (!s.Language) dq.push("Language unknown");
-    return { ...s, eff, next, nextFromEffective: next != null && toDay(s["Next review"]) == null, daysToReview: dtr, reviewStatus, dataQuality: dq };
+    return { ...s, eff, next, nextFromEffective: next != null && toDay(s["Next review"]) == null && toDay(ix?.["Validity date"]) == null, datesFromIndex: Boolean(ix) && (toDay(s["Effective date"]) == null || toDay(s["Next review"]) == null),
+      daysToReview: dtr, reviewStatus, dataQuality: dq };
   });
   const forms = objects(wb.forms).filter((f) => f["Form code"]).map((f) => ({
     ...f, dataQuality: [!f["Linked room"] && "No linked room", !f.Revision && "No revision"].filter(Boolean),

@@ -17,6 +17,7 @@ import * as OP from "./views-ops.js";
 import * as PE from "./views-people.js";
 import * as AP from "./views-apqr.js";
 import * as SV from "./views-sop.js";
+import * as DV from "./views-doc.js";
 import * as FV from "./views-fives.js";
 import { importFiles, COLS, emptyData, upsertRows } from "./importers.js";
 import { buildDomains } from "./domain.js";
@@ -69,6 +70,10 @@ function onWorkspace(s) {
   if (renderQueued) return;
   renderQueued = true;
   queueMicrotask(() => { renderQueued = false; refresh(); });
+}
+/** A whole-table write takes effect here at once, so a second one right after it builds on it (the store's own update follows). */
+function applyBase(next, replaced) {
+  onWorkspace({ ...wsState, base: next, edits: new Map([...wsState.edits].filter(([, e]) => !replaced.includes(e.table))) });
 }
 /** Re-render after a data change without stealing focus from someone typing. */
 function refresh() {
@@ -160,8 +165,17 @@ const ctx = {
       const next = structuredClone(wsState.base);
       next[table] = { cols: tbl.cols, rows: res.rows };
       await ws.importBase(next, [table], progress);
+      applyBase(next, [table]);
     }
     return res;
+  },
+  /** Replace a whole table (a register rebuilt from its source, e.g. the Drive document register). */
+  replaceTable: async (table, objs, progress) => {
+    const cols = data[table]?.cols ?? COLS[table];
+    const next = structuredClone(wsState.base);
+    next[table] = { cols, rows: objs.map((o) => cols.map((c) => o[c] ?? null)) };
+    await ws.importBase(next, [table], progress);
+    applyBase(next, [table]);
   },
   /** Apply the same change to several rows (e.g. record a calibration group as done). */
   bulkUpdate: async (table, keys, patch) => {
@@ -574,6 +588,8 @@ function openPalette() {
     add(t("n_eq"), model.equip.filter((e) => m(e["Asset no"]) || m(e.Description) || m(e.Serial)).map((e) => ({ label: `${e["Asset no"]} · ${e.Description}`, sub: e["Room code"] ?? "", icon: "equipment", act: () => openAsset(e["Asset no"]) })), 5);
     add(t("n_fm"), model.fmea.filter((f) => m(f["Risk ID"]) || m(f["Failure mode"]) || m(f["Process step"])).map((f) => ({ label: `${f["Risk ID"]} · ${f["Failure mode"]}`, sub: `RPN ${f.rpn ?? "—"}`, icon: "fmea", act: () => openRisk(f["Risk ID"]) })), 5);
     add(t("n_sop"), model.sops.filter((s) => m(s.Code) || m(s.Title)).map((s) => ({ label: `${s.Code} · ${s.Title}`, sub: s.Department ?? "", icon: "sop", act: () => go("sops", { code: s.Code }) })), 5);
+    add(t("doc_k_n"), model.x.docx.list.filter((d) => m(d.Code) || m(d.Title) || m(d.product)).map((d) => ({ label: `${d.Code} · ${d.Title ?? d["Drive file"] ?? ""}`, sub: [d.Type, d.product, d.Strength, d.zone !== "controlled" ? tv(d.Status) : null].filter(Boolean).join(" · "), icon: "sop",
+      act: () => { go("sops"); setTimeout(() => DV.openDoc(ctx, model.x.docx, d), 50); } })), 6);
     add(t("nav_actions"), model.actions.filter((a) => m(a.ref) || m(a.title) || m(a.parentRef)).map((a) => ({ label: `${a.ref} · ${a.title}`, sub: `${a.parentRef || t("standalone")} · ${tv(a.status)}`, icon: "tasks", act: () => openAction(a.ref) })), 5);
     add(t("batches_lbl"), model.x.batches.filter((b) => m(b["Batch no"]) || m(b.Product)).map((b) => ({ label: `${b["Batch no"]} · ${b.Product}`, sub: tv(b.stage), icon: "cycle", act: () => go("lifecycle") })), 4);
     add(t("trn_title"), model.x.training.filter((x) => m(x["Training ID"]) || m(x.Program) || m(x.Reference)).map((x) => ({ label: `${x["Training ID"] ?? ""} · ${x.Program}`, sub: tv(x.status), icon: "cap", act: () => go("training") })), 4);

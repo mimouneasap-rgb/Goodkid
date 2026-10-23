@@ -9,7 +9,7 @@ import { parseDelimited, matchColumns, prepBulkRow, upsertRows, readSheetRows, d
 // rows that are the same record: updated rather than added
 export const BULK_KEYS = {
   apqrTasks: ["Reference ID", "Task Title"], apqrPlan: ["Code"], apqrSys: ["Product"], apqr: ["Product", "Period"], apqrSections: ["Product", "Section"],
-  fivesAreas: ["Area"], fivesTpl: ["Area", "No"], fivesItems: ["Audit ID", "No"], training: ["Training ID"], metrics: ["Metric", "Period"],
+  fivesAreas: ["Area"], fivesTpl: ["Area", "No"], fivesItems: ["Audit ID", "No"], training: ["Training ID"], metrics: ["Metric", "Period"], docIndex: ["Index", "Code"],
 };
 export const bulkKeys = (table) => BULK_KEYS[table] ?? (SPECS[table]?.id ? [SPECS[table].id] : []);
 

@@ -27,7 +27,7 @@ export const VOCAB = {
   criticality: ["High", "Medium", "Low"],
   qualification: ["DQ", "IQ", "OQ", "PQ", "Qualified", "In progress", "Not started", "Requalification due"],
   registers: ["AR001", "AR004", "AR005", "AR009", "AR010", "AR011", "AR013"],
-  sopDepts: ["CM", "EN", "GS", "HSE", "PR", "QA", "QC", "RD", "SC", "VL", "WH"],
+  sopDepts: ["CM", "EN", "GS", "HSE", "PL", "PR", "QA", "QC", "RD", "SC", "VL", "WH"],
   sopSites: ["Oncology", "General", "Shared"],
   languages: ["EN", "FR", "EN/FR"],
   formTypes: ["Logbook", "Form", "Checklist", "Template"],

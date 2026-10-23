@@ -79,7 +79,7 @@ export function home(ctx) {
     ["equipment", "equipment", "eq_title", "m_eq", `${fmtNum(m.equip.length)} ${t("n_eq").toLowerCase()}`],
     ["fmea", "fmea", "fm_title", "m_fm", `${m.fmea.length} ${t("n_fm").toLowerCase()}`],
     ["improvements", "improve", "im_title", "m_im", `${m.impr.length} ${t("n_imp").toLowerCase()}`],
-    ["sops", "sop", "sop_title", "m_sop", `${m.sops.length} ${t("n_sop")}`],
+    ["sops", "sop", "sop_title", "m_sop", `${m.sops.length} ${t("n_sop")}${X.docx.list.length ? ` · ${fmtNum(X.docx.list.length)} ${t("doc_documents")}` : ""}`],
     ["quality", "quality", "dq_title", "m_dq", `${M.reconciliation(m).filter((c) => c.ok).length}/${M.reconciliation(m).length} ✔`],
     ["records", "records", "qr_title", "qr_sub", `${fmtNum(m.records.length)}`],
   ];

@@ -8,12 +8,13 @@ import { icon } from "./icons.js";
 import { toDay } from "./model.js";
 import { SOP_TOPICS, ROUTE_TOPICS, ACTIVITY_TOPICS, QA_ACTIVITIES } from "./catalogs.js";
 import { SOP_DEPTS, sopKey, parseSopText, parseSopFileName, matchesIn, deptCodes } from "./sopkit.js";
-import { driveMcp, readFile, searchText, filesNamed, driveProblem, syncLibrary, indexLibrary, indexFields, job } from "./sop-drive.js";
+import { driveMcp, readFile, searchText, filesNamed, driveProblem, syncLibrary, indexLibrary, indexFields, readIndexes, sourceFolders, job } from "./sop-drive.js";
+import { documents, productsTab, indexTab, folderMap, typeName, openDoc, STATE_COLOR, stateLabel } from "./views-doc.js";
 
 const FR = () => getLang() === "FR";
 const ALL = "__all";
 const DEPT_COLOR = { QA: "var(--c1)", QC: "var(--c3)", VL: "var(--c7)", PR: "var(--c2)", GS: "var(--c4)", CM: "var(--c5)", WH: "var(--c6)", HSE: "var(--c8)" };
-export const REVIEW_COLOR = { Overdue: "var(--critical)", "Due ≤90 d": "var(--warning)", "In date": "var(--good)", "No review date": "var(--muted-mark)" };
+export const REVIEW_COLOR = { Overdue: "var(--critical)", "Due ≤90 d": "var(--warning)", "In date": "var(--good)", "No review date": "var(--muted-mark)", Obsolete: "var(--muted-mark)" };
 const deptName = (d) => SOP_DEPTS[d]?.[FR() ? 1 : 0] ?? d ?? "—";
 const topicName = (id) => { const x = SOP_TOPICS.find(([k]) => k === id); return x ? x[FR() ? 2 : 1] : id; };
 const short = (s, n = 60) => (String(s ?? "").length > n ? String(s).slice(0, n - 1) + "…" : String(s ?? ""));
@@ -27,7 +28,7 @@ const ROUTE_LABEL = { review: "mr_title", metrics: "met_title", dashboard: "dash
   records: "qr_title", products: "pv_title", lifecycle: "lc_title", apqr: "apqr_title", wip: "wip_title", suppliers: "sup_title", map: "map_title", rooms: "rx_title", equipment: "eq_title",
   calibration: "cal_title", validation: "val_title", training: "trn_title", fives: "fives_title", fmea: "fm_title", improvements: "im_title", quality: "dq_title", spc: "spc_title" };
 
-const TABS = [["library", "sop_t_library"], ["search", "sop_t_search"], ["modules", "sop_t_modules"], ["drive", "sop_t_drive"]];
+const TABS = [["library", "sop_t_library"], ["documents", "sop_t_docs"], ["products", "sop_t_products"], ["index", "sop_t_index"], ["search", "sop_t_search"], ["modules", "sop_t_modules"], ["drive", "sop_t_drive"]];
 const state = { drive: undefined, docs: new Map(), search: { q: "", status: "idle", files: [], error: null, matches: new Map() } };
 // whether this view can reach Google Drive (resolved once per page load)
 driveMcp().then((m) => { state.drive = Boolean(m); });
@@ -36,9 +37,10 @@ export function sopsView(ctx) {
   if (ctx.params.code) return sopPage(ctx, ctx.params.code);
   const X = ctx.m.x.sopx;
   const tab = TABS.some(([k]) => k === ctx.state.sopTab) ? ctx.state.sopTab : "library";
-  const body = { library, search, modules, drive }[tab](ctx, X);
+  const D = ctx.m.x.docx;
+  const body = { library, documents: () => documents(ctx, D), products: () => productsTab(ctx, D), index: () => indexTab(ctx, D), search, modules, drive }[tab](ctx, X);
   return h("div.view",
-    viewHeader(t("sop_title"), t("sop_sub2"), segmented(TABS.map(([k, l]) => [k, t(l)]), tab, (v) => ctx.set("sopTab", v), t("sop_title")),
+    viewHeader(t("sop_title"), t("sop_sub3"), h("div.sop-tabs", segmented(TABS.map(([k, l]) => [k, t(l)]), tab, (v) => ctx.set("sopTab", v), t("sop_title"))),
       ctx.canEdit ? h("button.btn", { type: "button", onclick: () => ctx.add("sop") }, icon("plus", 16), t("add_sop")) : null),
     body);
 }
@@ -47,10 +49,13 @@ export function sopsView(ctx) {
 function library(ctx, X) {
   const L = X.list;
   const f = ctx.state.sopF ?? {};
+  const D = ctx.m.x.docx;
+  const unlisted = new Set(D.unlisted.filter((d) => d.kind === "sop").map((d) => d.ref.key));
   const setF = (k, v) => ctx.set("sopF", { ...f, [k]: v, show: k === "show" ? v : 48 });
   const qx = String(f.q ?? "").trim().toLowerCase();
   const F = L.filter((s) => (!f.dept || f.dept === ALL || s.Department === f.dept) && (!f.site || f.site === ALL || s.Site === f.site) && (!f.lang || f.lang === ALL || s.Language === f.lang)
-    && (!f.status || f.status === ALL || (f.status === "drive" ? s.inDrive : f.status === "nodrive" ? !s.inDrive : f.status === "unread" ? s.inDrive && !s.indexed : s.reviewStatus === f.status))
+    && (!f.status || f.status === ALL || (f.status === "drive" ? s.inDrive : f.status === "nodrive" ? !s.inDrive : f.status === "unread" ? s.inDrive && !s.indexed
+      : f.status === "ix-newer" ? s.idx?.state === "drive-newer" : f.status === "ix-listed" ? Boolean(s.idx) : f.status === "ix-unlisted" ? unlisted.has(s.key) : s.reviewStatus === f.status))
     && (!f.topic || f.topic === ALL || s.topics.includes(f.topic))
     && (!qx || `${s.Code} ${s.Title ?? ""} ${s.Purpose ?? ""} ${s["Drive file"] ?? ""}`.toLowerCase().includes(qx)));
   const depts = [...new Set(L.map((s) => s.Department).filter(Boolean))].sort((a, b) => L.filter((s) => s.Department === b).length - L.filter((s) => s.Department === a).length);
@@ -83,6 +88,11 @@ function library(ctx, X) {
       kpi({ label: t("sop_k_od"), value: fmtNum(by("Overdue").length), status: by("Overdue").length ? 1 : dated.length ? 3 : 0, onclick: () => setF("status", "Overdue") }),
       kpi({ label: t("sop_k_90"), value: fmtNum(by("Due ≤90 d").length), accent: "var(--warning)", onclick: () => setF("status", "Due ≤90 d") }),
       kpi({ label: t("sop_k_nodate"), value: fmtNum(by("No review date").length), accent: "var(--muted-mark)", onclick: () => setF("status", "No review date") })),
+    D.indexes.length ? h("div.ix-strip",
+      h("span.sop-strip-k", icon("report", 14), t("sop_ix_strip")),
+      [["ix-listed", L.filter((s) => s.idx).length, "var(--c1)", t("sop_f_listed")], ["ix-newer", L.filter((s) => s.idx?.state === "drive-newer").length, STATE_COLOR["drive-newer"], t("sop_f_newer")],
+        ["ix-unlisted", unlisted.size, STATE_COLOR.unlisted, t("sop_f_unlisted")]].map(([k, n, c, l]) => h("button.sop-chip", { type: "button", style: { "--dot": c }, onclick: () => setF("status", k) }, h("i"), h("b", fmtNum(n)), h("span", l))),
+      h("button.link", { type: "button", onclick: () => ctx.set("sopTab", "index") }, t("sop_t_index"), " →")) : null,
     h("div.grid.cols-3",
       card(t("sop_c_dept"), stacks(depts.map((d) => ({ label: `${d} · ${deptName(d)}`, parts: Object.fromEntries(sites.map((st) => [st, L.filter((s) => s.Department === d && s.Site === st).length])), onclick: () => setF("dept", d) })),
         sites.map((st, i) => ({ key: st, label: st === "Oncology" ? t("sop_onc") : st === "General" ? t("sop_general") : st, color: ["var(--c1)", "var(--c4)", "var(--c3)"][i % 3] })))),
@@ -96,7 +106,8 @@ function library(ctx, X) {
       select(t("col_dept"), [[ALL, t("filter_all")], ...depts.map((d) => [d, `${d} · ${deptName(d)}`])], f.dept ?? ALL, (v) => setF("dept", v)),
       select("Site", [[ALL, t("filter_all")], ...sites.map((x) => [x, x === "Oncology" ? t("sop_onc") : x === "General" ? t("sop_general") : x])], f.site ?? ALL, (v) => setF("site", v)),
       select(t("sop_lang"), [[ALL, t("filter_all")], ...langs.map((x) => [x, tv(x)])], f.lang ?? ALL, (v) => setF("lang", v)),
-      select(t("col_status"), [[ALL, t("filter_all")], ...Object.keys(REVIEW_COLOR).map((k) => [k, tv(k)]), ["drive", t("sop_k_drive")], ["nodrive", t("sop_k_nodrive")], ["unread", t("sop_unread")]], f.status ?? ALL, (v) => setF("status", v)),
+      select(t("col_status"), [[ALL, t("filter_all")], ...Object.keys(REVIEW_COLOR).map((k) => [k, tv(k)]), ["drive", t("sop_k_drive")], ["nodrive", t("sop_k_nodrive")], ["unread", t("sop_unread")],
+        ...(D.indexes.length ? [["ix-listed", t("sop_f_listed")], ["ix-newer", t("sop_f_newer")], ["ix-unlisted", t("sop_f_unlisted")]] : [])], f.status ?? ALL, (v) => setF("status", v)),
       select(t("sop_topic"), [[ALL, t("filter_all")], ...SOP_TOPICS.map(([id]) => [id, topicName(id)])], f.topic ?? ALL, (v) => setF("topic", v)),
       h("div.field", h("span", t("sop_view")), segmented([["cards", t("sop_cards")], ["table", t("sop_table")]], f.view ?? "cards", (v) => setF("view", v), t("sop_view")))), { cls: "filter-card" }),
     (f.view ?? "cards") === "table"
@@ -122,9 +133,10 @@ export function sopTableCols() {
   ];
 }
 function sopCard(ctx, s, i) {
-  return h("a.sop-card", { href: sopHref(s.Code), style: { "--c": DEPT_COLOR[s.Department] ?? "var(--c1)", "--i": Math.min(i, 24) } },
+  return h("a.sop-card", { href: sopHref(s.Code), style: { "--c": DEPT_COLOR[s.Department] ?? "var(--c1)", "--i": Math.min(i, 24) }, class: /obsolete/i.test(s.Status ?? "") ? "zone-obsolete" : "" },
     h("header", h("span.sop-code", s.Code), s.Revision ? h("span.sop-rev", `rev ${s.Revision}`) : null, s.Language ? h("span.sop-lang", s.Language === "French" ? "FR" : s.Language === "English" ? "EN" : s.Language.slice(0, 2).toUpperCase()) : null,
-      h("span.spacer"), s.inDrive ? h("span.sop-drive", { title: s.indexed ? t("sop_read_ok") : t("sop_in_drive") }, icon(s.indexed ? "check" : "globe", 13)) : null),
+      h("span.spacer"), s.idx ? h("span.sop-ix", { title: `${s.idx.index} · rev ${s.idx.rev} · ${stateLabel(s.idx.state)}`, style: { "--dot": STATE_COLOR[s.idx.state] } }, h("i")) : null,
+      s.inDrive ? h("span.sop-drive", { title: s.indexed ? t("sop_read_ok") : t("sop_in_drive") }, icon(s.indexed ? "check" : "globe", 13)) : null),
     h("h3", s.Title || h("span.muted", t("sop_untitled"))),
     s.Purpose ? h("p.sop-purpose", s.Purpose) : null,
     h("footer", reviewPill(s), h("span.sop-tags", s.topics.slice(0, 2).map((x) => h("span.tag", topicName(x))))));
@@ -147,6 +159,12 @@ function sopPage(ctx, code) {
   if (!s.Title) flags.push(t("sop_flag_title"));
   if (s.next == null) flags.push(t("sop_flag_review"));
   if (s.files > 1) flags.push(t("sop_flag_copies", fmtNum(s.files)));
+  if (/obsolete/i.test(s.Status ?? "")) flags.push(t("sop_flag_obsolete"));
+  if (+s.Uncontrolled) flags.push(t("sop_flag_uncontrolled", fmtNum(+s.Uncontrolled)));
+  const ix = s.idx;
+  if (ix?.state === "drive-newer") flags.push(t("sop_flag_newer", s.Revision, ix.index, ix.rev) + (ix.hasListedRev ? "" : ` ${t("sop_flag_nolisted", ix.rev)}`));
+  if (ix?.state === "drive-older") flags.push(t("sop_flag_older", ix.index, ix.rev, s.Revision));
+  if (!ix && s.inDrive && ctx.m.x.docx.unlisted.some((d) => d.kind === "sop" && d.ref === s)) flags.push(t("sop_flag_unlisted"));
   const activities = QA_ACTIVITIES.filter(([id]) => (ACTIVITY_TOPICS[id] ?? []).some((x) => s.topics.includes(x)));
   return h("div.view.sop-page",
     h("nav.crumbs", back, h("span.crumb-sep", "/"), h("span.crumb-here", s.Code), h("span.spacer"),
@@ -167,7 +185,7 @@ function sopPage(ctx, code) {
       h("div.sop-review", { class: (s.reviewStatus ?? "").replace(/\W+/g, "-").toLowerCase() },
         h("small", t("sop_effective")), h("b", fmtDate(s.eff) || "—"),
         h("small", t("col_nextrev")), h("b", fmtDate(s.next) || "—"),
-        h("span", tv(s.reviewStatus), s.nextFromEffective ? h("small", ` · ${t("sop_next_rule")}`) : null))),
+        h("span", tv(s.reviewStatus), s.nextFromEffective ? h("small", ` · ${t("sop_next_rule")}`) : s.datesFromIndex ? h("small", ` · ${t("sop_from_index")}`) : null))),
     h("div.sop-actions",
       fileId ? h("a.btn.primary.compact", { href: driveUrl(fileId), target: "_blank", rel: "noopener" }, icon("globe", 15), t("sop_open_drive")) : null,
       fileId ? h("button.btn.compact", { type: "button", onclick: () => { const nd = { status: "loading" }; state.docs.set(fileId, nd); loadDoc(ctx, s, nd, true); ctx.rerender(); } }, icon("cycle", 15), t("sop_reload")) : null,
@@ -179,8 +197,13 @@ function sopPage(ctx, code) {
         card(t("sop_facts"), h("dl.deflist.compact",
           [[t("col_dept"), deptName(s.Department)], ["Site", s.Site], [t("sop_lang"), tv(s.Language ?? "")], [t("col_type"), s.Type], [t("col_status"), tv(s.Status ?? "")], [t("col_rev"), s.Revision],
             [t("sop_effective"), fmtDate(s.eff)], [t("col_nextrev"), fmtDate(s.next)], [t("col_owner"), s.Owner], [t("sop_drive_mod"), fmtDate(toDay(s["Drive modified"]))],
-            [t("sop_read_on"), s.Indexed ? fmtDate(toDay(s.Indexed)) : null], [t("source"), s.Source], [t("sop_rooms"), s["Linked rooms"]], [t("sop_equipment"), s["Linked equipment"]]]
+            [t("sop_read_on"), s.Indexed ? fmtDate(toDay(s.Indexed)) : null], [t("source"), s.Source], [t("doc_folder"), s.inDrive ? s.Folder || "/" : null], [t("doc_revisions"), s.Revisions],
+            [t("doc_obsolete_n"), s.Obsolete], [t("doc_uncontrolled_n"), s.Uncontrolled], [t("sop_rooms"), s["Linked rooms"]], [t("sop_equipment"), s["Linked equipment"]]]
             .filter(([, v]) => v != null && v !== "").flatMap(([k, v]) => [h("dt", k), h("dd", v)]))),
+        ix ? card(t("ix_entry"), h("div.doc-index-box",
+          h("p", t("ix_entry_line", ix.index, ix.rev ?? "—", fmtDate(ix.effective) || "—", fmtDate(ix.validity) || "—")),
+          h("p", dot(STATE_COLOR[ix.state], stateLabel(ix.state)), s.Revisions ? h("small.muted", ` · ${t("doc_revisions")}: ${s.Revisions}`) : null),
+          ix.anomalies.length ? h("p.warn-text", ix.anomalies.map((a) => t(`ix_a_${a === "same-date" ? "same" : a}`)).join(" · ")) : null), { sub: t("ix_entry_sub") }) : null,
         card(t("sop_used_in"), s.topics.length ? h("div.sop-uses",
           s.topics.map((x) => h("div.sop-use", h("b", topicName(x)), h("span", (ROUTES_OF[x] ?? []).map((r) => h("a.tag", { href: `#/${r}` }, t(ROUTE_LABEL[r] ?? r)))))),
           activities.length ? h("p.fine", `${t("qaa_title")}: `, activities.map(([id, name]) => h("span.tag", { title: name }, id))) : null)
@@ -220,7 +243,7 @@ function filesView(ctx, X, s) {
     box.replaceChildren(h("span.spinner"));
     const base = s.Code.match(/^[A-Z]+\d+/)?.[0] ?? s.Code;
     try {
-      const files = await filesNamed(X.sources.map((x) => x.folderId).filter(Boolean), base);
+      const files = await filesNamed(sourceFolders(X.sources), base);
       box.replaceChildren(files.length ? h("ul.mini-codes", files.map((f) => { const p = parseSopFileName(f.title); return h("li", { class: f.id === s["Drive ID"] ? "current" : "" },
         h("a", { href: driveUrl(f.id), target: "_blank", rel: "noopener" }, h("b", p?.code ?? f.title), p?.rev ? ` rev ${p.rev}` : "", f.id === s["Drive ID"] ? ` · ${t("sop_current")}` : ""), h("small", ` ${fmtDate(toDay(String(f.modifiedTime ?? "").slice(0, 10)))}`)); })) : h("p.muted", t("none_found")));
     } catch (e) { box.replaceChildren(h("p.warn-text", t(driveProblem(e)))); }
@@ -285,7 +308,7 @@ function docView(ctx, s, d) {
 // ---------- search inside SOPs ----------
 function search(ctx, X) {
   const S = state.search;
-  const folders = X.sources.map((x) => x.folderId).filter(Boolean);
+  const folders = sourceFolders(X.sources);
   const run = async (term) => {
     S.q = term; S.status = "loading"; S.error = null; S.matches = new Map(); ctx.rerender();
     try { S.files = await searchText(folders, term); S.status = "ok"; } catch (e) { S.status = "error"; S.error = e; }
@@ -357,6 +380,8 @@ function drive(ctx, X) {
     try { job.sync = { status: "ok", ...(await syncLibrary(ctx, X.sources, (step) => { job.sync.step = step; ctx.rerender(); })) }; }
     catch (e) { job.sync = { status: "error", error: e }; }
     ctx.rerender();
+    // then read the current master indexes the sync found
+    if (job.sync.status === "ok" && job.sync.indexes) { try { await readIndexes(ctx, job.sync.docRows, () => ctx.rerender()); } catch { /* shown on the index tab */ } ctx.rerender(); }
   };
   const startIndex = async () => {
     try { await indexLibrary(ctx, X.list, () => ctx.rerender()); } catch (e) { job.index = { ...(job.index ?? {}), error: e, finished: true }; }
@@ -379,7 +404,9 @@ function drive(ctx, X) {
         h("p", t("sop_sync_body")),
         sync?.status === "running" ? h("p", h("span.spinner"), ` ${t("sop_syncing")} ${sync.step ?? ""}`) : null,
         sync?.status === "error" ? h("p.warn-text", t(driveProblem(sync.error))) : null,
-        sync?.status === "ok" ? h("p.ok-line", icon("check", 14), t("sop_sync_done", fmtNum(sync.files), fmtNum(sync.sops), fmtNum(sync.added), fmtNum(sync.updated))) : null,
+        sync?.status === "ok" ? h("p.ok-line", icon("check", 14), t("sop_sync_done2", fmtNum(sync.files), fmtNum(sync.folders), fmtNum(sync.sops), fmtNum(sync.docs), fmtNum(sync.added), fmtNum(sync.updated))) : null,
+        sync?.status === "ok" ? h("p.fine", t("sop_sync_zones", fmtNum(sync.zones.controlled ?? 0), fmtNum(sync.zones.obsolete ?? 0), fmtNum(sync.zones.uncontrolled ?? 0), fmtNum(sync.system))) : null,
+        job.indexes && !job.indexes.finished ? h("p", h("span.spinner"), ` ${t("ix_reading")} ${fmtNum(job.indexes.done)} / ${fmtNum(job.indexes.total)}`) : null,
         h("div.form-actions", h("button.btn.primary", { type: "button", disabled: busy || !ctx.canEdit || !X.sources.length ? true : null, onclick: startSync }, icon("cycle", 15), t("sop_sync_btn"))))),
       card(t("sop_index"), h("div.sop-job",
         h("p", t("sop_index_body", fmtNum(toRead.length), fmtNum(inDrive.length))),
@@ -390,13 +417,20 @@ function drive(ctx, X) {
         h("div.form-actions",
           h("button.btn.primary", { type: "button", disabled: busy || !ctx.canEdit || !toRead.length ? true : null, onclick: startIndex }, icon("report", 15), t("sop_index_btn", fmtNum(toRead.length))),
           idx && !idx.finished ? h("button.btn.ghost", { type: "button", onclick: () => idx.stop() }, t("sop_stop")) : null)), { sub: t("sop_index_sub") })),
+    card(t("lmap_title"), folderMap(ctx, ctx.m.x.docx), { sub: t("lmap_sub") }),
     sync?.status === "ok" && (sync.copies.length || sync.unnamed.length) ? card(t("sop_sync_notes"), h("div.grid.cols-2",
-      sync.copies.length ? h("div", h("h4", `${t("sop_copies")} · ${fmtNum(sync.copies.length)}`), h("ul.mini-codes", sync.copies.map((c) => h("li", h("b", c.code), h("small", ` ${c.files.join(" · ")}`))))) : null,
-      sync.unnamed.length ? h("div", h("h4", `${t("sop_unnamed")} · ${fmtNum(sync.unnamed.length)}`), h("ul.mini-codes", sync.unnamed.map((n) => h("li", n)))) : null)) : null,
+      sync.copies.length ? h("div", h("h4", `${t("sop_copies")} · ${fmtNum(sync.copies.length)}`), capped(sync.copies.map((c) => h("li", h("b", c.code), h("small", ` ${c.files.join(" · ")}`))))) : null,
+      sync.unnamed.length ? h("div", h("h4", `${t("sop_unnamed")} · ${fmtNum(sync.unnamed.length)}`), capped(sync.unnamed.map((n) => h("li", n)))) : null)) : null,
     h("div.grid.cols-2",
-      card(`${t("sop_k_nodrive")} · ${fmtNum(libOnly.length)}`, libOnly.length ? h("ul.mini-codes", libOnly.map((s) => h("li", h("a", { href: sopHref(s.Code) }, h("b", s.Code), ` ${short(s.Title, 54)}`)))) : h("p.ok-line", icon("check", 14), t("none_found")), { sub: t("sop_nodrive_sub") }),
-      card(`${t("sop_copies")} · ${fmtNum(copies.length)}`, copies.length ? h("ul.mini-codes", copies.map((s) => h("li", h("a", { href: sopHref(s.Code) }, h("b", s.Code), ` ${short(s.Title, 54)}`), h("small", ` · ${fmtNum(s.files)} ${t("sop_files_n").toLowerCase()}`)))) : h("p.ok-line", icon("check", 14), t("none_found")), { sub: t("sop_copies_sub") })),
+      card(`${t("sop_k_nodrive")} · ${fmtNum(libOnly.length)}`, libOnly.length ? capped(libOnly.map((s) => h("li", h("a", { href: sopHref(s.Code) }, h("b", s.Code), ` ${short(s.Title, 54)}`)))) : h("p.ok-line", icon("check", 14), t("none_found")), { sub: t("sop_nodrive_sub") }),
+      card(`${t("sop_copies")} · ${fmtNum(copies.length)}`, copies.length ? capped(copies.map((s) => h("li", h("a", { href: sopHref(s.Code) }, h("b", s.Code), ` ${short(s.Title, 54)}`), h("small", ` · ${fmtNum(s.files)} ${t("sop_files_n").toLowerCase()}${s.Revisions ? ` · rev ${s.Revisions}` : ""}`)))) : h("p.ok-line", icon("check", 14), t("none_found")), { sub: t("sop_copies_sub") })),
   ];
+}
+
+/** A long list: the first 12 lines, the rest behind "show all". */
+function capped(items, n = 12) {
+  if (items.length <= n) return h("ul.mini-codes", items);
+  return h("div", h("ul.mini-codes", items.slice(0, n)), h("details.more-list", h("summary", t("sop_more", fmtNum(items.length - n))), h("ul.mini-codes", items.slice(n))));
 }
 
 // ---------- the procedures strip under each page header ----------

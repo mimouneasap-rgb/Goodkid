@@ -4,6 +4,7 @@ import { h, fmtDate } from "./ui.js";
 import { t, tv, getLang } from "./i18n.js";
 import { STATUSES, CC_STAGES, IMPR_STAGES, toDay } from "./model.js";
 import { VOCAB as V, METRICS, APQR_SECTIONS, SOP_TOPICS } from "./catalogs.js";
+import { DOC_TYPES } from "./dockit.js";
 
 const FR = () => getLang() === "FR";
 const YN = ["Yes", "No"];
@@ -61,7 +62,18 @@ export const SPECS = {
     fields: [["Code", "text"], ["Title", "text"], ["Department", "pick", V.sopDepts], ["Site", "pick", V.sopSites], ["Language", "pick", V.languages], ["Type", "suggest", "col"],
       ["Status", "suggest", "col"], ["Revision", "text"], ["Effective date", "date"], ["Next review", "date"], ["Owner", "suggest", "col"],
       ["Linked rooms", "text"], ["Linked equipment", "text"], ["Source", "text"], ["Purpose", "long"], ["Distribution", "text"], ["References", "long"], ["Change controls", "text"],
-      ["Drive ID", "text"], ["Drive file", "text"], ["Drive modified", "date"], ["Files", "number"], ["Indexed", "date"]],
+      ["Drive ID", "text"], ["Drive file", "text"], ["Drive modified", "date"], ["Files", "number"], ["Indexed", "date"], ["Folder", "text"], ["Revisions", "text"], ["Obsolete", "number"], ["Uncontrolled", "number"]],
+  },
+  docs: {
+    label: ["Controlled document", "Document maîtrisé"], id: "Code", title: "Title",
+    fields: [["Code", "text"], ["Type", "pick", DOC_TYPES.map(([id]) => id)], ["Title", "text"], ["Product", "suggest", "col"], ["Strength", "text"], ["Product code", "text"],
+      ["Department", "pick", V.sopDepts], ["Site", "pick", V.sopSites], ["Language", "pick", V.languages], ["Revision", "text"], ["Revisions", "text"], ["Status", "pick", ["Effective", "Obsolete", "Uncontrolled copy"]],
+      ["Folder", "text"], ["Drive ID", "text"], ["Drive file", "text"], ["Drive modified", "date"], ["Files", "number"], ["Obsolete", "number"], ["Uncontrolled", "number"], ["Comment", "long"]],
+  },
+  docIndex: {
+    label: ["Master index entry", "Entrée d'index maître"], id: "Code", title: "Index",
+    fields: [["Index", "text"], ["Department", "pick", V.sopDepts], ["Scope", "text"], ["Year", "number"], ["Code", "text"], ["Revision", "text"], ["Effective date", "date"], ["Validity date", "date"],
+      ["Index file", "text"], ["Read on", "date"]],
   },
   sopSources: {
     label: ["SOP folder in Google Drive", "Dossier de procédures Google Drive"], id: "Folder", title: "Name",

@@ -5,6 +5,7 @@
 import { objects, clean, toDay, addMonths, monthStart, monthKey, daysBetween, countBy } from "./model.js";
 import { METRICS, QA_ACTIVITIES, FIVES, FIVES_ITEMS, fivesKey, fivesRating, RISK_FREQUENCY, FREQUENCY_DAYS, APQR_PHASES, APQR_STREAMS, APQR_SECTIONS, SOP_TOPICS } from "./catalogs.js";
 import { sopKey, topicsOf } from "./sopkit.js";
+import { docKey, productOf as docProductOf, productCodeOf, strengthOf, entryAnomalies, TYPE_BY_ID, zoneOf } from "./dockit.js";
 
 const DAY = 86400000;
 const num = (v) => (v == null || v === "" || isNaN(+v) ? null : +v);
@@ -208,6 +209,7 @@ export function buildDomains(m, wb, review) {
   const fives = fivesX.audits;
   const apqrProg = buildApqrProgramme(m, wb, apqr);
   const sopx = buildSopLibrary(m, wb);
+  const docx = buildDocControl(m, wb, sopx);
 
   // ----- GMP activity register (catalogue + entries recorded in the app) -----
   const latest = (xs) => xs.filter((x) => x != null).reduce((a, b) => Math.max(a, b), -Infinity);
@@ -245,7 +247,7 @@ export function buildDomains(m, wb, review) {
   // ----- manual metric values -----
   const metricValues = objects(wb.metrics).filter((x) => x.Metric && x.Period);
 
-  m.x = { training, calplan, validation, suppliers, rejections, batches, wip, lifecycle, apqr, apqrProg, sopx, fives, fivesX, qaact, metricValues };
+  m.x = { training, calplan, validation, suppliers, rejections, batches, wip, lifecycle, apqr, apqrProg, sopx, docx, fives, fivesX, qaact, metricValues };
   return m;
 }
 
@@ -434,6 +436,112 @@ export const folderIdOf = (v) => String(v ?? "").match(/folders\/([\w-]{10,})/)?
  * explicit link — the SOPs it cites and is cited by, its departments, and its Drive file. Returns
  * { list, byKey, byTopic: Map(topic → SOPs), sources, links }.
  */
+// ---------- document control: the Drive document register, the master indexes and the product dossiers ----------
+const DOSSIER = ["OF", "OC", "BOM", "BMR", "BPR", "FPS", "PMS", "STR", "FPR", "RMS", "STM", "RMR"];
+// what every marketed product should have (its packaging order, bill of materials, batch records, specifications, stability)
+const DOSSIER_REQUIRED = ["OF", "OC", "BOM", "BMR", "BPR", "FPS", "PMS", "RMS", "STM"];
+/** Index scope a document belongs to (the IndXX/Onc-<scope> edition that should list it). */
+export function scopeOfDoc(type, code) {
+  if (type === "SOP") return "SOP";
+  if (type === "STM") return /^STMFP/i.test(code ?? "") ? "STMFP" : "STMRM";
+  if (type === "FPR") return "FPRFP";
+  if (type === "CV") return "CVP";
+  return type;
+}
+
+export function buildDocControl(m, wb, sopx) {
+  const none = { cols: [], rows: [] };
+  const now = m.now;
+  const words = (v) => String(v ?? "").split(/[\s,;]+/).filter(Boolean);
+  const day = (v) => toDay(v);
+  const list = objects(wb.docs ?? none).filter((d) => d.Code).map((d) => ({ ...d, Strength: d.Strength || strengthOf(`${d.Title ?? ""} ${d["Drive file"] ?? ""}`), key: docKey(d.Code) ?? `${d.Type}:${d.Code}`.toUpperCase(), revs: words(d.Revisions),
+    zone: /obsolete/i.test(d.Status ?? "") ? "obsolete" : /uncontrolled/i.test(d.Status ?? "") ? "uncontrolled" : "controlled", modified: day(d["Drive modified"]) }));
+
+  // ----- products: the product list, then names found in documents whose product code no listed product carries -----
+  const prodRows = objects(wb.prod ?? none).filter((p) => p.Product);
+  const keys = prodRows.flatMap((p) => [{ key: p["Search key"] ?? p.Product, product: p.Product }, ...(p.API ? [{ key: String(p.API).split(/\s+/)[0], product: p.Product }] : [])]);
+  const byCode = new Map();
+  for (const d of list) { const c = d["Product code"] ?? productCodeOf(d.Code); if (c && d.Product && !byCode.has(c)) byCode.set(c, d.Product); }
+  const found = new Map();
+  for (const d of list) {
+    const c = d["Product code"] ?? productCodeOf(d.Code);
+    if (d.Product || !c || byCode.has(c) || !DOSSIER.includes(d.Type)) continue;
+    const name = String(d.Title ?? "").toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").split(/[^A-Z]+/).find((w) => w.length >= 5 && !/^(COMPRIM|PELLIC|TABLET|CAPSU|GELUL|FILM|COATED|BLEND|COMMUN|MELANGE)/.test(w));
+    if (name) { byCode.set(c, name); found.set(name, c); }
+  }
+  const allKeys = [...keys, ...[...found.keys()].map((n) => ({ key: n, product: n }))];
+  for (const d of list) {
+    const c = d["Product code"] ?? productCodeOf(d.Code);
+    d.product = d.Product || (c && byCode.get(c)) || (DOSSIER.includes(d.Type) || d.Type === "COD" ? docProductOf(`${d.Title ?? ""} ${d["Drive file"] ?? ""}`, allKeys) : null) || null;
+  }
+  const productNames = [...new Set([...prodRows.map((p) => p.Product), ...found.keys()])];
+  const products = productNames.map((name) => {
+    const p = prodRows.find((x) => x.Product === name);
+    const docs = list.filter((d) => d.product === name && d.zone !== "obsolete");
+    // a product made on site (marketed, or with a batch manufacturing record) needs the full set
+    const marketed = /marketed/i.test(p?.Status ?? "") || docs.some((d) => d.Type === "BMR");
+    const cells = Object.fromEntries(DOSSIER.map((tp) => [tp, docs.filter((d) => d.Type === tp)]));
+    const required = marketed ? DOSSIER_REQUIRED : [];
+    const missing = required.filter((tp) => !cells[tp].length);
+    const strengths = [...new Set(docs.filter((d) => DOSSIER.includes(d.Type)).map((d) => d.Strength).filter(Boolean))].sort((a, b) => parseFloat(a) - parseFloat(b));
+    return { name, api: p?.API ?? null, status: p?.Status ?? null, inList: Boolean(p), code: found.get(name) ?? null, marketed, docs, cells, missing, strengths,
+      complete: required.length ? (required.length - missing.length) / required.length : null };
+  }).filter((x) => x.docs.length || x.inList).sort((a, b) => b.docs.length - a.docs.length || a.name.localeCompare(b.name));
+
+  // ----- master indexes: editions read, the current one per department and scope -----
+  const entries = objects(wb.docIndex ?? none).filter((e) => e.Code && e.Index);
+  const editions = new Map();
+  for (const e of entries) {
+    if (!editions.has(e.Index)) editions.set(e.Index, { id: e.Index, dept: e.Department, scope: e.Scope, year: +e.Year || null, file: e["Index file"], readOn: day(e["Read on"]), entries: [] });
+    editions.get(e.Index).entries.push(e);
+  }
+  const latest = new Map();
+  for (const ed of editions.values()) { const k = `${ed.dept}/${ed.scope}`; const o = latest.get(k); if (!o || (ed.year ?? 0) > (o.year ?? 0)) latest.set(k, ed); }
+  const indexes = [...latest.values()].sort((a, b) => String(a.dept).localeCompare(String(b.dept)) || String(a.scope).localeCompare(String(b.scope)));
+
+  // ----- every controlled document by identity: SOPs from the library, the rest from the document register -----
+  const docBy = new Map();
+  for (const s of sopx.list) if (s.key) docBy.set(s.key, { kind: "sop", code: s.Code, title: s.Title, rev: s.Revision, revs: words(s.Revisions), status: s.Status, dept: s.Department, site: s.Site, ref: s, type: "SOP" });
+  for (const d of list) if (!docBy.has(d.key)) docBy.set(d.key, { kind: "doc", code: d.Code, title: d.Title, rev: d.Revision, revs: d.revs, status: d.Status, dept: d.Department, site: d.Site, ref: d, type: d.Type });
+
+  const checks = [];
+  const listedKeys = new Set();
+  for (const ix of indexes) {
+    ix.counts = { match: 0, "drive-newer": 0, "drive-older": 0, missing: 0, obsolete: 0 };
+    for (const e of ix.entries) {
+      const key = docKey(e.Code);
+      listedKeys.add(key);
+      const d = docBy.get(key);
+      const rev = e.Revision;
+      const state = !d || (d.kind === "sop" && !d.ref.inDrive) ? "missing" : /obsolete/i.test(d.status ?? "") ? "obsolete" : d.rev == null || rev == null ? "match" : +d.rev === +rev ? "match" : +d.rev > +rev ? "drive-newer" : "drive-older";
+      const validity = day(e["Validity date"]);
+      const c = { index: ix.id, dept: ix.dept, scope: ix.scope, code: e.Code, key, rev, effective: day(e["Effective date"]), validity, doc: d ?? null, state,
+        hasListedRev: d ? (d.revs.length ? d.revs.some((r) => +r === +rev) : +d.rev === +rev) : false,
+        anomalies: entryAnomalies({ effective: e["Effective date"], validity: e["Validity date"] }, ix.scope, ix.year),
+        review: validity == null ? null : validity < now ? "Overdue" : validity - 90 * 86400000 < now ? "Due ≤90 d" : "In date" };
+      ix.counts[state]++;
+      checks.push(c);
+      if (d?.kind === "sop") d.ref.idx = c;
+    }
+  }
+  // documents of an indexed department and scope that its current index does not list
+  const indexedScopes = new Set(indexes.map((ix) => `${ix.dept}/${ix.scope}`));
+  const unlisted = [...docBy.entries()].filter(([k, d]) => !listedKeys.has(k) && !/obsolete|uncontrolled/i.test(d.status ?? "") && (d.site === "Oncology" || /\bonc/i.test(d.code))
+    && indexedScopes.has(`${d.type === "SOP" ? d.dept : TYPE_BY_ID.get(d.type)?.[3] ?? d.dept}/${scopeOfDoc(d.type, d.code)}`)).map(([, d]) => d);
+
+  // ----- the library's folders (from each source's last sync) with the documents whose current file sits there -----
+  const sources = objects(wb.sopSources ?? none);
+  const folderRows = sources.flatMap((src) => { try { return JSON.parse(src.Folders || "[]").map(([id, path]) => ({ id, path, source: src.Name })); } catch { return []; } });
+  const here = new Map();
+  for (const x of [...sopx.list.filter((s) => s.inDrive), ...list]) { const p = x.Folder ?? ""; here.set(p, (here.get(p) ?? 0) + 1); }
+  const folders = folderRows.map((f) => ({ ...f, depth: f.path.split("/").length - 1, name: f.path.split("/").at(-1), zone: zoneOf(f.path), docs: here.get(f.path) ?? 0 }))
+    .sort((a, b) => a.path.localeCompare(b.path));
+  for (const f of folders) f.total = folders.filter((x) => x.path === f.path || x.path.startsWith(`${f.path}/`)).reduce((n, x) => n + x.docs, 0);
+
+  return { list, products, dossierTypes: DOSSIER, required: DOSSIER_REQUIRED, indexes, editions: [...editions.values()], checks, unlisted, folders, rootDocs: here.get("") ?? 0,
+    byType: countBy(list, (d) => d.Type ?? "?"), byZone: countBy(list, (d) => d.zone) };
+}
+
 export function buildSopLibrary(m, wb) {
   const none = { cols: [], rows: [] };
   const links = objects(wb.sopLinks ?? none).filter((l) => l.Topic && l.SOP);

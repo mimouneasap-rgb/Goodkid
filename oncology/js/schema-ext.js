@@ -39,11 +39,19 @@ export const EXT_COLS = {
   apqrTasks: ["Reference ID", "Product", "Dosage Form", "Site", "Department", "Data Stream", "Task Type", "Task Title", "Workflow Stage", "Status", "Assigned User", "Created", "Start", "Due", "Closed On", "Closure",
     "Critical level", "Created by", "Parent action", "Last seen", "Comment"],
   // SOP library: the workbook's columns, then the Drive file it is read from and what reading the SOP found
-  // (Distribution: department codes; References: SOP codes it cites; Indexed: the Drive modified date that was read)
+  // (Distribution: department codes; References: SOP codes it cites; Indexed: the Drive modified date that was read;
+  // Folder: the current file's folder path; Revisions: every controlled revision found; Obsolete / Uncontrolled: copies found there)
   sop: ["Code", "Title", "Department", "Site", "Language", "Type", "Status", "Revision", "Effective date", "Next review", "Owner", "Linked rooms", "Linked equipment", "Source",
-    "Drive ID", "Drive file", "Drive modified", "Files", "Purpose", "Distribution", "References", "Change controls", "Indexed"],
+    "Drive ID", "Drive file", "Drive modified", "Files", "Purpose", "Distribution", "References", "Change controls", "Indexed", "Folder", "Revisions", "Obsolete", "Uncontrolled"],
+  // Controlled documents other than SOPs found in the Drive library (batch records, orders, specifications, test methods,
+  // assessment records, registers, indexes…), one row per document code; Comment is kept across syncs
+  docs: ["Code", "Type", "Title", "Product", "Strength", "Product code", "Department", "Site", "Language", "Revision", "Revisions", "Status", "Folder",
+    "Drive ID", "Drive file", "Drive modified", "Files", "Obsolete", "Uncontrolled", "Comment"],
+  // Entries of the master document indexes (IndXX/Onc-…) read from Drive: what QA lists as effective, with which revision and dates
+  docIndex: ["Index", "Department", "Scope", "Year", "Code", "Revision", "Effective date", "Validity date", "Index file", "Read on"],
   // Google Drive folders the SOP library is synced from
-  sopSources: ["Folder", "Name", "Site", "Review years", "Last sync", "Files", "Comment"],
+  // (Folders: the folder tree found by the last sync, as JSON [[id, path], …], so searches reach every subfolder)
+  sopSources: ["Folder", "Name", "Site", "Review years", "Last sync", "Files", "Comment", "Folders"],
   // Module ↔ SOP links that override the automatic match on SOP titles
   sopLinks: ["Topic", "SOP", "Comment"],
   // Progress of each EU GMP Ch.1.10 review section within one product's APQR

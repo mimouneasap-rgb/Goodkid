@@ -1,6 +1,8 @@
-// Google Drive, as the viewer's own claude.ai connector (the page's `mcp` capability): list the SOP folders, read an
-// SOP's text and search inside the SOPs. Nothing here needs a token; a view without the connector gets clear states.
-import { groupSopFiles, driveRows, parseSopText, deptCodes, sopKey } from "./sopkit.js";
+// Google Drive, as the viewer's own claude.ai connector (the page's `mcp` capability): crawl the library folder tree,
+// read an SOP's or an index's text and search inside the documents. Nothing here needs a token; a view without the
+// connector gets clear states.
+import { driveRows, parseSopText, deptCodes, sopKey } from "./sopkit.js";
+import { groupDocs, docRows, zoneOf, isSystemFile, parseIndexText, currentIndexes } from "./dockit.js";
 
 export const DRIVE = "Google Drive";
 let mcpP = null;
@@ -14,38 +16,75 @@ async function call(tool, input, cache) {
   return r?.payload ?? r;
 }
 const q = (s) => String(s).replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+const isFolder = (f) => /folder/.test(f?.mimeType ?? "");
 
-/** Every file directly in a folder (all pages), newest listing at most `maxAgeMs` old. */
-export async function listFolder(folderId, { maxAgeMs = 60_000 } = {}) {
-  const files = [];
+/** Every item directly in any of `parents` (all pages; one query for several folders). */
+async function listChildren(parents, maxAgeMs) {
+  const out = [];
   let token = null, guard = 0;
+  const query = parents.map((id) => `parentId = '${q(id)}'`).join(" or ");
   do {
-    const p = await call("search_files", { query: `parentId = '${q(folderId)}'`, pageSize: 100, excludeContentSnippets: true, ...(token ? { pageToken: token } : {}) },
+    const p = await call("search_files", { query, pageSize: 100, excludeContentSnippets: true, ...(token ? { pageToken: token } : {}) },
       { staleTime: maxAgeMs, gcTime: Math.max(maxAgeMs, 300_000) });
-    files.push(...(p?.files ?? []));
+    out.push(...(p?.files ?? []));
     token = p?.nextPageToken || null;
-  } while (token && ++guard < 40);
-  return files;
+  } while (token && ++guard < 60);
+  return out;
 }
 
-/** An SOP file's text as the connector renders it ({fileContent, title, viewUrl}); kept 12 h unless `fresh`. */
+/**
+ * The whole tree under a folder: { files: [{…file, path}], folders: [{ id, path }] }, where `path` is the folder path
+ * below the root ("QA Documents/QA SOP"; "" for the root itself). Folders are listed six at a time.
+ */
+export async function listTree(rootId, { maxAgeMs = 60_000, onProgress } = {}) {
+  const paths = new Map([[rootId, ""]]);
+  const files = new Map();
+  const queue = [rootId];
+  let guard = 0;
+  while (queue.length && guard++ < 300) {
+    const batch = queue.splice(0, 6);
+    for (const f of await listChildren(batch, maxAgeMs)) {
+      const parent = paths.get(f.parentId) ?? "";
+      if (isFolder(f)) {
+        if (paths.has(f.id)) continue;
+        paths.set(f.id, parent ? `${parent}/${String(f.title ?? "").trim()}` : String(f.title ?? "").trim());
+        queue.push(f.id);
+      } else if (!files.has(f.id)) files.set(f.id, { ...f, path: parent });
+    }
+    onProgress?.(files.size, paths.size - 1);
+  }
+  return { files: [...files.values()], folders: [...paths].filter(([id]) => id !== rootId).map(([id, path]) => ({ id, path })) };
+}
+
+/** Every file directly in a folder (all pages), newest listing at most `maxAgeMs` old. */
+export const listFolder = async (folderId, { maxAgeMs = 60_000 } = {}) => (await listChildren([folderId], maxAgeMs)).filter((f) => !isFolder(f));
+
+/** A file's text as the connector renders it ({fileContent, title, viewUrl}); kept 12 h unless `fresh`. */
 export function readFile(fileId, { fresh } = {}) {
   return call("read_file_content", { fileId }, { staleTime: 12 * 3600_000, gcTime: 7 * 24 * 3600_000, ...(fresh ? { refresh: true } : {}) });
 }
 
-/** Files of the source folders whose text contains `term`. */
-export async function searchText(folderIds, term) {
-  const parents = folderIds.map((id) => `parentId = '${q(id)}'`).join(" or ");
-  const p = await call("search_files", { query: `(${parents}) and fullText contains '${q(term)}'`, pageSize: 60, excludeContentSnippets: true }, { staleTime: 5 * 60_000, gcTime: 30 * 60_000 });
-  return p?.files ?? [];
+/** The folders a search covers: each source's root and the subfolders its last sync found. */
+export function sourceFolders(sources) {
+  const ids = new Set();
+  for (const s of sources ?? []) {
+    if (s.folderId) ids.add(s.folderId);
+    try { for (const [id] of JSON.parse(s.Folders || "[]")) ids.add(id); } catch { /* not synced yet */ }
+  }
+  return [...ids];
 }
-
-/** Files of the source folders whose name contains `text` (an SOP's other revisions and copies). */
-export async function filesNamed(folderIds, text) {
-  const parents = folderIds.map((id) => `parentId = '${q(id)}'`).join(" or ");
-  const p = await call("search_files", { query: `(${parents}) and title contains '${q(text)}'`, pageSize: 30, excludeContentSnippets: true }, { staleTime: 10 * 60_000, gcTime: 60 * 60_000 });
-  return p?.files ?? [];
+// Drive queries stay short: folders are searched 25 at a time and the results merged
+async function inFolders(folderIds, clause, pageSize, cache) {
+  const chunks = [];
+  for (let i = 0; i < folderIds.length; i += 25) chunks.push(folderIds.slice(i, i + 25));
+  const res = await Promise.all(chunks.map((ids) => call("search_files", { query: `(${ids.map((id) => `parentId = '${q(id)}'`).join(" or ")}) and ${clause}`, pageSize, excludeContentSnippets: true }, cache)));
+  const seen = new Set();
+  return res.flatMap((p) => p?.files ?? []).filter((f) => !isFolder(f) && !seen.has(f.id) && seen.add(f.id));
 }
+/** Files of the library whose text contains `term`. */
+export const searchText = (folderIds, term) => inFolders(folderIds, `fullText contains '${q(term)}'`, 60, { staleTime: 5 * 60_000, gcTime: 30 * 60_000 });
+/** Files of the library whose name contains `text` (a document's other revisions and copies). */
+export const filesNamed = (folderIds, text) => inFolders(folderIds, `title contains '${q(text)}'`, 30, { staleTime: 10 * 60_000, gcTime: 60 * 60_000 });
 
 /** The message key for a connector failure, one per distinct fix. */
 export function driveProblem(e) {
@@ -60,33 +99,88 @@ export function driveProblem(e) {
   if (code === "tool_error") return "drv_e_tool";
   return "drv_e_other";
 }
+const FATAL = ["drv_e_reauth", "drv_e_add", "drv_e_allow", "drv_e_none", "drv_e_policy", "drv_e_choose"];
 
-// ---------- sync and indexing (state shared by the views of this page load) ----------
-export const job = { sync: null, index: null };
+// ---------- sync and reading (state shared by the views of this page load) ----------
+export const job = { sync: null, index: null, indexes: null };
 
-/** List every source folder, match its SOP files to the library and save the register. */
+/** Product search keys of the workbook's product list ([{ key, product }]). */
+export function productKeys(data) {
+  const t = data?.prod;
+  if (!t) return [];
+  const ki = t.cols.indexOf("Search key"), pi = t.cols.indexOf("Product"), ai = t.cols.indexOf("API");
+  const out = [];
+  for (const r of t.rows) {
+    if (r[pi]) { out.push({ key: r[ki] ?? r[pi], product: r[pi] }); if (ai >= 0 && r[ai]) out.push({ key: String(r[ai]).split(/\s+/)[0], product: r[pi] }); }
+  }
+  return out;
+}
+
+/**
+ * Crawl every source folder, sort its files into SOPs (matched to the library) and other controlled documents, note
+ * obsolete and uncontrolled copies, and save the SOP register, the document register and each source's folder tree.
+ */
 export async function syncLibrary(ctx, sources, onStep) {
-  const all = [];
+  const trees = [];
   for (const src of sources) {
     onStep?.(src.Name || src.folderId);
-    const files = await listFolder(src.folderId, { maxAgeMs: 0 });
-    all.push({ src, files, groups: groupSopFiles(files) });
+    const tree = await listTree(src.folderId, { maxAgeMs: 0, onProgress: (n, d) => onStep?.(`${src.Name || ""} · ${n} / ${d}`) });
+    for (const f of tree.files) { f.source = src.Name || "Drive"; f.zone = zoneOf(f.path, f.title); }
+    trees.push({ src, ...tree });
   }
+  const files = trees.flatMap((x) => x.files);
+  const system = files.filter((f) => isSystemFile(f.title));
+  const groups = groupDocs(files);
+  const sopGroups = groups.filter((g) => g.type === "SOP");
   const library = ctx.m.sops;
-  const rows = all.flatMap(({ src, groups }) => driveRows(library, groups.sops, src.Name || "Drive"));
-  // one row per SOP even when two folders hold it: the higher revision wins
-  const best = new Map();
-  for (const r of rows) { const k = sopKey(r.Code); const o = best.get(k); if (!o || +(r.Revision ?? 0) > +(o.Revision ?? 0)) best.set(k, r); }
-  const res = await ctx.bulkUpsert("sop", [...best.values()], ["Code"]);
+  onStep?.("SOP");
+  const res = await ctx.bulkUpsert("sop", driveRows(library, sopGroups, trees[0]?.src.Name || "Drive"), ["Code"]);
+  // the document register is Drive's: rewritten whole, keeping the comments people added
+  const comments = new Map((ctx.m.x?.docx?.list ?? []).filter((d) => d.Comment).map((d) => [d.Code, d.Comment]));
+  const docs = docRows(groups.filter((g) => g.type !== "SOP"), productKeys(ctx.data)).map((r) => ({ ...r, Comment: comments.get(r.Code) ?? null }));
+  onStep?.(`${docs.length}`);
+  await ctx.replaceTable("docs", docs);
   const today = new Date().toISOString().slice(0, 10);
-  for (const { src, files } of all) if (src.__key) await ctx.saveObj("sopSources", src.__key, { "Last sync": today, Files: files.length }, true);
-  const keys = new Set(best.keys());
+  for (const { src, files: fs, folders } of trees) {
+    if (src.__key) await ctx.saveObj("sopSources", src.__key, { "Last sync": today, Files: fs.filter((f) => !isSystemFile(f.title)).length, Folders: JSON.stringify(folders.map((x) => [x.id, x.path])) }, true);
+  }
+  const keys = new Set(sopGroups.map((g) => g.key));
+  const count = (xs, k) => xs.reduce((a, x) => ({ ...a, [k(x)]: (a[k(x)] ?? 0) + 1 }), {});
   return {
-    at: Date.now(), files: all.reduce((n, x) => n + x.files.length, 0), sops: best.size, added: res.added, updated: res.updated,
+    at: Date.now(), files: files.length - system.length, folders: trees.reduce((n, x) => n + x.folders.length, 0), system: system.length,
+    sops: sopGroups.length, docs: docs.length, added: res.added, updated: res.updated,
+    zones: count(files.filter((f) => !isSystemFile(f.title)), (f) => f.zone), types: count(groups, (g) => g.type ?? "?"),
     libraryOnly: library.filter((s) => !keys.has(sopKey(s.Code))).map((s) => s.Code),
-    copies: all.flatMap((x) => x.groups.sops.filter((g) => g.files.length > 1).map((g) => ({ code: g.code, files: g.files.map((f) => f.title) }))),
-    unnamed: all.flatMap((x) => x.groups.other.map((f) => f.title)),
+    copies: sopGroups.filter((g) => g.zones.controlled > 1).map((g) => ({ code: g.code, files: g.files.filter((f) => f.zone === "controlled").map((f) => `${f.path || "/"} · ${f.title}`) })),
+    unnamed: groups.filter((g) => g.type === "SCAN" || !g.type).map((g) => g.current.title),
+    indexes: currentIndexes(docs).length, docRows: docs,
   };
+}
+
+/** Read the current edition of every master index and save their entries (the register of what QA lists as effective). */
+export async function readIndexes(ctx, docs, onProgress) {
+  const list = currentIndexes(docs);
+  const st = { total: list.length, done: 0, failed: [], read: [], current: null, stopped: false, stop() { this.stopped = true; } };
+  job.indexes = st;
+  const today = new Date().toISOString().slice(0, 10);
+  const rows = [];
+  for (const { row } of list) {
+    if (st.stopped) break;
+    st.current = row["Drive file"]; onProgress?.(st);
+    try {
+      const p = await readFile(row["Drive ID"]);
+      const r = parseIndexText(p?.fileContent ?? "", row["Drive file"]);
+      for (const e of r.entries) rows.push({ Index: r.id, Department: r.dept, Scope: r.scope, Year: r.year, Code: e.code, Revision: e.rev, "Effective date": e.effective, "Validity date": e.validity, "Index file": row["Drive ID"], "Read on": today });
+      st.read.push({ id: r.id, file: row["Drive file"], n: r.entries.length, partial: r.partial });
+    } catch (e) {
+      st.failed.push({ code: row["Drive file"], problem: driveProblem(e), message: e?.message ?? "" });
+      if (FATAL.includes(driveProblem(e))) { st.stopped = true; st.fatal = driveProblem(e); }
+    }
+    st.done++; onProgress?.(st);
+  }
+  if (rows.length && !st.fatal) await ctx.replaceTable("docIndex", rows);
+  st.current = null; st.finished = true; st.entries = rows.length; onProgress?.(st);
+  return st;
 }
 
 /** What reading one SOP's text tells the library. */
@@ -102,7 +196,7 @@ export function indexFields(s, doc, today) {
 
 /** Read every SOP whose Drive file changed since it was last read; saves the findings in batches. `stop()` ends it early. */
 export async function indexLibrary(ctx, list, onProgress) {
-  const todo = list.filter((s) => s["Drive ID"] && s.Indexed !== (s["Drive modified"] || null));
+  const todo = list.filter((s) => s["Drive ID"] && s.Indexed !== (s["Drive modified"] || null) && !/obsolete/i.test(s.Status ?? ""));
   const st = { total: todo.length, done: 0, failed: [], current: null, stopped: false, stop() { this.stopped = true; } };
   job.index = st;
   const today = new Date().toISOString().slice(0, 10);
@@ -116,7 +210,7 @@ export async function indexLibrary(ctx, list, onProgress) {
       batch.push(indexFields(s, parseSopText(p?.fileContent ?? ""), today));
     } catch (e) {
       st.failed.push({ code: s.Code, problem: driveProblem(e), message: e?.message ?? "" });
-      if (["drv_e_reauth", "drv_e_add", "drv_e_allow", "drv_e_none", "drv_e_policy", "drv_e_choose"].includes(driveProblem(e))) { st.stopped = true; st.fatal = driveProblem(e); }
+      if (FATAL.includes(driveProblem(e))) { st.stopped = true; st.fatal = driveProblem(e); }
     }
     st.done++;
     if (batch.length >= 40) await flush();

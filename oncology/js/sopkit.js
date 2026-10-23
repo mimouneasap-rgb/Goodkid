@@ -27,7 +27,7 @@ export function sopKey(code) {
 /** Code as the library writes it: SOPAB0040F/Onc. */
 export const sopCode = (p) => `${p.prefix}${p.dept ?? ""}${String(p.num).padStart(p.width ?? 4, "0")}${p.lang ?? ""}${p.site === "Oncology" ? "/Onc" : ""}`;
 
-const cleanTitle = (s) => String(s ?? "")
+export const cleanTitle = (s) => String(s ?? "")
   .replace(/\s*-\s*copie\s*$/i, "").replace(/(\s*\(\d{1,3}\))+\s*$/g, "").replace(/\b(updated|final|draft)\s*$/i, "").replace(/[\s_]+\d{6,8}\s*$/, "")
   .replace(/^[\s\-_.:]+|[\s\-_.]+$/g, "").replace(/\s{2,}/g, " ").trim();
 const FRENCH = /[éèêàçù]|\bproc[ée]dure\b|\b(des|du|les|et|de la|pour)\b/i;
@@ -236,11 +236,18 @@ export function driveRows(library, groups, folderName) {
   const lib = new Map(library.filter((r) => r.Code).map((r) => [sopKey(r.Code), r]));
   return groups.map((g) => {
     const r = lib.get(g.key);
+    // where the files sit (groups from dockit's groupDocs carry zones; plain folder groups are all controlled)
+    const zone = (f) => f.zone ?? "controlled";
+    const drive = g.status && g.status !== "Effective" ? g.status : null;
+    const revs = [...new Set(g.files.filter((f) => zone(f) === "controlled" && f.parsed.rev).map((f) => f.parsed.rev))].sort();
     return {
       Code: r?.Code ?? g.code, Title: r?.Title || g.title || null, Department: r?.Department || g.dept, Site: r?.Site || g.site, Language: r?.Language || g.lang,
-      Type: r?.Type || (g.prefix === "VMP" ? "Validation master plan" : g.prefix === "SMF" ? "Site master file" : "SOP"), Status: r?.Status && !/^(listed|cited)$/i.test(r.Status) ? r.Status : "Effective",
+      Type: r?.Type || (g.prefix === "VMP" ? "Validation master plan" : g.prefix === "SMF" ? "Site master file" : "SOP"),
+      Status: drive ?? (r?.Status && !/^(listed|cited|obsolete|uncontrolled copy)$/i.test(r.Status) ? r.Status : "Effective"),
       Revision: g.rev ?? r?.Revision ?? null, "Drive ID": g.current.id, "Drive file": g.current.title ?? g.current.name, "Drive modified": (g.current.modifiedTime ?? "").slice(0, 10) || null,
-      Files: g.files.length, Source: r?.Source && !/^drive/i.test(r.Source) ? r.Source : `Drive · ${folderName}`,
+      Files: g.files.length, Source: r?.Source && !/^drive/i.test(r.Source) ? r.Source : `Drive · ${g.current.source ?? folderName}`,
+      Folder: g.current.path || null, Revisions: revs.join(" ") || null,
+      Obsolete: g.files.filter((f) => zone(f) === "obsolete").length || null, Uncontrolled: g.files.filter((f) => zone(f) === "uncontrolled").length || null,
     };
   });
 }
