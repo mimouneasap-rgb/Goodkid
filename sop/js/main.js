@@ -1195,7 +1195,7 @@ function renderData() {
     el("dl", { class: "kv" },
       el("dt", {}, "Source"), el("dd", {}, m.source?.url ? el("a", { href: m.source.url, target: "_blank", rel: "noopener" }, m.source.name || m.source.url) : m.source?.name || "—"),
       el("dt", {}, "Built"), el("dd", {}, m.generatedAt ? new Date(m.generatedAt).toLocaleString("en-GB") : "—"),
-      el("dt", {}, "Loaded from"), el("dd", {}, { demo: "Built-in demo", imported: "Imported file", hosted: "data/sop-library.json next to the app" }[state.origin]),
+      el("dt", {}, "Loaded from"), el("dd", {}, { demo: "Built-in demo", imported: "Imported file", hosted: "data/sop-library.json next to the app", embedded: "Built into this page" }[state.origin]),
       el("dt", {}, "Files"), el("dd", {}, `${st.total} (${st.current} current, ${st.duplicates} duplicates)`),
       el("dt", {}, "Attachments"), el("dd", {}, `${st.attachments} · ${st.fieldCount} fields`),
       el("dt", {}, "Digital entries"), el("dd", {}, totalRecords)),
@@ -1274,12 +1274,27 @@ async function importFile(file) {
   }
 }
 
+/** A library built into the page by `bundle_single.py --library`. */
+function builtInLibrary() {
+  const node = document.getElementById("sop-library-data");
+  if (!node) return null;
+  try {
+    const raw = JSON.parse(node.textContent);
+    return Array.isArray(raw?.sops) ? raw : null;
+  } catch {
+    return null;
+  }
+}
+
 async function removeLibrary() {
-  const ok = await ask({ title: "Remove the library from this device?", text: "The SOP library file is removed from this browser and the demo returns. Digital entries are kept.", confirm: "Remove", danger: true });
+  const builtIn = builtInLibrary();
+  const ok = await ask({ title: "Remove the library from this device?",
+    text: `The imported library is removed from this browser and ${builtIn ? "the library built into this page" : "the demo"} returns. Digital entries are kept.`, confirm: "Remove", danger: true });
   if (!ok) return;
   await store.deleteValue("library");
   await store.deleteValue("origin");
-  setLibrary(DEMO_LIBRARY, "demo");
+  if (builtIn) setLibrary(builtIn, "embedded");
+  else setLibrary(DEMO_LIBRARY, "demo");
   renderRail();
   toast("Library removed");
   go("#/overview");
@@ -1505,7 +1520,13 @@ async function start() {
     raw = await store.getValue("library");
     origin = (await store.getValue("origin")) || "imported";
   } catch { raw = null; }
-  if (!EMBED && location.protocol !== "file:" && (!raw || origin === "hosted")) {
+  // A library built into the page wins over a stored copy, unless the viewer imported their own.
+  const builtIn = builtInLibrary();
+  if (builtIn && !(raw && origin === "imported")) {
+    raw = builtIn;
+    origin = "embedded";
+  }
+  if (!EMBED && !builtIn && location.protocol !== "file:" && (!raw || origin === "hosted")) {
     const hosted = await fetchHosted();
     if (hosted && Array.isArray(hosted.sops)) {
       if (!raw || raw.generatedAt !== hosted.generatedAt) {

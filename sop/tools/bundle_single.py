@@ -2,11 +2,13 @@
 """Pack the SOP Library app into one self-contained HTML file.
 
 The CSS and the ES modules are inlined, so the file can be opened or hosted
-anywhere that takes a single page. No SOP data is included: the page starts
-with the demo library and the viewer imports sop-library.json as usual.
+anywhere that takes a single page. No SOP data is included unless you pass
+--library: then that library is built into the page and opens on load (keep
+such a file private; it contains your procedures).
 
   python3 sop/tools/bundle_single.py -o sop-library-app.html
   python3 sop/tools/bundle_single.py --embed -o page.html   # claude.ai page body
+  python3 sop/tools/bundle_single.py --library sop-library.json -o private.html
 
 --embed writes the page body without <!doctype>/<html>/<head>/<body> (the host
 adds its own) and switches the app to its embedded mode: no printing, no
@@ -46,13 +48,21 @@ def unwrap_imports(code):
     return "\n".join(lines) + "\n" + code
 
 
-def build(embed):
+def library_block(path):
+    """The library as inline JSON; "</" is escaped so the data cannot close the tag."""
+    raw = Path(path).read_text(encoding="utf-8")
+    return '<script type="application/json" id="sop-library-data">' + raw.replace("</", "<\\/") + "</script>\n"
+
+
+def build(embed, library=None):
     html = (APP / "index.html").read_text(encoding="utf-8")
     css = (APP / "css/sop.css").read_text(encoding="utf-8")
     js = "".join(wrap_module(n, (APP / p).read_text(encoding="utf-8")) for n, p in MODULES)
     js += unwrap_imports((APP / "js/main.js").read_text(encoding="utf-8"))
     flag = "globalThis.SOP_EMBED = true;\n" if embed else ""
     script = f"<script>\n\"use strict\";\n{flag}(() => {{\n{js}\n}})();\n</script>"
+    if library:
+        script = library_block(library) + script
 
     title = re.search(r"<title>.*?</title>", html, re.S).group(0)
     fonts = re.search(r'<link rel="stylesheet" href="https://fonts\.googleapis\.com[^>]+>', html).group(0)
@@ -70,8 +80,9 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("-o", "--output", default="sop-library-app.html")
     ap.add_argument("--embed", action="store_true", help="page body for a claude.ai page")
+    ap.add_argument("--library", help="sop-library.json to build into the page (private use only)")
     args = ap.parse_args()
-    out = build(args.embed)
+    out = build(args.embed, args.library)
     Path(args.output).write_text(out, encoding="utf-8")
     print(f"{len(out) // 1024} KB -> {args.output}")
 
