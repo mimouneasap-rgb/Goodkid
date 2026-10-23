@@ -5,6 +5,7 @@ import { t, tv, getLang } from "./i18n.js";
 import { STATUSES, CC_STAGES, IMPR_STAGES, toDay } from "./model.js";
 import { VOCAB as V, METRICS, APQR_SECTIONS, SOP_TOPICS } from "./catalogs.js";
 import { DOC_TYPES } from "./dockit.js";
+import { REVIEW_TYPES, REVIEW_STATUS, REVIEW_OUTCOMES, REVIEW_REASONS } from "./sopwork.js";
 
 const FR = () => getLang() === "FR";
 const YN = ["Yes", "No"];
@@ -92,7 +93,15 @@ export const SPECS = {
   ccp: { label: ["Critical control point", "Point critique"], id: "CCP ID", title: "Parameter",
     fields: [["CCP ID", "text"], ["Room", "suggest", "rooms"], ["Process step", "suggest", "col"], ["Parameter", "text"], ["Limit", "long"], ["Monitoring method", "long"], ["Frequency", "suggest", "col"], ["Responsible", "pick", V.owners], ["Linked SOP", "suggest", "sops"], ["Source", "text"]] },
   forms: { label: ["Logbook / form", "Registre / formulaire"], id: "Form code", title: "Title",
-    fields: [["Form code", "text"], ["Title", "long"], ["Type", "pick", V.formTypes], ["Linked SOP", "suggest", "sops"], ["Linked room", "room"], ["Linked equipment", "suggest", "assets"], ["Revision", "text"], ["Status", "suggest", "col"], ["Source", "text"]] },
+    fields: [["Form code", "text"], ["Title", "long"], ["Type", "pick", V.formTypes], ["Owner SOP", "suggest", "sopCodes"], ["Linked SOP", "suggest", "sops"], ["Linked room", "room"], ["Linked equipment", "suggest", "assets"], ["Revision", "text"], ["Status", "suggest", "col"], ["Source", "text"],
+      ["Sections", "long"], ["Fields", "long"], ["Columns", "long"], ["Comment", "long"]] },
+  sopReviews: {
+    label: ["SOP review / revision", "Revue / révision de procédure"], id: "Review ID", title: "SOP", get prefix() { return `SR-${new Date().getFullYear()}-`; },
+    defaults: () => ({ Status: "Requested", Type: "Periodic review", "Requested on": new Date().toISOString().slice(0, 10) }),
+    fields: [["Review ID", "text"], ["SOP", "suggest", "sopCodes"], ["Type", "pick", REVIEW_TYPES], ["Reason", "suggest", REVIEW_REASONS], ["Requested by", "suggest", "col"], ["Requested on", "date"],
+      ["Owner", "suggest", "col"], ["Due", "date"], ["Change control", "suggest", "refs"], ["Status", "pick", REVIEW_STATUS], ["Outcome", "pick", REVIEW_OUTCOMES], ["New revision", "text"], ["Effective on", "date"],
+      ["Closed on", "date"], ["Comment", "long"]],
+  },
   find: {
     label: ["Audit finding", "Constat d’audit"], id: "Reference Id", title: "Title", prefix: "FIND-KO-",
     defaults: () => ({ Type: "Audit Findings", Status: "Open", Stage: "Pending Response", Project: "ELKENDI Oncology", "Creation Date": sToday() }),

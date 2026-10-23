@@ -5,6 +5,8 @@ import { t, tv } from "./i18n.js";
 import { icon } from "./icons.js";
 import * as M from "./model.js";
 import { METRICS } from "./catalogs.js";
+import { dueItems } from "./cockpit.js";
+import { cockpitTile } from "./views-cockpit.js";
 
 const DAY = 86400000;
 
@@ -54,7 +56,9 @@ export function home(ctx) {
   const typeCount = (ty, f) => m.records.filter((r) => r.type === ty && f(r)).length;
   const fivesAvg = (() => { const xs = X.fives.filter((x) => x.date != null && x.date >= m.now - 84 * 86400000 && x.total != null).map((x) => x.total); return xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null; })();
   const trnDue = X.training.filter((x) => x.planned != null && x.planned <= m.now && x.status !== "Cancelled");
+  const due = dueItems(m, m.now, { horizon: 30 });
   const modules = [
+    ["cockpit", "calendar", "ck_title", "ck_m_desc", `${fmtNum(due.filter((x) => x.bucket === "overdue").length)} ${t("s_overdue").toLowerCase()} · ${fmtNum(due.filter((x) => x.bucket === "week").length)} ${t("ck_b_week").toLowerCase()}`],
     ["dashboard", "dashboard", "dash_title", "m_dash", `${fmtNum(k.total)} ${t("s_records").toLowerCase()}`],
     ["review", "review", "mr_title", "m_mr", `${sc.rows.filter((r) => r.status === 1).length} × ${t("st_action")}`],
     ["metrics", "target", "met_title", "m_met", `${fmtNum(METRICS.length)} KPI`],
@@ -80,6 +84,7 @@ export function home(ctx) {
     ["fmea", "fmea", "fm_title", "m_fm", `${m.fmea.length} ${t("n_fm").toLowerCase()}`],
     ["improvements", "improve", "im_title", "m_im", `${m.impr.length} ${t("n_imp").toLowerCase()}`],
     ["sops", "sop", "sop_title", "m_sop", `${m.sops.length} ${t("n_sop")}${X.docx.list.length ? ` · ${fmtNum(X.docx.list.length)} ${t("doc_documents")}` : ""}`],
+    ["audit", "history", "aud_title", "aud_m_desc", `${fmtNum((ctx.audit ?? []).filter((e) => Date.parse(e.at) >= Date.now() - 30 * 86400000).length)} / 30 ${t("d")}`],
     ["quality", "quality", "dq_title", "m_dq", `${M.reconciliation(m).filter((c) => c.ok).length}/${M.reconciliation(m).length} ✔`],
     ["records", "records", "qr_title", "qr_sub", `${fmtNum(m.records.length)}`],
   ];
@@ -109,6 +114,7 @@ export function home(ctx) {
           h("span.glance-v", val), h("span.glance-l", t(key))))),
         h("div.glance-spark", h("span", `${t("s_opened")} · 12 ${getMonthsWord()}`), sparkline(trendVals, { color: "#8fc1ff", w: 260, hgt: 36 })))),
     pulse(ctx),
+    cockpitTile(ctx),
     h("div.section-title", h("h2", t("h_menu")), h("p", t("everything"))),
     h("div.module-grid", modules.map(([route, ic, title, desc, metric], i) => h("button.module", { type: "button", style: { "--i": i }, onclick: () => ctx.go(route) },
       h("span.module-ico", icon(ic, 22)),

@@ -135,12 +135,12 @@ export async function syncLibrary(ctx, sources, onStep) {
   const sopGroups = groups.filter((g) => g.type === "SOP");
   const library = ctx.m.sops;
   onStep?.("SOP");
-  const res = await ctx.bulkUpsert("sop", driveRows(library, sopGroups, trees[0]?.src.Name || "Drive"), ["Code"]);
+  const res = await ctx.bulkUpsert("sop", driveRows(library, sopGroups, trees[0]?.src.Name || "Drive"), ["Code"], null, "sync");
   // the document register is Drive's: rewritten whole, keeping the comments people added
   const comments = new Map((ctx.m.x?.docx?.list ?? []).filter((d) => d.Comment).map((d) => [d.Code, d.Comment]));
   const docs = docRows(groups.filter((g) => g.type !== "SOP"), productKeys(ctx.data)).map((r) => ({ ...r, Comment: comments.get(r.Code) ?? null }));
   onStep?.(`${docs.length}`);
-  await ctx.replaceTable("docs", docs);
+  await ctx.replaceTable("docs", docs, null, "sync");
   const today = new Date().toISOString().slice(0, 10);
   for (const { src, files: fs, folders } of trees) {
     if (src.__key) await ctx.saveObj("sopSources", src.__key, { "Last sync": today, Files: fs.filter((f) => !isSystemFile(f.title)).length, Folders: JSON.stringify(folders.map((x) => [x.id, x.path])) }, true);
@@ -179,7 +179,7 @@ export async function readIndexes(ctx, docs, onProgress) {
     }
     st.done++; onProgress?.(st);
   }
-  if (rows.length && !st.fatal) await ctx.replaceTable("docIndex", rows);
+  if (rows.length && !st.fatal) await ctx.replaceTable("docIndex", rows, null, "index");
   st.current = null; st.finished = true; st.entries = rows.length; onProgress?.(st);
   return st;
 }
@@ -188,10 +188,11 @@ export async function readIndexes(ctx, docs, onProgress) {
 export function indexFields(s, doc, today, text) {
   const self = sopKey(s.Code);
   const src = s["Drive modified"] || today;
-  // a résumé Claude wrote for this very file stays; otherwise the app's own résumé of the text
+  // a résumé people edited stays (the page flags it when the file changed since); so does one Claude wrote for this very
+  // file; otherwise the app's own résumé of the text
   const kept = summaryOf(s);
   const history = doc.history.length ? doc.history.slice(-6).map((x) => ({ ver: x.ver, date: x.date, text: String(x.text ?? "").replace(/\s+/g, " ").slice(0, 160) })) : kept?.history ?? null;
-  const summary = kept?.by === "claude" && kept.src === src ? { ...kept, history }
+  const summary = kept?.edited || (kept?.by === "claude" && kept.src === src) ? { ...kept, history }
     : { ...sopDigest(doc), history, lang: /French/i.test(s.Language ?? "") ? "FR" : "EN", src, rev: s.Revision ?? doc.header?.rev ?? null, at: today };
   const forms = text != null ? sopForms(text).map(({ key, code, title, kind, citedRev, attachedRev, rev, cited, attached, mentions, sections, fields, columns }) =>
     ({ key, code, title, kind, citedRev, attachedRev, rev, cited, attached, mentions, sections, fields, columns })) : null;
@@ -211,7 +212,7 @@ export async function indexLibrary(ctx, list, onProgress) {
   job.index = st;
   const today = new Date().toISOString().slice(0, 10);
   let batch = [];
-  const flush = async () => { if (batch.length) { await ctx.bulkUpsert("sop", batch, ["Code"]); batch = []; } };
+  const flush = async () => { if (batch.length) { await ctx.bulkUpsert("sop", batch, ["Code"], null, "read"); batch = []; } };
   for (const s of todo) {
     if (st.stopped) break;
     st.current = s.Code; onProgress?.(st);

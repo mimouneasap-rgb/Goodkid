@@ -12,7 +12,7 @@ const GROUPS = [
   ["dt_programmes", ["training", "calplan", "validation", "fives", "fivesItems", "fivesAreas", "fivesTpl", "qaact", "metrics"]],
   ["dt_product", ["batches", "wip", "rejections", "suppliers"]],
   ["dt_site", ["rooms", "adj", "equip", "ccp"]],
-  ["dt_docs", ["sop", "docs", "docIndex", "sopSources", "sopLinks", "forms", "fmea", "impr"]],
+  ["dt_docs", ["sop", "sopReviews", "docs", "docIndex", "sopSources", "sopLinks", "forms", "fmea", "impr"]],
   ["dt_settings", ["targets", "bands", "crit", "prio", "prod", "deptMap"]],
 ];
 

@@ -345,19 +345,30 @@ export function buildModel(wb, opts = {}) {
   const reviewYears = +(objects(wb.sopSources ?? null).map((x) => x["Review years"]).find((v) => +v > 0) ?? 3);
   const listed = new Map();
   for (const e of objects(wb.docIndex ?? null)) { const k = sopKey(e.Code); const o = k && listed.get(k); if (k && (!o || +(e.Year ?? 0) >= +(o.Year ?? 0))) listed.set(k, e); }
+  // a review closed in the app restarts the review period ("No change", or "Revised" until the new file is synced); "Withdrawn" retires the SOP
+  const reviewed = new Map();
+  for (const r of objects(wb.sopReviews ?? null)) {
+    const k = sopKey(r.SOP), at = toDay(r["Effective on"]) ?? toDay(r["Closed on"]);
+    if (!k || at == null || !/^closed/i.test(r.Status ?? "") || !/^(no change|revised|withdrawn)$/i.test(r.Outcome ?? "")) continue;
+    if (!reviewed.has(k) || at > reviewed.get(k).at) reviewed.set(k, { at, outcome: r.Outcome, id: r["Review ID"] });
+  }
   const sops = objects(wb.sop).filter((s) => s.Code).map((s) => {
     // (the index's dates belong to the revision it lists: they apply when that is the SOP's revision, or the SOP has no dates of its own)
     const ix0 = listed.get(sopKey(s.Code));
     const ix = ix0 && (!s.Revision || !ix0.Revision || +ix0.Revision === +s.Revision || toDay(s["Effective date"]) == null) ? ix0 : null;
     const eff = toDay(s["Effective date"]) ?? toDay(ix?.["Effective date"]);
-    const next = toDay(s["Next review"]) ?? toDay(ix?.["Validity date"]) ?? (eff != null ? addMonths(eff, 12 * reviewYears) : null);
+    const next0 = toDay(s["Next review"]) ?? toDay(ix?.["Validity date"]) ?? (eff != null ? addMonths(eff, 12 * reviewYears) : null);
+    const rv = reviewed.get(sopKey(s.Code));
+    const fromReview = rv && rv.outcome !== "Withdrawn" && (next0 == null || addMonths(rv.at, 12 * reviewYears) > next0) ? addMonths(rv.at, 12 * reviewYears) : null;
+    const next = fromReview ?? next0;
     const dtr = next != null ? daysBetween(now, next) : null;
-    const reviewStatus = /^obsolete$/i.test(s.Status ?? "") ? "Obsolete" : next == null ? "No review date" : dtr < 0 ? "Overdue" : dtr <= 90 ? "Due ≤90 d" : "In date";
+    const reviewStatus = /^obsolete$/i.test(s.Status ?? "") || rv?.outcome === "Withdrawn" ? "Obsolete" : next == null ? "No review date" : dtr < 0 ? "Overdue" : dtr <= 90 ? "Due ≤90 d" : "In date";
     const dq = [];
     if (next == null) dq.push("No review date");
     if (!s["Linked rooms"] && !s["Linked equipment"]) dq.push("No linked room/equipment");
     if (!s.Language) dq.push("Language unknown");
-    return { ...s, eff, next, nextFromEffective: next != null && toDay(s["Next review"]) == null && toDay(ix?.["Validity date"]) == null, datesFromIndex: Boolean(ix) && (toDay(s["Effective date"]) == null || toDay(s["Next review"]) == null),
+    return { ...s, eff, next, reviewedOn: rv?.at ?? null, reviewedBy: rv?.id ?? null, nextFromReview: fromReview != null, withdrawn: rv?.outcome === "Withdrawn",
+      nextFromEffective: fromReview == null && next != null && toDay(s["Next review"]) == null && toDay(ix?.["Validity date"]) == null, datesFromIndex: Boolean(ix) && (toDay(s["Effective date"]) == null || toDay(s["Next review"]) == null),
       daysToReview: dtr, reviewStatus, dataQuality: dq };
   });
   const forms = objects(wb.forms).filter((f) => f["Form code"]).map((f) => ({

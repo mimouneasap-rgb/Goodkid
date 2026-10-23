@@ -11,6 +11,10 @@ import { SOP_DEPTS, sopKey, parseSopText, parseSopFileName, matchesIn, deptCodes
 import { sampler, summarizeSop, summarizeAll, aiProblem, aiJob } from "./sop-ai.js";
 import { driveMcp, readFile, searchText, filesNamed, driveProblem, syncLibrary, indexLibrary, indexFields, readIndexes, sourceFolders, job } from "./sop-drive.js";
 import { documents, productsTab, indexTab, folderMap, typeName, openDoc, STATE_COLOR, stateLabel } from "./views-doc.js";
+import { openResumeEditor, openFormEditor, setRemoved, partName } from "./views-sop-edit.js";
+import { reviewsTab, reviewCard } from "./views-sop-review.js";
+import { auditCard } from "./views-audit.js";
+import { editedParts } from "./sopwork.js";
 
 const FR = () => getLang() === "FR";
 const ALL = "__all";
@@ -29,7 +33,7 @@ const ROUTE_LABEL = { review: "mr_title", metrics: "met_title", dashboard: "dash
   records: "qr_title", products: "pv_title", lifecycle: "lc_title", apqr: "apqr_title", wip: "wip_title", suppliers: "sup_title", map: "map_title", rooms: "rx_title", equipment: "eq_title",
   calibration: "cal_title", validation: "val_title", training: "trn_title", fives: "fives_title", fmea: "fm_title", improvements: "im_title", quality: "dq_title", spc: "spc_title" };
 
-const TABS = [["library", "sop_t_library"], ["forms", "sop_t_forms"], ["documents", "sop_t_docs"], ["products", "sop_t_products"], ["index", "sop_t_index"], ["search", "sop_t_search"], ["modules", "sop_t_modules"], ["drive", "sop_t_drive"]];
+const TABS = [["library", "sop_t_library"], ["reviews", "sop_t_reviews"], ["forms", "sop_t_forms"], ["documents", "sop_t_docs"], ["products", "sop_t_products"], ["index", "sop_t_index"], ["search", "sop_t_search"], ["modules", "sop_t_modules"], ["drive", "sop_t_drive"]];
 const state = { drive: undefined, aiAvailable: undefined, docs: new Map(), ai: new Map(), search: { q: "", status: "idle", files: [], error: null, matches: new Map() } };
 // whether this view can reach Google Drive and ask Claude (resolved once per page load)
 driveMcp().then((m) => { state.drive = Boolean(m); });
@@ -40,7 +44,7 @@ export function sopsView(ctx) {
   const X = ctx.m.x.sopx;
   const tab = TABS.some(([k]) => k === ctx.state.sopTab) ? ctx.state.sopTab : "library";
   const D = ctx.m.x.docx;
-  const body = { library, forms: () => formsTab(ctx, X), documents: () => documents(ctx, D), products: () => productsTab(ctx, D), index: () => indexTab(ctx, D), search, modules, drive }[tab](ctx, X);
+  const body = { library, reviews: () => reviewsTab(ctx, X), forms: () => formsTab(ctx, X), documents: () => documents(ctx, D), products: () => productsTab(ctx, D), index: () => indexTab(ctx, D), search, modules, drive }[tab](ctx, X);
   return h("div.view",
     viewHeader(t("sop_title"), t("sop_sub3"), h("div.sop-tabs", segmented(TABS.map(([k, l]) => [k, t(l)]), tab, (v) => ctx.set("sopTab", v), t("sop_title"))),
       ctx.canEdit ? h("button.btn", { type: "button", onclick: () => ctx.add("sop") }, icon("plus", 16), t("add_sop")) : null),
@@ -160,7 +164,8 @@ function sopPage(ctx, code) {
   const fileId = s["Drive ID"];
   const sum = s.summary;
   // the résumé and the forms come from reading the file once; an editor's visit reads it when they are missing or out of date
-  const stale = fileId && (!sum || !s.Forms || (s["Drive modified"] && sum.src && sum.src !== s["Drive modified"] && sum.by !== "claude"));
+  // (a résumé people edited is kept as it is: the page says when the file changed after the edit)
+  const stale = fileId && (!sum || !s.Forms || (s["Drive modified"] && sum.src && sum.src !== s["Drive modified"] && sum.by !== "claude" && !sum.edited));
   let d = fileId ? state.docs.get(fileId) : null;
   if (stale && ctx.canEdit && !d && state.drive !== false) { d = { status: "loading" }; state.docs.set(fileId, d); loadDoc(ctx, s, d); }
   const doc = d?.doc;
@@ -171,6 +176,8 @@ function sopPage(ctx, code) {
   if (s.next == null && !/obsolete/i.test(s.Status ?? "")) flags.push(t("sop_flag_review"));
   if (s.files > 1) flags.push(t("sop_flag_copies", fmtNum(s.files)));
   if (/obsolete/i.test(s.Status ?? "")) flags.push(t("sop_flag_obsolete"));
+  if (s.withdrawn && !/obsolete/i.test(s.Status ?? "")) flags.push(t("rv_flag_withdrawn"));
+  if (s.pendingRevision) flags.push(t("rv_flag_pending", s.pendingRevision, s.Revision));
   if (+s.Uncontrolled) flags.push(t("sop_flag_uncontrolled", fmtNum(+s.Uncontrolled)));
   const ix = s.idx;
   if (ix?.state === "drive-newer") flags.push(t("sop_flag_newer", s.Revision, ix.index, ix.rev) + (ix.hasListedRev ? "" : ` ${t("sop_flag_nolisted", ix.rev)}`));
@@ -200,7 +207,7 @@ function sopPage(ctx, code) {
       h("div.sop-review", { class: (s.reviewStatus ?? "").replace(/\W+/g, "-").toLowerCase() },
         h("small", t("sop_effective")), h("b", fmtDate(s.eff) || "—"),
         h("small", t("col_nextrev")), h("b", fmtDate(s.next) || "—"),
-        h("span", tv(s.reviewStatus), s.nextFromEffective ? h("small", ` · ${t("sop_next_rule")}`) : s.datesFromIndex ? h("small", ` · ${t("sop_from_index")}`) : null))),
+        h("span", tv(s.reviewStatus), s.nextFromReview ? h("small", ` · ${t("rv_next_from", s.reviewedBy ?? "")}`) : s.nextFromEffective ? h("small", ` · ${t("sop_next_rule")}`) : s.datesFromIndex ? h("small", ` · ${t("sop_from_index")}`) : null))),
     h("div.sop-actions",
       fileId ? h("a.btn.primary.compact", { href: driveUrl(fileId), target: "_blank", rel: "noopener" }, icon("globe", 15), t("sop_open_full")) : null,
       fileId && ctx.canEdit ? aiButton(ctx, s) : null,
@@ -210,14 +217,16 @@ function sopPage(ctx, code) {
     h("div.sop-layout",
       h("div.sop-main",
         resumeCard(ctx, X, s, sum, d),
-        formsCard(ctx, X, s, forms, d)),
+        formsCard(ctx, X, s, forms, d),
+        reviewCard(ctx, X, s)),
       h("aside.sop-side",
         card(t("sop_facts"), h("dl.deflist.compact",
           [[t("col_dept"), deptName(s.Department)], ["Site", s.Site], [t("sop_lang"), tv(s.Language ?? "")], [t("col_type"), s.Type], [t("col_status"), tv(s.Status ?? "")], [t("col_rev"), s.Revision],
             [t("sop_effective"), fmtDate(s.eff)], [t("col_nextrev"), fmtDate(s.next)], [t("col_owner"), s.Owner], [t("sop_drive_mod"), fmtDate(toDay(s["Drive modified"]))],
             [t("sop_read_on"), s.Indexed ? fmtDate(toDay(s.Indexed)) : null], [t("source"), s.Source], [t("doc_folder"), s.inDrive ? s.Folder || "/" : null], [t("doc_revisions"), s.Revisions],
             [t("doc_obsolete_n"), s.Obsolete], [t("doc_uncontrolled_n"), s.Uncontrolled], [t("sop_rooms"), s["Linked rooms"]], [t("sop_equipment"), s["Linked equipment"]]]
-            .filter(([, v]) => v != null && v !== "").flatMap(([k, v]) => [h("dt", k), h("dd", v)]))),
+            .filter(([, v]) => v != null && v !== "").flatMap(([k, v]) => [h("dt", k), h("dd", v)])),
+          { actions: ctx.canEdit ? pen(t("ed_facts"), () => ctx.edit("sop", s.__key, `${s.Code} · ${s.Title ?? ""}`)) : null }),
         ix ? card(t("ix_entry"), h("div.doc-index-box",
           h("p", t("ix_entry_line", ix.index, ix.rev ?? "—", fmtDate(ix.effective) || "—", fmtDate(ix.validity) || "—")),
           h("p", dot(STATE_COLOR[ix.state], stateLabel(ix.state)), s.Revisions ? h("small.muted", ` · ${t("doc_revisions")}: ${s.Revisions}`) : null),
@@ -233,48 +242,70 @@ function sopPage(ctx, code) {
           h("div", h("h4", `${t("sop_cited_by")} · ${fmtNum(s.citedBy.length)}`), s.citedBy.length ? h("ul.mini-codes", s.citedBy.map((x) => h("li", h("a", { href: sopHref(x.Code) }, h("b", x.Code), ` ${short(x.Title, 40)}`)))) : h("p.muted", s.indexed ? t("none_found") : t("sop_cited_wait"))))),
         (s.changes.length || doc?.changes?.length) ? card(t("sop_changes"), h("div.sop-chips", (s.changes.length ? s.changes : doc.changes).map((c) => h("span.tag.mono", c)))) : null,
         history.length ? card(t("sop_history"), h("ol.sop-history", [...history].reverse().map((x) => h("li", h("b", `rev ${x.ver}`), x.date ? h("small", ` · ${fmtDate(toDay(x.date))}`) : null, x.text ? h("p", short(x.text, 140)) : null)))) : null,
-        fileId ? card(t("sop_files"), filesView(ctx, X, s)) : null)));
+        fileId ? card(t("sop_files"), filesView(ctx, X, s)) : null,
+        auditCard(ctx, sopAudit(ctx, s), { title: t("aud_record_title") }))));
+}
+
+/** The audit trail of an SOP: its own row, its review records and the register rows of its forms. */
+function sopAudit(ctx, s) {
+  const keys = new Set((s.formList ?? []).map((f) => f.key));
+  return (ctx.audit ?? []).filter((e) => (e.table === "sop" && (e.ref === s.Code || e.key === s.__key))
+    || (e.table === "sopReviews" && String(e.label ?? "").includes(s.Code))
+    || (e.table === "forms" && e.ref && keys.has(formKey(e.ref))));
 }
 
 /** The forms an SOP owns or uses, from the register (its own record first). */
 export function sopFormsOf(X, s) {
+  if (s.formList) return s.formList;
   const seen = new Set();
   return (s.forms ?? []).map((f) => X.formsByKey?.get(f.key) ?? f).filter((f) => f?.key && !seen.has(f.key) && seen.add(f.key));
 }
 
-// the SOP's résumé: purpose, who does what, the key steps, the critical points — written by Claude or extracted by the app
+// the SOP's résumé: purpose, who does what, the key steps, the critical points — written by Claude, extracted by the app,
+// and corrected by people (every part has its own pencil for editors)
+const pen = (label, fn) => h("button.icon-btn.sum-pen", { type: "button", title: label, "aria-label": label, onclick: fn }, icon("edit", 14));
 function resumeCard(ctx, X, s, sum, d) {
   const job = state.ai.get(s.Code);
   const reading = d?.status === "loading";
-  const by = sum?.by === "claude" ? t("sum_by_claude", fmtDate(toDay(sum.at)) || "—", sum.rev ?? "—") : sum ? t("sum_by_app", sum.rev ?? s.Revision ?? "—") : null;
+  const edit = ctx.canEdit && s.__key;
+  const penFor = (k) => (edit ? pen(t("ed_part_title", partName(k)), () => openResumeEditor(ctx, s, k)) : null);
+  const by = [sum?.by === "claude" ? t("sum_by_claude", fmtDate(toDay(sum.at)) || "—", sum.rev ?? "—") : sum?.by === "people" ? t("sum_by_people") : sum ? t("sum_by_app", sum.rev ?? s.Revision ?? "—") : null,
+    sum?.edited ? t("sum_edited", ctx.who(sum.editedBy), fmtDate(toDay(sum.editedAt)) || "—") : null].filter(Boolean).join(" · ") || null;
   const formLink = (c) => { const k = formKey(c); const f = k && X.formsByKey?.get(k); return h("button.form-chip", { type: "button", title: f?.title ?? c, onclick: () => (f ? openForm(ctx, X, f) : null) }, icon("edit", 11), c.replace(/\/Onc/, "")); };
+  const changedSince = sum?.edited && s["Drive modified"] && sum.src && sum.src !== s["Drive modified"];
   let body;
   if (job?.status === "running") body = h("div.sum-wait", h("span.spinner"), h("div", h("b", t("sum_writing")), h("p.muted", t("sum_writing_sub"))), h("button.btn.compact.ghost", { type: "button", onclick: () => job.ctl?.abort() }, t("sop_stop")));
   else if (!sum) body = h("div.sum-empty",
     reading ? h("p", h("span.spinner"), ` ${t("sum_reading")}`) : h("p.muted", s["Drive ID"] ? t("sum_none") : t("sop_no_file")),
     d?.status === "error" ? h("p.warn-text", t(driveProblem(d.error))) : null,
-    s["Drive ID"] ? h("a.btn.compact", { href: driveUrl(s["Drive ID"]), target: "_blank", rel: "noopener" }, icon("globe", 14), t("sop_open_full")) : null);
+    h("div.sum-empty-acts",
+      s["Drive ID"] ? h("a.btn.compact", { href: driveUrl(s["Drive ID"]), target: "_blank", rel: "noopener" }, icon("globe", 14), t("sop_open_full")) : null,
+      edit && !reading ? h("button.btn.compact", { type: "button", onclick: () => openResumeEditor(ctx, s) }, icon("edit", 14), t("ed_write")) : null));
   else {
     const phases = [];
     for (const st of sum.steps ?? []) { const last = phases.at(-1); if (last && last.phase === (st.phase || null)) last.steps.push(st); else phases.push({ phase: st.phase || null, steps: [st] }); }
     let n = 0;
+    const what = [["purpose", "sum_purpose"], ["scope", "sum_scope"], ["trigger", "sum_trigger"]].filter(([k]) => sum[k] || edit);
+    const head = (ic, k, label) => h("h4", icon(ic, 15), label, penFor(k));
+    const none = (k) => h("p.muted.sum-missing", edit ? h("button.link", { type: "button", onclick: () => openResumeEditor(ctx, s, k) }, t("ed_add_part", partName(k).toLowerCase())) : "—");
     body = h("div.sum",
-      h("div.sum-what",
-        sum.purpose ? h("div", h("small", t("sum_purpose")), h("p", sum.purpose)) : null,
-        sum.scope ? h("div", h("small", t("sum_scope")), h("p", sum.scope)) : null,
-        sum.trigger ? h("div", h("small", t("sum_trigger")), h("p", sum.trigger)) : null),
-      sum.roles?.length ? h("div.sum-block", h("h4", icon("cap", 15), t("sum_roles")), h("div.sum-roles", sum.roles.map((r) => h("div.sum-role", h("b", r.role), h("span", r.duties))))) : null,
-      phases.length ? h("div.sum-block", h("h4", icon("tasks", 15), t("sum_steps")), h("div.sum-steps", phases.map((ph) => h("div.sum-phase",
+      changedSince ? h("div.banner.warn.sum-changed", icon("alert", 18), h("span", t("sum_changed_since", fmtDate(toDay(s["Drive modified"])) || "—", fmtDate(toDay(sum.editedAt)) || "—"), " ",
+        edit ? h("button.link", { type: "button", onclick: () => openResumeEditor(ctx, s) }, t("ed_check")) : null)) : null,
+      what.length ? h("div.sum-what", what.map(([k, l]) => h("div", h("small", t(l), penFor(k)), sum[k] ? h("p", sum[k]) : none(k)))) : null,
+      sum.roles?.length || edit ? h("div.sum-block", head("cap", "roles", t("sum_roles")), sum.roles?.length ? h("div.sum-roles", sum.roles.map((r) => h("div.sum-role", h("b", r.role), h("span", r.duties)))) : none("roles")) : null,
+      phases.length || edit ? h("div.sum-block", head("tasks", "steps", t("sum_steps")), phases.length ? h("div.sum-steps", phases.map((ph) => h("div.sum-phase",
         ph.phase ? h("h5", ph.phase) : null,
         h("ol", ph.steps.map((st) => { n++; return h("li", { "data-n": n },
           h("span.sum-do", st.do),
           st.who ? h("span.sum-who", st.who) : null,
-          (st.records ?? []).length ? h("span.sum-recs", st.records.map(formLink)) : null); })))))) : null,
-      sum.critical?.length ? h("div.sum-block.crit", h("h4", icon("alert", 15), t("sum_critical")), h("ul", sum.critical.map((c) => h("li", c)))) : null,
-      sum.training ? h("p.sum-training", icon("cap", 14), ` ${sum.training}`) : null);
+          (st.records ?? []).length ? h("span.sum-recs", st.records.map(formLink)) : null); }))))) : none("steps")) : null,
+      sum.critical?.length || edit ? h("div.sum-block.crit", head("alert", "critical", t("sum_critical")), sum.critical?.length ? h("ul", sum.critical.map((c) => h("li", c))) : none("critical")) : null,
+      sum.training ? h("p.sum-training", icon("cap", 14), ` ${sum.training}`, penFor("training")) : edit ? h("p.sum-training.muted", icon("cap", 14), " ", h("button.link", { type: "button", onclick: () => openResumeEditor(ctx, s, "training") }, t("ed_add_part", partName("training").toLowerCase()))) : null);
   }
   return card(t("sum_title"), body, { cls: "sum-card", sub: by,
-    actions: s["Drive ID"] ? h("a.link", { href: driveUrl(s["Drive ID"]), target: "_blank", rel: "noopener" }, t("sum_full_drive"), " ↗") : null });
+    actions: h("div.sum-acts",
+      edit && sum ? h("button.btn.compact.ghost", { type: "button", onclick: () => openResumeEditor(ctx, s) }, icon("edit", 14), t("ed_edit")) : null,
+      s["Drive ID"] ? h("a.link", { href: driveUrl(s["Drive ID"]), target: "_blank", rel: "noopener" }, t("sum_full_drive"), " ↗") : null) });
 }
 
 // "Write the résumé with Claude" (editors; only where this view can ask Claude)
@@ -283,12 +314,16 @@ function aiButton(ctx, s) {
   const job = state.ai.get(s.Code);
   const has = s.summary?.by === "claude";
   const lang = getLang() === "FR" ? "FR" : "EN";
+  const edited = editedParts(s.summary);
+  let armed = false;
   const run = async () => {
+    // a résumé people corrected is only replaced on a second click
+    if (edited.length && !armed) { armed = true; btn.lastChild.textContent = t("sum_ai_replace"); ctx.toast?.(t("sum_ai_replace_t"), "warn"); setTimeout(() => { armed = false; if (btn.isConnected) btn.lastChild.textContent = t("sum_ai_again"); }, 5000); return; }
     const st = { status: "running", ctl: new AbortController() };
     state.ai.set(s.Code, st); ctx.rerender();
     try {
       const patch = await summarizeSop(s, { lang, signal: st.ctl.signal });
-      await ctx.saveObj("sop", s.__key, patch, true);
+      await ctx.saveObj("sop", s.__key, patch, true, "claude");
       state.ai.set(s.Code, { status: "ok" });
     } catch (e) {
       const key = aiProblem(e);
@@ -298,8 +333,9 @@ function aiButton(ctx, s) {
     }
     ctx.rerender();
   };
-  return h("button.btn.compact.ai-btn", { type: "button", disabled: job?.status === "running" || state.aiAvailable === false ? true : null, title: t("sum_ai_t"), onclick: run },
-    icon("sparkle", 15), job?.status === "running" ? t("sum_writing") : has ? t("sum_ai_again") : t("sum_ai"));
+  const btn = h("button.btn.compact.ai-btn", { type: "button", disabled: job?.status === "running" || state.aiAvailable === false ? true : null, title: t("sum_ai_t"), onclick: run },
+    icon("sparkle", 15), h("span", job?.status === "running" ? t("sum_writing") : has || edited.length ? t("sum_ai_again") : t("sum_ai")));
+  return btn;
 }
 
 // forms, templates and attachments of the SOP, each with what it records; forms of other SOPs it uses; separate files in Drive
@@ -311,21 +347,27 @@ function formsCard(ctx, X, s, forms, d) {
     h("span.form-ic", icon(KIND_ICON[f.kind] ?? "edit", 16)),
     h("span.form-main",
       h("span.form-top", h("b.mono", f.code.replace(/\/Onc/, "")), h("span.tag", kindName(f.kind)), f.rev ? h("span.sop-rev", `rev ${f.rev}`) : null,
-        f.mismatch ? h("span.tag.warn", t("frm_rev_mismatch", f.citedRev, f.attachedRev)) : null),
+        f.mismatch ? h("span.tag.warn", t("frm_rev_mismatch", f.citedRev, f.attachedRev)) : null,
+        f.inApp && f.register?.Source === "App" ? h("span.tag.edit-tag", t("fe_added_tag")) : f.register?.Source === "App" ? h("span.tag.edit-tag", t("fe_edited_tag")) : null),
       h("span.form-title", f.title || h("span.muted", t("frm_untitled"))),
       h("span.form-meta",
-        f.attached ? h("span.ok-mini", icon("check", 12), ` ${t("frm_attached")}`) : h("span.warn-mini", t("frm_listed_only")),
+        f.attached ? h("span.ok-mini", icon("check", 12), ` ${t("frm_attached")}`) : f.inApp ? h("span", t("fe_in_register")) : h("span.warn-mini", t("frm_listed_only")),
         f.steps?.length ? h("span", ` · ${t("frm_in_steps", f.steps.map((x) => x.n).join(", "))}`) : null,
         f.fields?.length || f.columns?.length || f.sections?.length ? h("span", ` · ${fmtNum((f.sections?.length ?? 0) + (f.fields?.length ?? 0) + (f.columns?.length ?? 0))} ${t("frm_items")}`) : null,
         f.usedBy?.length ? h("span", ` · ${t("frm_used_by_n", fmtNum(f.usedBy.length))}`) : null)),
     h("span.form-go", icon("chevron", 15)));
-  const body = !forms.length && !files.length
+  const removed = (X.removedForms ?? []).filter((f) => f.owner === s || s.forms.some((x) => x.key === f.key));
+  const body = !forms.length && !files.length && !removed.length
     ? h("p.muted", s.Forms ? t("frm_none") : d?.status === "loading" ? t("sum_reading") : t("frm_unknown"))
     : h("div.form-list",
       own.length ? own.map(row) : null,
       other.length ? [h("h5.form-sub", t("frm_other_sops")), ...other.map((f) => h("div.form-other", row(f), h("a.tag", { href: sopHref(f.owner.Code) }, f.owner.Code)))] : null,
-      files.length ? [h("h5.form-sub", t("frm_files")), ...files.map((x) => h("a.form-file", { href: driveUrl(x["Drive ID"]), target: "_blank", rel: "noopener" }, icon("globe", 13), h("b", x.Code), ` ${short(x.Title, 60)}`))] : null);
-  return card(t("frm_title"), body, { sub: forms.length ? t("frm_sub", fmtNum(forms.filter((f) => f.attached).length), fmtNum(forms.length)) : null });
+      files.length ? [h("h5.form-sub", t("frm_files")), ...files.map((x) => h("a.form-file", { href: driveUrl(x["Drive ID"]), target: "_blank", rel: "noopener" }, icon("globe", 13), h("b", x.Code), ` ${short(x.Title, 60)}`))] : null,
+      removed.length ? h("details.form-removed", h("summary", t("fe_removed_n", fmtNum(removed.length))), removed.map((f) => h("div.form-other",
+        h("span.muted", h("b.mono", f.code.replace(/\/Onc/, "")), ` ${short(f.title, 50)}`),
+        ctx.canEdit ? h("button.btn.compact.ghost", { type: "button", onclick: () => setRemoved(ctx, f, false).then(() => ctx.rerender()) }, icon("undo", 14), t("fe_restore")) : null))) : null);
+  return card(t("frm_title"), body, { sub: forms.length ? t("frm_sub", fmtNum(forms.filter((f) => f.attached).length), fmtNum(forms.length)) : null,
+    actions: ctx.canEdit ? h("button.btn.compact.ghost", { type: "button", onclick: () => openFormEditor(ctx, X, null, { owner: s }) }, icon("plus", 14), t("fe_add")) : null });
 }
 
 /** One form in the drawer: what it is, what it records, its revisions, the SOP that owns it and the SOPs and steps that use it. */
@@ -336,9 +378,12 @@ export function openForm(ctx, X, f) {
     h("div.form-actions",
       owner?.["Drive ID"] ? h("a.btn.primary.compact", { href: driveUrl(owner["Drive ID"]), target: "_blank", rel: "noopener" }, icon("globe", 15), f.attached ? t("frm_open_in_sop") : t("sop_open_full")) : null,
       f.file?.["Drive ID"] ? h("a.btn.compact", { href: driveUrl(f.file["Drive ID"]), target: "_blank", rel: "noopener" }, icon("globe", 15), t("frm_open_file")) : null,
-      owner ? h("a.btn.compact", { href: sopHref(owner.Code), onclick: () => ctx.closeDrawer() }, icon("sop", 15), owner.Code) : null),
+      owner ? h("a.btn.compact", { href: sopHref(owner.Code), onclick: () => ctx.closeDrawer() }, icon("sop", 15), owner.Code) : null,
+      ctx.canEdit ? h("button.btn.compact", { type: "button", onclick: () => openFormEditor(ctx, X, f) }, icon("edit", 15), t("edit")) : null),
+    f.removed ? h("div.banner.warn", icon("alert", 18), h("span", t("fe_removed_long")), ctx.canEdit ? h("button.btn.compact", { type: "button", onclick: () => setRemoved(ctx, f, false).then(() => { ctx.closeDrawer(); ctx.rerender(); }) }, icon("undo", 14), t("fe_restore")) : null) : null,
+    f.register?.Comment ? h("p.form-note", icon("report", 14), ` ${f.register.Comment}`) : null,
     f.mismatch ? h("div.banner.warn", icon("alert", 18), h("span", t("frm_mismatch_long", f.citedRev, f.attachedRev))) : null,
-    !f.attached ? h("div.banner.info", icon("report", 18), h("span", t("frm_not_attached_long"))) : null,
+    !f.attached && !f.inApp ? h("div.banner.info", icon("report", 18), h("span", t("frm_not_attached_long"))) : null,
     h("dl.deflist", [[t("col_type"), kindName(f.kind)], [t("frm_owner"), owner ? `${owner.Code} · ${short(owner.Title, 60)}` : t("frm_no_owner")], [t("frm_rev_listed"), f.citedRev], [t("frm_rev_attached"), f.attachedRev],
       [t("frm_register"), f.register ? [f.register.Type, f.register.Status, f.register["Linked room"], f.register["Linked equipment"]].filter(Boolean).join(" · ") : null]]
       .filter(([, v]) => v != null && v !== "").flatMap(([k, v]) => [h("dt", k), h("dd", v)])),
@@ -348,6 +393,7 @@ export function openForm(ctx, X, f) {
     !f.sections?.length && !f.fields?.length && !f.columns?.length ? h("p.muted", t("frm_no_preview")) : null,
     f.steps?.length ? h("div.form-prev", h("h4", t("frm_steps")), h("ol", f.steps.map((x) => h("li", { value: x.n }, x.do)))) : null,
     f.usedBy?.length ? h("div.form-prev", h("h4", t("frm_used_by")), h("ul.mini-codes", f.usedBy.map((x) => h("li", h("a", { href: sopHref(x.Code), onclick: () => ctx.closeDrawer() }, h("b", x.Code), ` ${short(x.Title, 50)}`))))) : null,
+    auditCard(ctx, (ctx.audit ?? []).filter((e) => e.table === "forms" && e.ref && formKey(e.ref) === f.key), { title: t("aud_record_title") }),
   ]);
 }
 
@@ -359,7 +405,7 @@ async function loadDoc(ctx, s, d, fresh, force) {
     if (ctx.canEdit && s.__key && (force || s.Indexed !== (s["Drive modified"] || null) || !s.Summary || !s.Forms)) {
       const patch = indexFields(s, d.doc, isoToday(), p?.fileContent ?? "");
       delete patch.Code;
-      ctx.saveObj("sop", s.__key, patch, true).catch(() => {});
+      ctx.saveObj("sop", s.__key, patch, true, "drive").catch(() => {});
     }
   } catch (e) { d.status = "error"; d.error = e; }
   ctx.rerender();
@@ -516,8 +562,10 @@ function formsTab(ctx, X) {
   if (!F0.length) return [h("div.empty.big", h("p", t("frm_empty", fmtNum(read), fmtNum(inDrive))), h("button.btn", { type: "button", onclick: () => ctx.set("sopTab", "drive") }, icon("report", 15), t("sop_t_drive")))];
   const kinds = Object.keys(KIND_COLOR).filter((k) => F0.some((x) => x.kind === k));
   const depts = [...new Set(F0.map((x) => x.dept).filter(Boolean))].sort();
-  const F = F0.filter((x) => (!f.kind || f.kind === ALL || x.kind === f.kind) && (!f.dept || f.dept === ALL || x.dept === f.dept)
-    && (!f.state || f.state === ALL || (f.state === "attached" ? x.attached : f.state === "listed" ? !x.attached : f.state === "mismatch" ? x.mismatch : f.state === "shared" ? x.usedBy.length > 0 : !x.owner))
+  const pool = f.state === "removed" ? X.removedForms ?? [] : F0;
+  const F = pool.filter((x) => (!f.kind || f.kind === ALL || x.kind === f.kind) && (!f.dept || f.dept === ALL || x.dept === f.dept)
+    && (!f.state || f.state === ALL || f.state === "removed" || (f.state === "attached" ? x.attached : f.state === "listed" ? !x.attached && !x.inApp : f.state === "mismatch" ? x.mismatch : f.state === "shared" ? x.usedBy.length > 0
+      : f.state === "edited" ? x.register?.Source === "App" : !x.owner))
     && (!qx || `${x.code} ${x.title ?? ""} ${x.owner?.Code ?? ""} ${(x.fields ?? []).join(" ")} ${(x.columns ?? []).join(" ")}`.toLowerCase().includes(qx)));
   const n = (fn) => F0.filter(fn).length;
   return [
@@ -542,14 +590,16 @@ function formsTab(ctx, X) {
       h("label.field.grow", h("span", t("sop_find")), h("input", { type: "search", value: f.q ?? "", placeholder: t("frm_find_ph"), onchange: (e) => setF("q", e.target.value) })),
       select(t("col_type"), [[ALL, t("filter_all")], ...kinds.map((k) => [k, kindName(k)])], f.kind ?? ALL, (v) => setF("kind", v)),
       select(t("col_dept"), [[ALL, t("filter_all")], ...depts.map((x) => [x, `${x} · ${deptName(x)}`])], f.dept ?? ALL, (v) => setF("dept", v)),
-      select(t("col_status"), [[ALL, t("filter_all")], ["attached", t("frm_attached")], ["listed", t("frm_listed_only")], ["mismatch", t("frm_k_mismatch")], ["shared", t("frm_k_shared")], ["orphan", t("frm_k_orphan")]], f.state ?? ALL, (v) => setF("state", v))), { cls: "filter-card" }),
+      select(t("col_status"), [[ALL, t("filter_all")], ["attached", t("frm_attached")], ["listed", t("frm_listed_only")], ["mismatch", t("frm_k_mismatch")], ["shared", t("frm_k_shared")], ["orphan", t("frm_k_orphan")],
+        ["edited", t("fe_f_edited")], ["removed", t("fe_f_removed", fmtNum(X.removedForms?.length ?? 0))]], f.state ?? ALL, (v) => setF("state", v)),
+      ctx.canEdit ? h("div.field", h("span", "\u00a0"), h("button.btn", { type: "button", onclick: () => openFormEditor(ctx, X, null, {}) }, icon("plus", 15), t("fe_add"))) : null), { cls: "filter-card" }),
     card(`${t("frm_forms")} · ${fmtNum(F.length)}`, dataTable([
       { key: "code", label: t("col_code"), cls: "mono nowrap", render: (x) => x.code.replace(/\/Onc/, "") },
       { key: "title", label: t("col_title"), cls: "wrap", render: (x) => (x.title ? h("b", x.title) : h("span.muted", t("frm_untitled"))) },
       { key: "kind", label: t("col_type"), render: (x) => h("span.tag", { style: { "--tag": KIND_COLOR[x.kind] } }, kindName(x.kind)) },
       { key: "owner", label: t("frm_owner"), cls: "nowrap", sort: (x) => x.owner?.Code ?? "~", render: (x) => (x.owner ? h("a", { href: sopHref(x.owner.Code), onclick: (e) => e.stopPropagation() }, x.owner.Code) : h("span.muted", "—")) },
       { key: "rev", label: t("col_rev"), cls: "num" },
-      { key: "attached", label: t("frm_in_file"), render: (x) => (x.attached ? dot("var(--good)", t("frm_attached")) : dot("var(--warning)", t("frm_listed_only"))) },
+      { key: "attached", label: t("frm_in_file"), render: (x) => (x.attached ? dot("var(--good)", t("frm_attached")) : x.inApp ? dot("var(--c4)", t("fe_in_register")) : dot("var(--warning)", t("frm_listed_only"))) },
       { key: "mismatch", label: "≠", render: (x) => (x.mismatch ? h("span.tag.warn", `${x.citedRev} ≠ ${x.attachedRev}`) : "") },
       { key: "usedBy", label: t("frm_used_by"), cls: "num", sort: (x) => x.usedBy.length, render: (x) => (x.usedBy.length ? fmtNum(x.usedBy.length) : "") },
     ], F, { pageSize: 40, onRow: (x) => openForm(ctx, X, x), searchText: (x) => `${x.code} ${x.title ?? ""}`, exportName: "forms" }), { sub: t("frm_table_sub") }),
@@ -560,7 +610,7 @@ function formsTab(ctx, X) {
 function aiJobCard(ctx, X) {
   const st = aiJob.run;
   const lang = getLang() === "FR" ? "FR" : "EN";
-  const todo = X.list.filter((s) => s["Drive ID"] && !/obsolete/i.test(s.Status ?? "") && s.summary?.by !== "claude");
+  const todo = X.list.filter((s) => s["Drive ID"] && !/obsolete/i.test(s.Status ?? "") && s.summary?.by !== "claude" && !s.summary?.edited);
   const busy = st && !st.finished;
   return card(t("ai_job"), h("div.sop-job",
     h("p", t("ai_job_body", fmtNum(todo.length))),

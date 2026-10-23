@@ -4,7 +4,8 @@
 import SCHEMA from "./schema.js";
 import * as M from "./model.js";
 import { openStore, applyEdits } from "./store.js";
-import { rowForm, changeLine, tableLabel } from "./editing.js";
+import { rowForm, changeLine, tableLabel, SPECS } from "./editing.js";
+import { diffRows } from "./audit.js";
 import { initI18n, setLang, getLang, t, tv } from "./i18n.js";
 import { h, pill, typeTag, fmtDate, fmtNum, fmtPct, defList, dataTable } from "./ui.js";
 import { icon } from "./icons.js";
@@ -18,6 +19,8 @@ import * as PE from "./views-people.js";
 import * as AP from "./views-apqr.js";
 import * as SV from "./views-sop.js";
 import * as DV from "./views-doc.js";
+import * as AU from "./views-audit.js";
+import * as CK from "./views-cockpit.js";
 import * as FV from "./views-fives.js";
 import { importFiles, COLS, emptyData, upsertRows } from "./importers.js";
 import { buildDomains } from "./domain.js";
@@ -90,20 +93,20 @@ function withAllTables(base) {
 
 // ---------- routes ----------
 const NAV = [
-  ["nav_overview", [["home", "home", "home"], ["dashboard", "dashboard", "dash_title"], ["review", "review", "mr_title"], ["metrics", "target", "met_title"], ["spc", "spc", "spc_title"]]],
+  ["nav_overview", [["home", "home", "home"], ["cockpit", "calendar", "ck_title"], ["dashboard", "dashboard", "dash_title"], ["review", "review", "mr_title"], ["metrics", "target", "met_title"], ["spc", "spc", "spc_title"]]],
   ["nav_events", [["deviations", "deviation", "nav_dev_t"], ["capa", "capa", "nav_capa_t"], ["cc", "cc", "nav_cc_t"], ["findings", "flag", "nav_find_t"], ["actions", "tasks", "nav_actions_t"], ["records", "records", "qr_title"]]],
   ["nav_product", [["products", "product", "pv_title"], ["lifecycle", "cycle", "lc_title"], ["apqr", "report", "apqr_title"], ["wip", "layers", "wip_title"], ["suppliers", "truck", "sup_title"]]],
   ["nav_ops", [["map", "map", "map_title"], ["rooms", "room", "rx_title"], ["equipment", "equipment", "eq_title"], ["calibration", "thermo", "cal_title"], ["validation", "badge", "val_title"]]],
   ["nav_people", [["training", "cap", "trn_title"], ["fives", "sparkle", "fives_title"], ["activities", "calendar", "qaa_title"], ["sops", "sop", "sop_title"], ["fmea", "fmea", "fm_title"], ["improvements", "improve", "im_title"]]],
-  ["nav_gov", [["data", "edit", "dt_title"], ["quality", "quality", "dq_title"]]],
+  ["nav_gov", [["data", "edit", "dt_title"], ["audit", "history", "aud_title"], ["quality", "quality", "dq_title"]]],
 ];
 const VIEWS = {
-  home: O.home, dashboard: O.dashboard, review: O.review, metrics: PE.metricsView, spc: O.spc,
+  home: O.home, cockpit: CK.cockpitView, dashboard: O.dashboard, review: O.review, metrics: PE.metricsView, spc: O.spc,
   deviations: QV.deviations, capa: QV.capaView, cc: QV.ccView, findings: QV.findings, actions: QV.actionsView, records: Q.records,
   products: S.products, lifecycle: OP.lifecycle, apqr: AP.apqrView, wip: OP.wipView, suppliers: OP.suppliersView,
   map: S.map, rooms: S.rooms, equipment: S.equipment, calibration: OP.calibration, validation: OP.validation,
   training: PE.trainingView, fives: FV.fivesView, activities: PE.activitiesView, sops: SV.sopsView, fmea: Q.fmea, improvements: Q.improvements,
-  data: dataTables, quality: Q.quality,
+  data: dataTables, audit: AU.auditView, quality: Q.quality,
 };
 
 function parseHash() {
@@ -130,6 +133,9 @@ const ctx = {
     set: (k, v) => ws.saveReview({ ...(wsState.review ?? {}), [k]: v }).catch((e) => toast(e.message, "warn")),
   },
   get canEdit() { return Boolean(ws?.canWrite); },
+  /** The signed-in person's id (who an edit is recorded against) and name (null when unknown). */
+  get me() { return me ?? null; },
+  get myName() { return (me && names.get(me)) || null; },
   get data() { return data; },
   /** Change some fields of one row (e.g. move an improvement to the next stage). */
   update: async (table, key, patch) => {
@@ -148,34 +154,37 @@ const ctx = {
   /** New row with some fields filled in (e.g. a metric value for a given quarter). */
   addWith: (table, defaults, title) => openEditor(table, null, title, defaults),
   /** Save a row given as {column: value} (key null = new row); other columns are kept. */
-  saveObj: (table, key, obj, quiet) => saveObj(table, key, obj, quiet),
+  saveObj: (table, key, obj, quiet, note) => saveObj(table, key, obj, quiet, note),
+  get audit() { return wsState.audit ?? []; },
   toast: (msg, kind) => toast(msg, kind),
   /**
    * Add or update many rows at once ({column: value} objects; rows matching on keyCols are updated).
    * A few rows are saved as individual changes; a large batch rewrites the table once (its in-app changes are folded in).
    */
-  bulkUpsert: async (table, objs, keyCols, progress) => {
+  bulkUpsert: async (table, objs, keyCols, progress, note) => {
     const tbl = data[table];
     const res = upsertRows(tbl.cols, tbl.rows, objs, keyCols);
     if (!res.changed.length) return res;
     if (res.changed.length <= 25) {
       let n = 0;
-      for (const i of res.changed) { progress?.(++n, res.changed.length); await ws.saveRow(table, i < tbl.rows.length ? tbl.keys[i] : newKey(), res.rows[i], me, tbl.importId); }
+      for (const i of res.changed) { progress?.(++n, res.changed.length); auditNote = note ?? null; await ws.saveRow(table, i < tbl.rows.length ? tbl.keys[i] : newKey(), res.rows[i], me, tbl.importId); }
     } else {
       const next = structuredClone(wsState.base);
       next[table] = { cols: tbl.cols, rows: res.rows };
       await ws.importBase(next, [table], progress);
       applyBase(next, [table]);
+      audit({ op: "bulk", table, n: res.changed.length, added: res.added, updated: res.updated, note: note ?? null });
     }
     return res;
   },
   /** Replace a whole table (a register rebuilt from its source, e.g. the Drive document register). */
-  replaceTable: async (table, objs, progress) => {
+  replaceTable: async (table, objs, progress, note) => {
     const cols = data[table]?.cols ?? COLS[table];
     const next = structuredClone(wsState.base);
     next[table] = { cols, rows: objs.map((o) => cols.map((c) => o[c] ?? null)) };
     await ws.importBase(next, [table], progress);
     applyBase(next, [table]);
+    audit({ op: "replace", table, n: objs.length, note: note ?? null });
   },
   /** Apply the same change to several rows (e.g. record a calibration group as done). */
   bulkUpdate: async (table, keys, patch) => {
@@ -199,13 +208,44 @@ const ctx = {
 };
 
 const newKey = () => `n-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
-async function saveObj(table, key, obj, quiet) {
+async function saveObj(table, key, obj, quiet, note) {
   const tbl = data[table];
   const i = key ? tbl.keys.indexOf(key) : -1;
   const row = i >= 0 ? [...tbl.rows[i]] : tbl.cols.map(() => null);
   for (const [c, v] of Object.entries(obj)) { const j = tbl.cols.indexOf(c); if (j >= 0) row[j] = v; }
-  await ws.saveRow(table, i >= 0 ? key : newKey(), row, me, tbl.importId);
+  const k = i >= 0 ? key : newKey();
+  auditNote = note ?? null;
+  await ws.saveRow(table, k, row, me, tbl.importId);
   if (!quiet) toast(t("saved_ok"));
+  return k;
+}
+
+// ---------- audit trail: every change made in the app — who, when, which record, old → new for each field ----------
+let auditNote = null; // why the next row change happens, when not a person's edit ("Read from Drive", "Résumé by Claude")
+function auditRef(table, cols, row) {
+  const sp = SPECS[table] ?? {};
+  const v = (c) => (row && cols.includes(c) ? row[cols.indexOf(c)] : null);
+  return { ref: v(sp.id) ?? null, label: [v(sp.id), v(sp.title)].filter((x) => x != null && x !== "").join(" · ").slice(0, 160) || null };
+}
+async function audit(entry) {
+  try { await ws.audit?.({ at: new Date().toISOString(), by: me ?? null, ...entry }); } catch (e) { console.warn("Audit trail entry not saved:", e?.message); }
+}
+/** Every row change goes through here: the change is saved, then logged with what it changed. */
+function auditedStore(store) {
+  const save = store.saveRow.bind(store);
+  store.saveRow = async (table, key, row, by, base) => {
+    const tb = data?.[table];
+    const i = tb ? tb.keys.indexOf(key) : -1;
+    const before = i >= 0 ? tb.rows[i] : null;
+    const note = auditNote; auditNote = null;
+    await save(table, key, row, by, base);
+    const cols = tb?.cols ?? COLS[table] ?? [];
+    const op = row == null ? "delete" : before ? "edit" : "add";
+    const changes = row == null ? [] : diffRows(cols, before, row);
+    if (op === "edit" && !changes.length) return;
+    audit({ op, table, key, ...auditRef(table, cols, row ?? before), changes, note });
+  };
+  return store;
 }
 
 // ---------- shell ----------
@@ -684,6 +724,7 @@ function dropZone(onDone) {
       if (!replaced.length) { status.replaceChildren(h("div.warn-text", t("import_nothing")), report); return; }
       next.meta = { ...next.meta, importedAt: new Date().toISOString() };
       await ws.importBase(next, replaced, (n, total) => status.replaceChildren(h("span.spinner"), ` ${t("ws_saving")} ${n}/${total}`));
+      audit({ op: "import", table: replaced.join(", "), n: replaced.length, note: done.map(([name]) => name).join(", ").slice(0, 300) });
       status.replaceChildren(h("div.ok-line", icon("check", 16), t("import_done")), report);
       toast(t("import_done"));
       onDone?.(done.some(([, msg]) => msg.startsWith("✘")));
@@ -757,5 +798,8 @@ function clearButton() {
 applyTheme();
 render(); // loading state until the workspace answers
 ({ store: ws, user: userCap, me } = await openStore(bundled));
+auditedStore(ws);
 isOwner = ws.mode === "shared" ? Boolean(await userCap?.isOwner?.()) : true;
+// the signed-in person's own name, for fields that record who did something ("Requested by")
+if (me) userCap?.profiles?.([me]).then((ps) => { if (ps?.[me]?.name) names.set(me, ps[me].name); }).catch(() => {});
 ws.onChange(onWorkspace);

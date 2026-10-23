@@ -90,7 +90,7 @@ export async function summarizeAll(ctx, list, lang, onProgress) {
     st.current = s.Code; st.ctl = new AbortController(); onProgress?.(st);
     try {
       const patch = await summarizeSop(s, { lang, signal: st.ctl.signal });
-      if (s.__key) await ctx.saveObj("sop", s.__key, patch, true);
+      if (s.__key) await ctx.saveObj("sop", s.__key, patch, true, "claude");
     } catch (e) {
       const key = aiProblem(e);
       if (key !== "ai_e_cancelled") st.failed.push({ code: s.Code, problem: key });

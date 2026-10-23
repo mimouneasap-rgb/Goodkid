@@ -54,6 +54,13 @@ export const EXT_COLS = {
   // Google Drive folders the SOP library is synced from
   // (Folders: the folder tree found by the last sync, as JSON [[id, path], …], so searches reach every subfolder)
   sopSources: ["Folder", "Name", "Site", "Review years", "Last sync", "Files", "Comment", "Folders"],
+  // Forms register: the workbook's columns, then corrections and additions made in the app (Owner SOP: the SOP the form
+  // belongs to when its code does not say; Sections / Fields / Columns: one per line, "—" for none; Status "Removed" hides
+  // a form wrongly found in an SOP file)
+  forms: ["Form code", "Title", "Type", "Linked SOP", "Linked room", "Linked equipment", "Revision", "Status", "Source", "Owner SOP", "Sections", "Fields", "Columns", "Comment"],
+  // SOP review and revision requests, tracked to closure (Outcome: No change — the review date moves on; Revised — the
+  // new revision and its effective date; Withdrawn)
+  sopReviews: ["Review ID", "SOP", "Type", "Reason", "Requested by", "Requested on", "Owner", "Due", "Change control", "Status", "Outcome", "New revision", "Effective on", "Closed on", "Comment"],
   // Module ↔ SOP links that override the automatic match on SOP titles
   sopLinks: ["Topic", "SOP", "Comment"],
   // Progress of each EU GMP Ch.1.10 review section within one product's APQR

@@ -30,7 +30,7 @@ export const VOCAB = {
   sopDepts: ["CM", "EN", "GS", "HSE", "PL", "PR", "QA", "QC", "RD", "SC", "VL", "WH"],
   sopSites: ["Oncology", "General", "Shared"],
   languages: ["EN", "FR", "EN/FR"],
-  formTypes: ["Logbook", "Form", "Checklist", "Template"],
+  formTypes: ["Logbook", "Form", "Checklist", "Template", "Attachment"],
   improvementStages: ["Idea", "Assessed", "In progress", "Done"],
   benefits: ["Primary containment", "Mechanical & residue transfer", "Occupational exposure", "Loss of containment", "Personnel flow", "Compliance", "Efficiency", "Data integrity"],
   owners: ["Production", "Quality Assurance", "EHS", "Engineering", "IT", "Validation", "Quality Control", "Warehouse", "R&D"],

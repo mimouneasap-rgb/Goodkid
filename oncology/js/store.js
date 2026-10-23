@@ -14,6 +14,7 @@
 //            `base` is the import id of the table the edit was made against: after a table is
 //            re-imported, older edits no longer apply (their row positions mean something else).
 //   review – { meeting, decisions } for the management review
+//   audit  – the latest audit-trail entries, newest first: { id, at, by, op, table, key, ref, label, changes: [[field, old, new]], n, note }
 
 const CHUNK_BYTES = 180_000; // documents are capped at 256 KiB
 const TABLE_KEYS = (data) => Object.keys(data).filter((k) => data[k] && Array.isArray(data[k].rows) && Array.isArray(data[k].cols));
@@ -26,6 +27,7 @@ const ls = {
 };
 
 export const editId = (table, key) => `${table}~${key}`;
+const auditId = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 const newImportId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 
 /** Split a JSON-able list into pieces whose serialized size stays under `limit`. */
@@ -53,7 +55,7 @@ class LocalStore {
   state() {
     const edits = new Map(Object.entries(ls.get("edits", {})));
     const review = ls.get("review", null) ?? { meeting: ls.get("u.meeting", null), decisions: ls.get("u.decisions", []) };
-    return { base: ls.get("data", null) ?? this.bundled ?? null, edits, review, ready: true };
+    return { base: ls.get("data", null) ?? this.bundled ?? null, edits, review, audit: ls.get("audit", []), ready: true };
   }
   onChange(fn) { this.listeners.push(fn); fn(this.state()); }
   emit() { const s = this.state(); for (const fn of this.listeners) fn(s); }
@@ -73,6 +75,13 @@ class LocalStore {
     this.emit();
   }
   async saveReview(review) { ls.set("review", review); this.emit(); }
+  /** Append one audit-trail entry (kept: the latest 3000). */
+  async audit(entry) {
+    const list = ls.get("audit", []);
+    list.unshift({ id: auditId(), ...entry });
+    ls.set("audit", list.slice(0, 3000));
+    this.emit();
+  }
   async clear() { ls.del("data"); ls.del("edits"); this.emit(); }
   localData() { return null; }
 }
@@ -89,6 +98,7 @@ class SharedStore {
     this.chunks = new Map();
     this.edits = new Map();
     this.review = null;
+    this.auditLog = [];
     this.loaded = { info: false, chunks: false, edits: false };
     this.cache = null;
   }
@@ -108,6 +118,8 @@ class SharedStore {
       this.loaded.edits = true; this.emit();
     }, err);
     this.db.doc("review/current").onSnapshot((s) => { this.review = s.exists ? s.data() : null; this.emit(); }, err);
+    // the audit trail: the latest 1000 entries live (older ones stay in the database)
+    this.db.collection("audit").orderBy("at", "desc").limit(1000).onSnapshot((q) => { this.auditLog = q.docs.map((d) => ({ id: d.id, ...d.data() })); this.emit(); }, err);
   }
   /** Reassemble the imported workbook from its chunks (only when every chunk of the current import has arrived). */
   base() {
@@ -138,7 +150,7 @@ class SharedStore {
   }
   state() {
     const ready = this.loaded.info && this.loaded.chunks && this.loaded.edits;
-    return { base: ready ? this.base() : null, edits: this.edits, review: this.review, ready, pending: ready && this.info && !this.base() };
+    return { base: ready ? this.base() : null, edits: this.edits, review: this.review, audit: this.auditLog, ready, pending: ready && this.info && !this.base() };
   }
   onChange(fn) { this.listeners.push(fn); fn(this.state()); }
   emit() { const s = this.state(); for (const fn of this.listeners) fn(s); }
@@ -186,6 +198,8 @@ class SharedStore {
     await this.write(this.db.collection("edits").doc(editId(table, key)), { table, key, row, at: new Date().toISOString(), by: by ?? null, base: base ?? null });
   }
   async saveReview(review) { await this.write(this.db.doc("review/current"), review); }
+  /** Append one audit-trail entry; entries are never changed or deleted by the app. */
+  async audit(entry) { await this.write(this.db.collection("audit").doc(auditId()), entry); }
   async clear() {
     await this.remove(this.db.doc("base/info"));
     for (const id of [...this.chunks.keys()]) await this.remove(this.db.collection("chunks").doc(id));

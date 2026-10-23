@@ -5,6 +5,7 @@
 import { objects, clean, toDay, addMonths, monthStart, monthKey, daysBetween, countBy } from "./model.js";
 import { METRICS, QA_ACTIVITIES, FIVES, FIVES_ITEMS, fivesKey, fivesRating, RISK_FREQUENCY, FREQUENCY_DAYS, APQR_PHASES, APQR_STREAMS, APQR_SECTIONS, SOP_TOPICS } from "./catalogs.js";
 import { sopKey, topicsOf, summaryOf, formsOf, formKey, formKind } from "./sopkit.js";
+import { formOverride, joinReviews } from "./sopwork.js";
 import { docKey, productOf as docProductOf, productCodeOf, strengthOf, entryAnomalies, TYPE_BY_ID, zoneOf } from "./dockit.js";
 
 const DAY = 86400000;
@@ -211,6 +212,7 @@ export function buildDomains(m, wb, review) {
   const sopx = buildSopLibrary(m, wb);
   const docx = buildDocControl(m, wb, sopx);
   buildFormRegistry(m, sopx, docx);
+  sopx.reviews = joinReviews(objects(wb.sopReviews ?? { cols: [], rows: [] }), sopx.list, { now, dayOf: toDay, keyOf: sopKey });
 
   // ----- GMP activity register (catalogue + entries recorded in the app) -----
   const latest = (xs) => xs.filter((x) => x != null).reduce((a, b) => Math.max(a, b), -Infinity);
@@ -552,15 +554,19 @@ export function buildDocControl(m, wb, sopx) {
  */
 export function buildFormRegistry(m, sopx, docx) {
   const by = new Map();
+  const sopOf = (code) => (code ? sopx.byKey.get(sopKey(code)) ?? sopx.list.find((s) => s.Code === code) ?? null : null);
   const ownerOf = (key) => { const base = key.split("/")[0]; return sopx.byKey.get(`SOP${base}/ONC`) ?? sopx.byKey.get(`SOP${base}`) ?? null; };
+  // what the SOP files and Drive say about a form, before the register's corrections (the editor stores only differences)
+  const readOf = (e) => ({ title: e.title, kind: formKind(e.key.split("/")[1], e.title ?? ""), rev: [e.citedRev, e.attachedRev].filter(Boolean).sort().at(-1) ?? null, sections: e.sections, fields: e.fields, columns: e.columns });
   const entry = (key, code) => {
-    if (!by.has(key)) by.set(key, { key, code, title: null, kind: null, owner: ownerOf(key), usedBy: [], attached: false, citedRev: null, attachedRev: null, rev: null,
-      sections: [], fields: [], columns: [], register: null, file: null, steps: [] });
+    if (!by.has(key)) by.set(key, { key, code, title: null, kind: null, owner: ownerOf(key), homeOwner: ownerOf(key), usedBy: [], attached: false, citedRev: null, attachedRev: null, rev: null,
+      sections: [], fields: [], columns: [], register: null, file: null, steps: [], edited: null, removed: false, found: false });
     return by.get(key);
   };
   for (const s of sopx.list) for (const f of s.forms) {
     if (!f?.key) continue;
     const e = entry(f.key, f.code);
+    e.found = true;
     const own = e.owner === s;
     if (!own && !e.usedBy.includes(s)) e.usedBy.push(s);
     // the owner's own record wins for title, revisions and contents
@@ -569,27 +575,45 @@ export function buildFormRegistry(m, sopx, docx) {
     e.attached ||= Boolean(f.attached);
     for (const k of ["sections", "fields", "columns"]) if ((own || !e[k].length) && f[k]?.length) e[k] = f[k];
   }
-  for (const r of m.forms ?? []) {
-    const key = formKey(r["Form code"]);
-    if (!key) continue;
-    const e = entry(key, String(r["Form code"]).replace(/\/\d{2}$/, ""));
-    e.register = r; e.title ??= r.Title;
-  }
   for (const d of docx.list) {
     if (d.Type !== "TE") continue;
     const key = formKey(String(d.Code).replace(/-/g, "/"));
     if (key) { const e = entry(key, String(d.Code).replace(/-/g, "/")); e.file = d; e.title ??= d.Title; }
   }
+  // the forms register: what people corrected or added in the app wins over what was read in the SOP files
+  for (const r of m.forms ?? []) {
+    const key = formKey(r["Form code"]);
+    if (!key) continue;
+    const e = entry(key, String(r["Form code"]).replace(/\/\d{2}$/, ""));
+    const o = formOverride(r);
+    e.read ??= readOf(e);
+    e.register = r; e.edited = o;
+    if (o.title) e.title = o.title;
+    if (o.rev) e.regRev = o.rev;
+    for (const k of ["sections", "fields", "columns"]) if (o[k]) e[k] = o[k];
+    const owner = sopOf(o.owner);
+    if (owner && owner !== e.owner) { if (e.owner && !e.usedBy.includes(e.owner) && e.found) e.usedBy.push(e.owner); e.owner = owner; e.usedBy = e.usedBy.filter((x) => x !== owner); }
+    e.removed = o.removed;
+  }
   const REG_KIND = { checklist: "checklist", logbook: "logbook", template: "template", annex: "attachment", attachment: "attachment", form: "form" };
   for (const e of by.values()) {
+    e.read ??= readOf(e);
     e.kind = REG_KIND[String(e.register?.Type ?? "").toLowerCase()] ?? formKind(e.key.split("/")[1], e.title ?? "");
-    e.rev = [e.citedRev, e.attachedRev].filter(Boolean).sort().at(-1) ?? null;
-    e.mismatch = Boolean(e.citedRev && e.attachedRev && e.citedRev !== e.attachedRev);
+    e.rev = e.regRev ?? [e.citedRev, e.attachedRev].filter(Boolean).sort().at(-1) ?? null;
+    e.mismatch = Boolean(e.citedRev && e.attachedRev && e.citedRev !== e.attachedRev && !e.regRev);
     e.steps = (e.owner?.summary?.steps ?? []).map((st, i) => ({ ...st, n: i + 1 })).filter((st) => (st.records ?? []).some((c) => formKey(c) === e.key));
     e.dept = e.key.match(/^[A-Z]+/)?.[0] ?? null;
+    e.inApp = !e.found && !e.file && Boolean(e.register); // added in the app (or only in the workbook register)
   }
-  sopx.forms = [...by.values()].sort((a, b) => a.code.localeCompare(b.code, undefined, { numeric: true }));
+  const all = [...by.values()].sort((a, b) => a.code.localeCompare(b.code, undefined, { numeric: true }));
+  sopx.forms = all.filter((e) => !e.removed);
+  sopx.removedForms = all.filter((e) => e.removed);
   sopx.formsByKey = by;
+  // each SOP's forms: those its file lists or attaches, then those the register gives it
+  for (const s of sopx.list) {
+    const seen = new Set();
+    s.formList = [...s.forms.map((f) => by.get(f.key)), ...sopx.forms.filter((e) => e.owner === s)].filter((e) => e && !e.removed && !seen.has(e.key) && seen.add(e.key));
+  }
   return sopx.forms;
 }
 
