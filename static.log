@@ -1,3 +1,0 @@
-Quality Risk Manager running at http://localhost:8098
-QE Investigator running at http://localhost:8098/qe/
-Claude: no ANTHROPIC_API_KEY, the QE Investigator will ask for a key in the browser.
