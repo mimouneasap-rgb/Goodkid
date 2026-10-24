@@ -21,6 +21,7 @@ import * as SV from "./views-sop.js";
 import * as DV from "./views-doc.js";
 import * as AU from "./views-audit.js";
 import * as CK from "./views-cockpit.js";
+import * as TR from "./views-training.js";
 import * as FV from "./views-fives.js";
 import { importFiles, COLS, emptyData, upsertRows } from "./importers.js";
 import { buildDomains } from "./domain.js";
@@ -105,7 +106,7 @@ const VIEWS = {
   deviations: QV.deviations, capa: QV.capaView, cc: QV.ccView, findings: QV.findings, actions: QV.actionsView, records: Q.records,
   products: S.products, lifecycle: OP.lifecycle, apqr: AP.apqrView, wip: OP.wipView, suppliers: OP.suppliersView,
   map: S.map, rooms: S.rooms, equipment: S.equipment, calibration: OP.calibration, validation: OP.validation,
-  training: PE.trainingView, fives: FV.fivesView, activities: PE.activitiesView, sops: SV.sopsView, fmea: Q.fmea, improvements: Q.improvements,
+  training: TR.trainingView, fives: FV.fivesView, activities: PE.activitiesView, sops: SV.sopsView, fmea: Q.fmea, improvements: Q.improvements,
   data: dataTables, audit: AU.auditView, quality: Q.quality,
 };
 
@@ -136,6 +137,8 @@ const ctx = {
   /** The signed-in person's id (who an edit is recorded against) and name (null when unknown). */
   get me() { return me ?? null; },
   get myName() { return (me && names.get(me)) || null; },
+  /** The app's own data for pickers (rooms, assets, SOPs, people, positions, products, records, 5S areas). */
+  get options() { return optionLists(); },
   get data() { return data; },
   /** Change some fields of one row (e.g. move an improvement to the next stage). */
   update: async (table, key, patch) => {
@@ -171,7 +174,7 @@ const ctx = {
     } else {
       const next = structuredClone(wsState.base);
       next[table] = { cols: tbl.cols, rows: res.rows };
-      await ws.importBase(next, [table], progress);
+      await ws.importBase(next, [table], progress ?? (() => {}));
       applyBase(next, [table]);
       audit({ op: "bulk", table, n: res.changed.length, added: res.added, updated: res.updated, note: note ?? null });
     }
@@ -182,10 +185,12 @@ const ctx = {
     const cols = data[table]?.cols ?? COLS[table];
     const next = structuredClone(wsState.base);
     next[table] = { cols, rows: objs.map((o) => cols.map((c) => o[c] ?? null)) };
-    await ws.importBase(next, [table], progress);
+    await ws.importBase(next, [table], progress ?? (() => {}));
     applyBase(next, [table]);
     audit({ op: "replace", table, n: objs.length, note: note ?? null });
   },
+  /** Delete one row (logged in the audit trail like every change). */
+  deleteRow: async (table, key) => { await ws.saveRow(table, key, null, me, data[table]?.importId); },
   /** Apply the same change to several rows (e.g. record a calibration group as done). */
   bulkUpdate: async (table, keys, patch) => {
     try { for (const k of keys) await saveObj(table, k, patch, true); toast(t("saved_ok")); } catch (e) { toast(e.message, "warn"); }
@@ -365,6 +370,27 @@ function suggestionLists() {
   };
 }
 
+/** The app's own data offered by the pickers: [value, label, detail]. People are the staff list, then the users of the imported records. */
+function optionLists() {
+  const tx = model.x.trainingX;
+  const people = new Map();
+  for (const s of tx?.staff ?? []) people.set(s.name, [s.position, s.dept].filter(Boolean).join(" · "));
+  for (const u of [...model.records.map((r) => r.owner), ...model.actions.map((a) => a.owner)]) if (u && !people.has(u) && !/^\(/.test(u)) people.set(u, "Scigeniq");
+  const positions = new Map((tx?.positions ?? []).map((p) => [p.name, [p.Department, p.Section].filter(Boolean).join(" · ")]));
+  for (const s of tx?.staff ?? []) if (s.position && !positions.has(s.position)) positions.set(s.position, s.dept ?? "");
+  const products = [...new Set([...model.products.map((p) => p.Product), ...model.x.apqrProg.products.map((p) => p.name), ...model.x.lifecycle.map((p) => p.name)].filter(Boolean))].sort();
+  return {
+    rooms: model.rooms.map((r) => [r.Code, `${r.Code} · ${r.Name ?? ""}`, [r.Area, r.Grade].filter(Boolean).join(" · ")]),
+    assets: model.equip.map((e) => [e["Asset no"], `${e["Asset no"]} · ${e.Description ?? ""}`, e["Room code"] ?? ""]),
+    sops: model.x.sopx.list.map((s) => [s.Code, `${s.Code} · ${s.Title ?? ""}`, s.Revision ? `rev ${s.Revision}` : ""]),
+    people: [...people].sort((a, b) => a[0].localeCompare(b[0])).map(([n, sub]) => [n, n, sub]),
+    positions: [...positions].map(([n, sub]) => [n, n, sub]),
+    products: products.map((p) => [p, p]),
+    records: model.records.map((r) => [r.ref, `${r.ref} · ${r.title ?? ""}`, r.type]),
+    areas: model.x.fivesX.areas.map((a) => [a.Area, a.Area]),
+  };
+}
+
 /** Editor for one row of a workbook table (key null = new row). */
 function openEditor(table, key, title, defaults) {
   const tbl = data[table];
@@ -377,7 +403,7 @@ function openEditor(table, key, title, defaults) {
       h("h2", key ? (title || t("edit")) : t("add_row_title", tableLabel(table).toLowerCase()))),
     ws.mode === "shared" ? h("p.fine", t("edit_shared_note")) : h("p.fine", t("edit_local_note")),
     rowForm({
-      table, cols: tbl.cols, row, index, allRows: tbl.rows, lists: suggestionLists(), defaults,
+      table, cols: tbl.cols, row, index, allRows: tbl.rows, lists: suggestionLists(), options: optionLists(), defaults,
       rooms: model.rooms.map((r) => [r.Code, r.Name]),
       onSave: async (values) => {
         const k = key ?? newKey();
@@ -531,6 +557,12 @@ function openAsset(no) {
         ["Data quality", e.dataQuality.length ? h("span.warn-text", e.dataQuality.join(" · ")) : null],
       ]),
       recs.length ? [h("h3", t("rx_k_qr")), recList(recs)] : null,
+      (() => {
+        // the SOPs that govern this asset (their links name it)
+        const sops = model.x.sopx.list.filter((s) => String(s["Linked equipment"] ?? "").split(/\s*[;,\n]\s*/).includes(no));
+        return sops.length ? [h("h3", t("lk_asset_sops")), h("div.d-list", sops.map((s) => h("button.d-item", { type: "button", onclick: () => { closeDrawer(); go("sops", { code: s.Code }); } },
+          h("b", s.Code), h("span", s.Title ?? ""))))] : null;
+      })(),
     ];
   });
 }

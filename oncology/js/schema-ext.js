@@ -8,7 +8,8 @@ export const EXT_COLS = {
   find: [...SCIG, "Parent ID Reference", "Supplier Name", "Wait CAPA?", "Classification", "Finding Type", "Audited Areas"],
   // Scigeniq "Actions" exports (all-tasks and open-actions, merged by Reference Id); Folders dropped (it repeats the parent's)
   actions: ["Creation Date", "Type", "Stage", "Title", "Reference Id", "Status", "Closing date", "Location", "Role", "Start Date", "End Date", "Assigned User", "Tags", "Created By", "Parent action", "Parent ID Reference", "Description", "Parent Type", "Department", "Source", "Parent Parent Source"],
-  // Annual department training plans (GS0024/Onc/T06)
+  // Annual department training plans (the department's planned trainings): description, job positions of the attendee group,
+  // planned month, new / rescheduled, completion
   training: ["Training ID", "Program", "Reference", "Type", "Department", "Attendee group", "Planned month", "Status", "New", "Rescheduled to", "Completion date", "Trainer", "Planned attendees", "Trained attendees", "Effectiveness", "Comments"],
   // Annual / monthly calibration programs (VL0003E/Onc/FE03, FE01)
   calplan: ["Item", "Description", "Location", "Parent", "Category", "Duration", "Planned start", "Planned end", "Frequency (months)", "Interval", "Calibrated on", "Certificate", "Performed by", "Result", "Program", "Comment"],
@@ -44,7 +45,7 @@ export const EXT_COLS = {
   // Summary: the SOP's résumé as JSON — extracted by the app, or written by Claude; Forms: its forms, templates and attachments as JSON)
   sop: ["Code", "Title", "Department", "Site", "Language", "Type", "Status", "Revision", "Effective date", "Next review", "Owner", "Linked rooms", "Linked equipment", "Source",
     "Drive ID", "Drive file", "Drive modified", "Files", "Purpose", "Distribution", "References", "Change controls", "Indexed", "Folder", "Revisions", "Obsolete", "Uncontrolled",
-    "Summary", "Forms"],
+    "Summary", "Forms", "Linked products"],
   // Controlled documents other than SOPs found in the Drive library (batch records, orders, specifications, test methods,
   // assessment records, registers, indexes…), one row per document code; Comment is kept across syncs
   docs: ["Code", "Type", "Title", "Product", "Strength", "Product code", "Department", "Site", "Language", "Revision", "Revisions", "Status", "Folder",
@@ -61,6 +62,17 @@ export const EXT_COLS = {
   // SOP review and revision requests, tracked to closure (Outcome: No change — the review date moves on; Revised — the
   // new revision and its effective date; Withdrawn)
   sopReviews: ["Review ID", "SOP", "Type", "Reason", "Requested by", "Requested on", "Owner", "Due", "Change control", "Status", "Outcome", "New revision", "Effective on", "Closed on", "Comment"],
+  // Training by job position (the site's training procedure): the positions of each department and who holds them, the
+  // training matrix (each topic or SOP and the positions that must be trained on it), trainings outside the annual plan
+  // (new or revised SOP, quality circle, deviation / OOS / complaint, external, re-training, induction or new position…),
+  // and one attendance record per trainee (the employee training card: score, complying or re-training).
+  // Positions, Trainees: lists separated by " / "; Level: 1 manager … 5 officer (read & understood from supervisor up)
+  positions: ["Position", "Code", "Department", "Section", "Level", "Reports to", "Read & understood", "Comment"],
+  staff: ["Name", "Employee ID", "Position", "Department", "Section", "Status", "Hired on", "In position since", "Training representative", "Trainer", "Comment"],
+  trainingMatrix: ["Topic", "Reference", "Kind", "Department", "Positions", "Refresh (months)", "Comment"],
+  trainingUnplanned: ["Training ID", "Category", "Title", "Reference", "Revision", "Trigger", "Department", "Positions", "Trainees", "Trainer", "Organisation", "Delivery",
+    "Due", "Date", "Duration", "Evaluation", "Status", "Comment"],
+  trainingRecords: ["Record ID", "Training ID", "Plan", "Date", "Employee", "Position", "Department", "Title", "Reference", "Revision", "Trainer", "Evaluation", "Score", "Result", "Comment"],
   // Module ↔ SOP links that override the automatic match on SOP titles
   sopLinks: ["Topic", "SOP", "Comment"],
   // Progress of each EU GMP Ch.1.10 review section within one product's APQR

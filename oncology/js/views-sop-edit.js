@@ -6,6 +6,7 @@ import { t } from "./i18n.js";
 import { icon } from "./icons.js";
 import { summaryOf, formKey } from "./sopkit.js";
 import { editSummary, linesOf, textOf, codesOf, SUMMARY_PARTS, FORM_TYPES, REMOVED, formRow } from "./sopwork.js";
+import { fieldPicker } from "./editing.js";
 
 const isoToday = () => new Date().toISOString().slice(0, 10);
 let uid = 0;
@@ -127,9 +128,11 @@ export function openFormEditor(ctx, X, f, { owner } = {}) {
   const [title, titleF] = input("title", t("col_title"), f?.title ?? "", { wide: true });
   const kind = h("select", { id: `fe${n}-kind` }, FORM_TYPES.map(([k]) => h("option", { value: k, selected: (f?.kind ?? "form") === k ? true : null }, t(`frm_k_${k}`))));
   const [rev, revF] = input("rev", t("fe_rev"), f?.rev ?? "", { inputmode: "numeric", hint: f?.mismatch ? t("frm_rev_mismatch", f.citedRev, f.attachedRev) : null });
-  const [own, ownF] = input("owner", t("fe_owner"), (owner ?? f?.owner)?.Code ?? "", { list: `fe${n}-sops`, class: "mono" });
-  const [room, roomF] = input("room", t("col_room"), reg?.["Linked room"] ?? "", { list: `fe${n}-rooms` });
-  const [equip, equipF] = input("equip", t("sop_equipment"), reg?.["Linked equipment"] ?? "");
+  const opts = ctx.options;
+  const pick = (kind, k, label, value, wide) => { const el = fieldPicker(kind, opts, value, `fe${n}-${k}`); return [el, h(`label.field${wide ? ".wide" : ""}`, { for: `fe${n}-${k}` }, h("span", label), el)]; };
+  const [own, ownF] = pick("sop", "owner", t("fe_owner"), (owner ?? f?.owner)?.Code ?? "");
+  const [room, roomF] = pick("room", "room", t("col_room"), reg?.["Linked room"] ?? "");
+  const [equip, equipF] = pick("assets", "equip", t("sop_equipment"), reg?.["Linked equipment"] ?? "", true);
   const [secs, secsF] = area("sections", t("frm_sections"), f?.sections, t("fe_lines_h"));
   const [flds, fldsF] = area("fields", t("frm_fields"), f?.fields, t("fe_lines_h"));
   const [cols, colsF] = area("columns", t("frm_columns"), f?.columns, t("fe_lines_h"));
@@ -174,8 +177,6 @@ export function openFormEditor(ctx, X, f, { owner } = {}) {
   },
     h("div.form-grid", codeF, h("label.field", { for: kind.id }, h("span", t("col_type")), kind), titleF, revF, ownF, roomF, equipF),
     h("div.form-grid", secsF, fldsF, colsF, noteF),
-    h("datalist", { id: `fe${n}-sops` }, X.list.map((x) => h("option", { value: x.Code }, x.Title ?? ""))),
-    h("datalist", { id: `fe${n}-rooms` }, (ctx.m.rooms ?? []).map((r) => h("option", { value: r.Code }, r.Name ?? ""))),
     msg,
     h("div.form-actions", save, h("button.btn.ghost", { type: "button", onclick: () => ctx.closeDrawer() }, t("cancel")), h("span.spacer"), remove));
   ctx.open.drawer(() => [

@@ -9,7 +9,8 @@ import { openBulk } from "./bulk.js";
 const GROUPS = [
   ["dt_quality", ["cc", "capa", "qe", "find", "actions", "links", "appr"]],
   ["dt_apqr", ["apqrTasks", "apqrPlan", "apqrSys", "apqr", "apqrSections"]],
-  ["dt_programmes", ["training", "calplan", "validation", "fives", "fivesItems", "fivesAreas", "fivesTpl", "qaact", "metrics"]],
+  ["dt_training", ["training", "trainingUnplanned", "trainingRecords", "trainingMatrix", "positions", "staff"]],
+  ["dt_programmes", ["calplan", "validation", "fives", "fivesItems", "fivesAreas", "fivesTpl", "qaact", "metrics"]],
   ["dt_product", ["batches", "wip", "rejections", "suppliers"]],
   ["dt_site", ["rooms", "adj", "equip", "ccp"]],
   ["dt_docs", ["sop", "sopReviews", "docs", "docIndex", "sopSources", "sopLinks", "forms", "fmea", "impr"]],

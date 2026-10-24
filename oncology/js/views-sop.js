@@ -15,6 +15,7 @@ import { openResumeEditor, openFormEditor, setRemoved, partName } from "./views-
 import { reviewsTab, reviewCard } from "./views-sop-review.js";
 import { auditCard } from "./views-audit.js";
 import { editedParts } from "./sopwork.js";
+import { linksCard, trainingCard } from "./views-sop-links.js";
 
 const FR = () => getLang() === "FR";
 const ALL = "__all";
@@ -218,13 +219,15 @@ function sopPage(ctx, code) {
       h("div.sop-main",
         resumeCard(ctx, X, s, sum, d),
         formsCard(ctx, X, s, forms, d),
+        linksCard(ctx, X, s),
+        trainingCard(ctx, s),
         reviewCard(ctx, X, s)),
       h("aside.sop-side",
         card(t("sop_facts"), h("dl.deflist.compact",
           [[t("col_dept"), deptName(s.Department)], ["Site", s.Site], [t("sop_lang"), tv(s.Language ?? "")], [t("col_type"), s.Type], [t("col_status"), tv(s.Status ?? "")], [t("col_rev"), s.Revision],
             [t("sop_effective"), fmtDate(s.eff)], [t("col_nextrev"), fmtDate(s.next)], [t("col_owner"), s.Owner], [t("sop_drive_mod"), fmtDate(toDay(s["Drive modified"]))],
             [t("sop_read_on"), s.Indexed ? fmtDate(toDay(s.Indexed)) : null], [t("source"), s.Source], [t("doc_folder"), s.inDrive ? s.Folder || "/" : null], [t("doc_revisions"), s.Revisions],
-            [t("doc_obsolete_n"), s.Obsolete], [t("doc_uncontrolled_n"), s.Uncontrolled], [t("sop_rooms"), s["Linked rooms"]], [t("sop_equipment"), s["Linked equipment"]]]
+            [t("doc_obsolete_n"), s.Obsolete], [t("doc_uncontrolled_n"), s.Uncontrolled]]
             .filter(([, v]) => v != null && v !== "").flatMap(([k, v]) => [h("dt", k), h("dd", v)])),
           { actions: ctx.canEdit ? pen(t("ed_facts"), () => ctx.edit("sop", s.__key, `${s.Code} · ${s.Title ?? ""}`)) : null }),
         ix ? card(t("ix_entry"), h("div.doc-index-box",

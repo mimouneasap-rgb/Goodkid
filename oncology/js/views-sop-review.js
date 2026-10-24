@@ -8,6 +8,7 @@ import { t, tv, getLang } from "./i18n.js";
 import { icon } from "./icons.js";
 import { toDay } from "./model.js";
 import { REVIEW_TYPES, REVIEW_STATUS, REVIEW_OUTCOMES, REVIEW_REASONS, reviewSuggestions, reviewPlan, nextReviewId } from "./sopwork.js";
+import { fieldPicker } from "./editing.js";
 
 const ALL = "__all";
 const DAY = 86400000;
@@ -175,7 +176,7 @@ export function openReview(ctx, X, r) {
   ]);
 }
 
-const field = (label, el, wide) => h(`label.field${wide ? ".wide" : ""}`, { for: el.id }, h("span", label), el);
+const field = (label, el, wide) => h(`label.field${wide ? ".wide" : ""}`, { for: el.id || el.querySelector?.("input")?.id }, h("span", label), el);
 let uid = 0;
 const options = (list, value, name = (x) => tv(x)) => list.map((x) => h("option", { value: x, selected: x === value ? true : null }, name(x)));
 const saveForm = (onSave, ...kids) => {
@@ -193,13 +194,14 @@ export function requestReview(ctx, X, s, preset = {}) {
   const n = ++uid;
   const now = ctx.m.now;
   const due0 = s?.next != null && s.next > now ? s.next : now + 30 * DAY;
-  const sop = h("input.mono", { id: `rq${n}-sop`, value: s?.Code ?? "", list: `rq${n}-sops`, required: true });
+  const opts = ctx.options;
+  const sop = fieldPicker("sop", opts, s?.Code ?? "", `rq${n}-sop`);
   const type = h("select", { id: `rq${n}-type` }, options(REVIEW_TYPES, preset.Type ?? (s?.idx?.state === "drive-newer" ? "Revision" : "Periodic review"), reviewTypeName));
   const reason = h("select", { id: `rq${n}-reason` }, options(REVIEW_REASONS, preset.Reason ?? "Review date"));
-  const owner = h("input", { id: `rq${n}-owner`, value: s?.Owner ?? "", list: `rq${n}-owners` });
-  const asker = h("input", { id: `rq${n}-by`, value: ctx.myName ?? "", list: `rq${n}-owners` });
+  const owner = fieldPicker("person", opts, s?.Owner ?? "", `rq${n}-owner`);
+  const asker = fieldPicker("person", opts, ctx.myName ?? "", `rq${n}-by`);
   const due = h("input", { id: `rq${n}-due`, type: "date", value: isoOf(due0) });
-  const cc = h("input", { id: `rq${n}-cc`, value: "" });
+  const cc = fieldPicker("record", opts, "", `rq${n}-cc`);
   const note = h("textarea", { id: `rq${n}-note`, rows: 3 });
   const form = saveForm(async () => {
     const code = sop.value.trim();
@@ -211,8 +213,7 @@ export function requestReview(ctx, X, s, preset = {}) {
     return null;
   },
     h("div.form-grid", field(t("frm_owner"), sop), field(t("col_type"), type), field(t("rv_reason"), reason), field(t("rv_requested_by"), asker), field(t("col_owner"), owner), field(t("col_due"), due), field(t("rv_cc"), cc), field(t("rv_comment"), note, true)),
-    h("datalist", { id: `rq${n}-sops` }, X.list.map((x) => h("option", { value: x.Code }, x.Title ?? ""))),
-    h("datalist", { id: `rq${n}-owners` }, ownersOf(X).map((x) => h("option", { value: x }))));
+  );
   form.querySelector(".form-actions .ghost").onclick = () => ctx.closeDrawer();
   ctx.open.drawer(() => [
     h("div.d-head", h("span.d-ref", t("rv_card")), h("h2", s ? t("rv_request_for", s.Code) : t("rv_request"))),
@@ -229,7 +230,7 @@ export function closeReview(ctx, X, r, s) {
   const rev = h("input", { id: `cl${n}-rev`, value: sop?.Revision ? String(+sop.Revision + 1).padStart(2, "0") : "", inputmode: "numeric" });
   const eff = h("input", { id: `cl${n}-eff`, type: "date", value: isoToday() });
   const closed = h("input", { id: `cl${n}-closed`, type: "date", value: isoToday() });
-  const cc = h("input", { id: `cl${n}-cc`, value: r?.["Change control"] ?? "" });
+  const cc = fieldPicker("record", ctx.options, r?.["Change control"] ?? "", `cl${n}-cc`);
   const note = h("textarea", { id: `cl${n}-note`, rows: 3 }, r?.Comment ?? "");
   const revF = field(t("rv_new_rev"), rev), effF = field(t("rv_effective_on"), eff);
   const sync = () => { const v = outcome.value === "Revised"; revF.hidden = !v; effF.hidden = !v; };
