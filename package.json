@@ -1,17 +1,21 @@
 {
   "name": "goodkid-quality-risk",
   "version": "1.0.0",
-  "description": "Quality risk management app: FMEA-style risk register, risk matrix and dashboard.",
+  "description": "Quality risk management app (FMEA register) and QE Investigator, a Claude-assisted quality event investigation app.",
   "type": "module",
   "private": true,
   "scripts": {
     "start": "node server.js",
-    "test": "node --test"
+    "test": "node --test",
+    "build:artifact": "node scripts/build-artifact.mjs"
   },
   "engines": {
     "node": ">=18"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "1.3.0"
+  },
+  "devDependencies": {
+    "esbuild": "0.25.0"
   }
 }

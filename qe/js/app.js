@@ -66,6 +66,12 @@ const state = {
   abort: null,
 };
 
+// Inside a published claude.ai artifact, `window.claude.use` reaches the viewer's
+// own Claude account (sample), their private storage (db + user) and file saves
+// (downloads). Elsewhere these stay null and the app uses its own connection modes.
+const runtime = { inArtifact: typeof window.claude?.use === "function", sample: null, downloads: null, col: null };
+const pendingWrites = new Map();
+
 // ---------- persistence ----------
 
 function load(key, fallback) {
@@ -92,6 +98,29 @@ function upsert(record) {
   record.updatedAt = new Date().toISOString();
   if (i >= 0) state.records[i] = record; else state.records.unshift(record);
   saveRecords();
+  syncRecord(record);
+}
+
+// One debounced write per record to the viewer's private claude.ai storage.
+function syncRecord(record) {
+  if (!runtime.col) return;
+  clearTimeout(pendingWrites.get(record.uid));
+  pendingWrites.set(record.uid, setTimeout(() => {
+    pendingWrites.delete(record.uid);
+    runtime.col?.doc(record.uid).set({ json: JSON.stringify(record), updatedAt: record.updatedAt }).catch((err) => {
+      if (err?.code === "quota_exceeded") return toast("Your saved events are full. Delete old events or export a backup.");
+      // This viewer may not write here (e.g. view-only access): keep events in the browser from now on.
+      if (err?.code === "invalid_argument" || err?.code === "revoked") runtime.col = null;
+      toast("Could not save to your claude.ai storage. Events are kept in this browser.");
+    });
+  }, 800));
+}
+
+function unsyncRecord(uid) {
+  if (!runtime.col) return;
+  clearTimeout(pendingWrites.get(uid));
+  pendingWrites.delete(uid);
+  runtime.col.doc(uid).delete().catch(() => {});
 }
 
 // ---------- small UI helpers ----------
@@ -128,6 +157,13 @@ async function copy(text) {
 }
 
 function download(name, text, type) {
+  if (runtime.downloads) {
+    runtime.downloads.save({ filename: name, data: text }).then(
+      () => toast(`Saved ${name}.`),
+      (err) => { if (err?.code !== "declined") toast("This view cannot save files."); },
+    );
+    return;
+  }
   const url = URL.createObjectURL(new Blob([text], { type }));
   const a = el("a", { href: url, download: name });
   document.body.append(a);
@@ -179,7 +215,9 @@ function renderPageActions() {
     const rec = currentRecord();
     box.append(
       el("button", { class: "btn", type: "button", onclick: () => copy(exportText(rec)) }, icon(ICON.copy), "Copy all"),
-      el("button", { class: "btn", type: "button", onclick: () => printRecord(rec) }, icon(ICON.print), "Print / PDF"),
+      runtime.inArtifact
+        ? el("button", { class: "btn", type: "button", onclick: () => download(`${fileStem(rec)}.html`, reportHtml(rec), "text/html") }, icon(ICON.print), "Download report")
+        : el("button", { class: "btn", type: "button", onclick: () => printRecord(rec) }, icon(ICON.print), "Print / PDF"),
     );
   } else if (state.view !== "new") {
     box.append(el("button", { class: "btn primary", type: "button", onclick: () => { resetIntake(); setView("new"); } }, icon("M9 3h2v6h6v2h-6v6H9v-6H3V9h6z"), "New event"));
@@ -190,13 +228,17 @@ function refreshNav() {
   $("#nav-count").textContent = state.records.length || "";
   $("#nav-event").disabled = !currentRecord();
   const s = state.settings;
-  $("#doc-claude").textContent = s.mode === "browser"
+  $("#doc-claude").textContent = s.mode === "account" ? (runtime.sample ? "Your Claude account" : "Connecting…") : s.mode === "browser"
     ? (s.apiKey ? `Browser key · ${modelName(s.model)}` : "Browser: no key")
     : state.server.available ? `Server · ${modelName(s.model)}` : "Not connected";
 }
-const modelName = (id) => (MODELS.find(([m]) => m === id)?.[1] ?? id).replace(/ \(.*\)$/, "").replace("Claude ", "");
+function modelName(id) {
+  const known = MODELS.find(([m]) => m === id);
+  return known ? known[1].replace(/ \(.*\)$/, "").replace("Claude ", "") : id;
+}
 
 function claudeReady() {
+  if (state.settings.mode === "account") return Boolean(runtime.sample);
   return state.settings.mode === "browser" ? Boolean(state.settings.apiKey) : state.server.available;
 }
 
@@ -246,8 +288,12 @@ async function startAnalysis(useClaude) {
   if (!input.detectionDate) { toast("Enter the detection date: it starts the SOP deadlines."); $("#in-detectionDate").focus(); return; }
   let record = state.editing ? { ...currentRecord(), input, number: input.number } : newRecord(input);
   if (useClaude && !claudeReady()) {
-    const ok = await confirmBox("Claude is not connected yet. Open Settings to add an API key, or make an offline draft now from the SOP rules (you can run Claude later).", "Draft offline");
-    if (!ok) { openSettings(); return; }
+    if (runtime.inArtifact) {
+      if (!(await confirmBox("Claude is not available in this view (sign in to claude.ai to use it). Make an offline draft from the SOP rules instead?", "Draft offline"))) return;
+    } else if (!(await confirmBox("Claude is not connected yet. Open Settings to add an API key, or make an offline draft now from the SOP rules (you can run Claude later).", "Draft offline"))) {
+      openSettings();
+      return;
+    }
     useClaude = false;
   }
   if (useClaude) {
@@ -277,7 +323,7 @@ async function runClaude(kind, record, text) {
   state.abort = new AbortController();
   dlg.showModal();
   try {
-    return await draft(kind, record, state.settings, { signal: state.abort.signal });
+    return await draft(kind, record, state.settings, { signal: state.abort.signal, sample: runtime.sample });
   } catch (err) {
     if (err.name === "AbortError" || state.abort.signal.aborted) toast("Cancelled.");
     else {
@@ -376,6 +422,7 @@ async function deleteRecord(rec) {
   if (!(await confirmBox(`Delete "${summary(rec).title}" from this browser? This cannot be undone.`, "Delete"))) return;
   state.records = state.records.filter((r) => r.uid !== rec.uid);
   saveRecords();
+  unsyncRecord(rec.uid);
   state.current = null;
   refreshNav();
   setView("register");
@@ -679,10 +726,24 @@ function renderCheck(rec, s, checks) {
 
 // ---------- print ----------
 
+const fileStem = (rec) => (rec.number || `quality-event-${(rec.input.detectionDate || "draft")}`).replace(/[^\w.-]+/g, "-");
+
 function printRecord(rec) {
-  const s = summary(rec);
   const root = $("#print-root") ?? document.body.appendChild(el("div", { id: "print-root" }));
-  root.replaceChildren(
+  root.replaceChildren(...reportNodes(rec));
+  window.print();
+}
+
+// A standalone, printable copy of the report (used where the page cannot print).
+const REPORT_CSS = "body{font:11pt/1.45 system-ui,sans-serif;margin:24px auto;max-width:900px;padding:0 16px;color:#111;background:#fff}h1{font-size:18pt;margin:0 0 4pt}h2{font-size:13pt;margin:16pt 0 6pt;border-bottom:1px solid #999;padding-bottom:2pt}dl{display:grid;grid-template-columns:34% 66%;margin:0}dt{font-weight:600;padding:4pt 8pt 4pt 0;border-top:1px solid #ddd}dd{margin:0;padding:4pt 0;border-top:1px solid #ddd;white-space:pre-wrap}table{width:100%;border-collapse:collapse;font-size:9.5pt}th,td{border:1px solid #bbb;padding:3pt 5pt;text-align:left;vertical-align:top}.draft-note{font-weight:600;border:1px solid #000;padding:4pt 6pt}";
+function reportHtml(rec) {
+  const wrap = el("div", {}, ...reportNodes(rec));
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${wrap.querySelector("h1").innerHTML}</title><style>${REPORT_CSS}</style></head><body>${wrap.innerHTML}</body></html>`;
+}
+
+function reportNodes(rec) {
+  const s = summary(rec);
+  return [
     el("h1", {}, `${rec.number || "Quality event"} – ${s.title}`),
     el("p", {}, `Stage: ${s.stage} · Initial RPN ${s.initialRpn ?? "—"} ${s.initialClass ? `(${s.initialClass.name})` : ""}${s.finalRpn ? ` · Final RPN ${s.finalRpn} (${s.finalClass.name})` : ""} · Printed ${new Date().toISOString().slice(0, 10)}`),
     el("p", { class: "draft-note" }, "DRAFT prepared with QE Investigator. Not a GMP record until entered, reviewed and approved in Scigeniq."),
@@ -691,8 +752,7 @@ function printRecord(rec) {
     el("section", {}, el("h2", {}, "Investigation data plan"),
       el("table", {}, el("thead", {}, el("tr", {}, ["6M", "Item", "Status", "Finding"].map((h) => el("th", {}, h)))),
         el("tbody", {}, Object.values(rec.dataItems ?? {}).map((d) => el("tr", {}, el("td", {}, d.factor), el("td", {}, d.item), el("td", {}, STATUS_LABEL[d.status]), el("td", {}, d.note || "")))))),
-  );
-  window.print();
+  ];
 }
 
 // ---------- register ----------
@@ -788,7 +848,7 @@ function setupSettings() {
   $("#settings").addEventListener("close", () => {
     if ($("#settings").returnValue !== "save") return;
     Object.assign(state.settings, {
-      mode: $("#set-mode").value, apiKey: $("#set-key").value.trim(), model: $("#set-model").value, effort: $("#set-effort").value,
+      mode: runtime.sample ? "account" : $("#set-mode").value, apiKey: $("#set-key").value.trim(), model: $("#set-model").value, effort: $("#set-effort").value,
     });
     persist(SETTINGS_KEY, state.settings);
     refreshNav();
@@ -804,7 +864,12 @@ function openSettings() {
   $("#set-model").value = s.model;
   $("#set-effort").value = s.effort;
   $("#set-key-row").hidden = s.mode !== "browser";
-  $("#server-line").textContent = state.server.available
+  const account = s.mode === "account";
+  $("#set-mode").closest("label").hidden = account;
+  $("#set-model").closest("label").hidden = account;
+  $("#server-line").textContent = account
+    ? "Drafts run on your own Claude account, using its most capable model. Claude asks your permission the first time this page uses it."
+    : state.server.available
     ? "The local server has an API key configured: choose “Local server” to keep the key off this device."
     : "No local server key detected. Either run the app with `ANTHROPIC_API_KEY=… npm start`, or use your own key in this browser.";
   $("#settings").returnValue = "";
@@ -854,6 +919,7 @@ function setupBackup() {
       const added = incoming.filter((r) => !known.has(r.uid));
       state.records = [...added, ...state.records];
       saveRecords();
+      added.forEach(syncRecord);
       refreshNav();
       renderRegister();
       toast(`Imported ${added.length} event(s)${incoming.length > added.length ? `, ${incoming.length - added.length} already present` : ""}.`);
@@ -879,6 +945,12 @@ function init() {
   updateRunHint();
   const start = location.hash.slice(1);
   setView(VIEWS[start] ? start : "new");
+  if (runtime.inArtifact) {
+    $$('a.nav-item[href="../"]').forEach((a) => { a.hidden = true; });
+    state.settings.mode = "account";
+    connectRuntime();
+    return;
+  }
   if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost")) {
     navigator.serviceWorker.register("../sw.js").catch(() => {});
   }
@@ -888,6 +960,41 @@ function init() {
     refreshNav();
     updateRunHint();
   });
+}
+
+async function connectRuntime() {
+  const [sample, db, user, downloads] = await Promise.all(
+    ["sample", "db", "user", "downloads"].map((name) => window.claude.use(name).catch(() => null)),
+  );
+  runtime.sample = sample;
+  runtime.downloads = downloads;
+  const id = user ? await user.id().catch(() => null) : null;
+  if (db && id) {
+    try {
+      const col = db.collection(`data/users/${id}`);
+      const snap = await col.get();
+      runtime.col = col;
+      const byUid = new Map(state.records.map((r) => [r.uid, r]));
+      const remote = new Set();
+      for (const doc of snap.docs) {
+        let r = null;
+        try { r = JSON.parse(doc.data()?.json ?? "null"); } catch { /* skip an unreadable document */ }
+        if (!r?.uid) continue;
+        remote.add(r.uid);
+        const local = byUid.get(r.uid);
+        if (!local || (r.updatedAt ?? "") >= (local.updatedAt ?? "")) byUid.set(r.uid, r);
+        else syncRecord(local);
+      }
+      for (const r of byUid.values()) if (!remote.has(r.uid)) syncRecord(r);
+      state.records = [...byUid.values()].sort((a, b) => (b.createdAt ?? "").localeCompare(a.createdAt ?? ""));
+      saveRecords();
+      state.current ??= state.records[0]?.uid ?? null;
+    } catch { /* storage unavailable: events stay in this browser */ }
+  }
+  refreshNav();
+  updateRunHint();
+  if (state.view === "event") renderEvent();
+  if (state.view === "register") renderRegister();
 }
 
 init();

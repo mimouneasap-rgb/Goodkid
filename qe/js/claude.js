@@ -296,9 +296,53 @@ async function viaBrowser(params, apiKey, signal) {
   }
 }
 
+const SAMPLE_ERRORS = {
+  not_granted: "Claude was not allowed for this page. Allow it from the page's permissions to draft with Claude.",
+  sampling_disabled: "Claude is not available for this account.",
+  rate_limited: "Too many Claude requests, or your usage limit is reached. Try again later.",
+  session_expired: "Your session expired. Sign in to claude.ai again.",
+  refused: "Claude declined this request. Rephrase the event details and try again.",
+  invalid_json: "Claude's answer could not be read as a complete form. Try again.",
+  prompt_too_large: "The record is too long to send. Shorten the notes and findings.",
+};
+
+/** Prompt for the in-claude.ai mode, where the page has no system prompt or schema option. */
+export function accountPrompt(params) {
+  return `${params.system[0].text}
+
+---
+
+${params.messages[0].content}
+
+Reply with only one JSON object, no other text. It must match this JSON Schema exactly: every property present, no extra properties, enums spelled as given.
+${JSON.stringify(params.output_config.format.schema)}`;
+}
+
+// Inside a published claude.ai artifact: the `sample` capability runs the call on
+// the viewer's own Claude account, so no API key is involved.
+async function viaAccount(sample, params, settings, signal) {
+  const effort = { medium: "medium", high: "high", xhigh: "high", max: "high" }[settings.effort] ?? "high";
+  try {
+    return await sample.json(accountPrompt(params), { modelTier: "complex", effort, signal, cache: false });
+  } catch (err) {
+    if (err?.code === "cancelled") throw Object.assign(new Error("Cancelled"), { name: "AbortError" });
+    throw new ClaudeError(SAMPLE_ERRORS[err?.code] ?? "Claude could not finish the draft. Try again in a moment.");
+  }
+}
+
 /** Runs one drafting step and returns the parsed JSON result plus the model used. */
-export async function draft(kind, record, settings, { signal } = {}) {
+export async function draft(kind, record, settings, { signal, sample } = {}) {
   const params = buildRequest(kind, record, settings);
+  if (settings.mode === "account") {
+    if (!sample) throw new ClaudeError("Claude is not available on this page.");
+    const result = await viaAccount(sample, params, settings, signal);
+    // Here nothing enforces the schema, so check the sections the app reads.
+    const schema = params.output_config.format.schema;
+    const complete = result && typeof result === "object" && !Array.isArray(result)
+      && schema.required.every((k) => k in result && (schema.properties[k].type !== "object" || (result[k] && typeof result[k] === "object")));
+    if (!complete) throw new ClaudeError(SAMPLE_ERRORS.invalid_json);
+    return { result, model: "Your Claude account", usage: null };
+  }
   const message = settings.mode === "browser"
     ? await viaBrowser(params, settings.apiKey, signal)
     : await viaServer(params, signal);

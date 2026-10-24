@@ -27,6 +27,7 @@ The app uses Claude Opus 5.5 by default, with structured JSON output, adaptive t
   ANTHROPIC_API_KEY=sk-ant-... npm start   # then open http://localhost:8080/qe/
   ```
 - **This browser:** for the hosted (GitHub Pages) version, enter your own API key in **Settings**. It is stored only in that browser.
+- **Published on claude.ai:** `npm run build:artifact` packs the app into `dist/qe-investigator.html`, published as a claude.ai artifact. There, Claude runs on the viewer's own Claude account (no API key), each viewer's events are saved privately in their claude.ai storage, and "Download report" replaces printing.
 
 The event details are sent to the Anthropic API. Do not include patient data. Claude only drafts: every form must be reviewed, completed and approved by the responsible people in Scigeniq. The app is not a validated GMP system, and the records saved in the browser are working drafts, not GMP records.
 
