@@ -184,6 +184,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
   padding: 10px 12px; border-radius: var(--radius-sm); cursor: pointer; text-align: left;
   font-weight: 500; position: relative;
 }
+a.nav-item { text-decoration: none; }
 .nav-item svg { width: 18px; height: 18px; fill: currentColor; opacity: .85; }
 .nav-item:hover { color: var(--rail-ink); background: var(--rail-active); }
 .nav-item.active { color: var(--rail-ink); background: var(--rail-active); }

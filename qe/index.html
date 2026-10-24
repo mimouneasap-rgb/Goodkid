@@ -1,0 +1,250 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Quality Event Investigator</title>
+  <meta name="description" content="Drafts every Scigeniq quality event stage from a deviation description, with the investigation data plan, 6M root cause analysis, CAPA and regulatory references.">
+  <meta name="theme-color" content="#0e2326">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="QE Investigator">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <link rel="manifest" href="../manifest.webmanifest">
+  <link rel="icon" href="../icons/icon.svg" type="image/svg+xml">
+  <link rel="icon" href="../icons/favicon-32.png" sizes="32x32" type="image/png">
+  <link rel="apple-touch-icon" href="../icons/apple-touch-icon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+  <link rel="stylesheet" href="../css/styles.css">
+  <link rel="stylesheet" href="css/qe.css">
+</head>
+<body>
+<div class="shell">
+  <aside class="rail">
+    <div class="brand">
+      <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true">
+        <rect x="2" y="2" width="28" height="28" rx="7" class="bm-frame"/>
+        <circle cx="14" cy="14" r="6" fill="none" stroke="currentColor" stroke-width="2.4"/>
+        <path d="M18.5 18.5 24 24" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/>
+        <circle cx="14" cy="14" r="2.2" class="bm-high"/>
+      </svg>
+      <div class="brand-text">
+        <span class="brand-name">QE Investigator</span>
+        <span class="brand-sub">Scigeniq · KO</span>
+      </div>
+    </div>
+
+    <nav class="nav" aria-label="Main">
+      <button class="nav-item active" data-view="new">
+        <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M9 3h2v6h6v2h-6v6H9v-6H3V9h6z"/></svg>
+        <span>New event</span>
+      </button>
+      <button class="nav-item" data-view="event" id="nav-event" disabled>
+        <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5 2h7l4 4v12H5zm6 1.5V7h3.5zM7 10v1.6h6V10zm0 3v1.6h6V13z"/></svg>
+        <span>Current event</span>
+      </button>
+      <button class="nav-item" data-view="register">
+        <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 4h14v2H3zm0 5h14v2H3zm0 5h14v2H3z"/></svg>
+        <span>Events</span><span class="nav-count" id="nav-count"></span>
+      </button>
+      <button class="nav-item" data-view="masterclass">
+        <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 3 1 7.5 10 12l7-3.5V14h2V7.5zM5 10.8V14c0 1.5 2.4 3 5 3s5-1.5 5-3v-3.2L10 13.3z"/></svg>
+        <span>Masterclass</span>
+      </button>
+      <a class="nav-item" href="../">
+        <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 11h5V3H3zm0 6h5v-4H3zm9 0h5V9h-5zm0-14v4h5V3z"/></svg>
+        <span>Risk manager</span>
+      </a>
+    </nav>
+
+    <div class="rail-foot">
+      <dl class="doc-control">
+        <div><dt>Procedures</dt><dd>SOPQA0015E/Onc v04<br>SOPQA0146E/Onc v02</dd></div>
+        <div><dt>Claude</dt><dd id="doc-claude">checking…</dd></div>
+      </dl>
+      <button class="theme-toggle" id="open-settings" type="button">
+        <svg viewBox="0 0 20 20" aria-hidden="true"><path d="m11.6 2 .4 2.2c.5.2 1 .5 1.4.8l2.1-.8 1.6 2.8-1.7 1.4a6 6 0 0 1 0 1.6l1.7 1.4-1.6 2.8-2.1-.8c-.4.3-.9.6-1.4.8l-.4 2.2H8.4L8 16.2c-.5-.2-1-.5-1.4-.8l-2.1.8-1.6-2.8 1.7-1.4a6 6 0 0 1 0-1.6L2.9 9 4.5 6.2l2.1.8c.4-.3.9-.6 1.4-.8L8.4 2zM10 7.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5z"/></svg>
+        <span>Settings</span>
+      </button>
+      <button class="theme-toggle" id="theme-toggle" type="button" aria-label="Change colour theme">
+        <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 2a8 8 0 1 0 0 16zm0 2.2v11.6a5.8 5.8 0 0 1 0-11.6z"/></svg>
+        <span id="theme-label">Theme: system</span>
+      </button>
+    </div>
+  </aside>
+
+  <div class="main-col">
+    <header class="page-head">
+      <div class="page-title">
+        <p class="eyebrow" id="page-eyebrow">New event</p>
+        <h1 id="page-title">Describe the deviation</h1>
+      </div>
+      <div class="page-actions" id="page-actions"></div>
+    </header>
+
+    <main>
+      <!-- New event -->
+      <section id="view-new" class="view active" aria-label="New event">
+        <form id="intake" class="intake" autocomplete="off">
+          <div class="panel intake-main">
+            <div class="panel-head">
+              <h2>What happened</h2>
+              <button type="button" class="btn small" id="load-example">Load an example</button>
+            </div>
+            <label class="field wide">
+              <span>Deviation description <b class="req">*</b></span>
+              <textarea id="in-description" rows="7" required placeholder="Describe the event as you would tell QA: what was observed, where, when, on which product, batch and equipment, what was done straight away. Add values and limits when you have them."></textarea>
+            </label>
+            <div class="fields">
+              <label class="wide">Short title<input id="in-title" placeholder="e.g. Compression failure, Product X 200 mg, batch 261401"></label>
+              <label>Date of occurrence<input type="date" id="in-occurrenceDate"></label>
+              <label><span>Detection date <b class="req">*</b></span><input type="date" id="in-detectionDate" required></label>
+              <label>Date logged in Scigeniq<input type="date" id="in-reportedDate"></label>
+              <label>QE number<input id="in-number" placeholder="QE-KO-…"></label>
+              <label>Detected by<input id="in-detectedBy" placeholder="Role or name"></label>
+              <label>Department<select id="in-department"></select></label>
+              <label class="wide">Immediate actions taken<textarea id="in-immediateActions" rows="3" placeholder="Stop, quarantine, inform QA, R&amp;D consulted…"></textarea></label>
+            </div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-head"><h2>Product, area and equipment</h2><span class="panel-meta">Required selections depend on the scope (AE05)</span></div>
+            <div class="fields">
+              <label>Area / room<input id="in-area" placeholder="e.g. FFO-09 compression room"></label>
+              <label>Equipment<input id="in-equipment" placeholder="e.g. EQ0940-Onc compression machine"></label>
+              <label>Product<input id="in-product" placeholder="Name and strength"></label>
+              <label>Product code<input id="in-productCode" placeholder="ONC-…"></label>
+              <label>Batch number(s)<input id="in-batch"></label>
+              <label>Raw material(s)<input id="in-rawMaterial" placeholder="Name and lot"></label>
+              <label>Packing material<input id="in-packingMaterial"></label>
+              <label>Semi-finished product<input id="in-semiFinished"></label>
+              <label>Supplier<input id="in-supplier"></label>
+              <label>Computerized system<input id="in-computerizedSystem"></label>
+              <label class="wide">Deviation values: parameter (unit) / result / limit<textarea id="in-deviationValues" rows="2"></textarea></label>
+              <label class="wide">Related records<input id="in-relatedRecords" placeholder="Other QE, OOS, CC, CAPA numbers"></label>
+              <label class="wide">Anything else the investigator should know<textarea id="in-otherDetails" rows="3" placeholder="Validation / registration batch, recent changes, previous similar events, results already available…"></textarea></label>
+            </div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-head"><h2>Event scope</h2><span class="panel-meta">Pick what applies; Claude can add others</span></div>
+            <div class="scope-grid" id="in-scopes"></div>
+            <div class="mandatory-note" id="mandatory-note"></div>
+          </div>
+
+          <div class="panel run-panel">
+            <div class="run-copy">
+              <h2>Draft the workflow</h2>
+              <p class="hint" id="run-hint">Claude drafts the Open, In Review and Investigation Planning stages, the hypotheses and the full data plan for the investigation.</p>
+            </div>
+            <div class="run-opts">
+              <label class="inline">Output language
+                <select id="in-language"><option value="en">English</option><option value="fr">Français</option></select>
+              </label>
+              <button type="button" class="btn" id="run-offline">Draft without AI</button>
+              <button type="submit" class="btn primary" id="run-claude">
+                <svg viewBox="0 0 20 20" aria-hidden="true"><path d="m10 1 2.1 6.1L18 9l-5.9 1.9L10 17l-2.1-6.1L2 9l5.9-1.9z"/></svg>
+                Analyse with Claude
+              </button>
+            </div>
+          </div>
+        </form>
+      </section>
+
+      <!-- Current event -->
+      <section id="view-event" class="view" aria-label="Current event">
+        <div class="event-head panel" id="event-head"></div>
+        <div class="tabs" role="tablist" id="event-tabs">
+          <button role="tab" class="tab active" data-tab="workflow">Workflow forms</button>
+          <button role="tab" class="tab" data-tab="data">Investigation data <span class="tab-count" id="tab-data-count"></span></button>
+          <button role="tab" class="tab" data-tab="insight">Causes &amp; interviews</button>
+          <button role="tab" class="tab" data-tab="check">Compliance check <span class="tab-count" id="tab-check-count"></span></button>
+        </div>
+        <div id="tab-workflow" class="tab-panel active"></div>
+        <div id="tab-data" class="tab-panel"></div>
+        <div id="tab-insight" class="tab-panel"></div>
+        <div id="tab-check" class="tab-panel"></div>
+      </section>
+
+      <!-- Register -->
+      <section id="view-register" class="view" aria-label="Events">
+        <div class="toolbar">
+          <span class="hint">Events are saved in this browser. Export a backup regularly.</span>
+          <span class="spacer"></span>
+          <button class="btn" id="export-json">Export backup</button>
+          <label class="btn" for="import-json">Import backup</label>
+          <input type="file" id="import-json" accept=".json,application/json" hidden>
+        </div>
+        <div class="panel flush"><div class="table-wrap"><table class="register qe-register" id="register"></table></div></div>
+        <section class="panel trend-panel">
+          <div class="panel-head"><h2>Semi-annual trending</h2><span class="panel-meta">SOPQA0015E 10.10 · QA0015E/Onc/TE03/02</span></div>
+          <div id="trend"></div>
+        </section>
+      </section>
+
+      <!-- Masterclass -->
+      <section id="view-masterclass" class="view" aria-label="Masterclass">
+        <div id="masterclass"></div>
+      </section>
+    </main>
+  </div>
+</div>
+
+<nav class="tabbar" aria-label="Main">
+  <button class="tabbar-item active" data-view="new"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M9 3h2v6h6v2h-6v6H9v-6H3V9h6z"/></svg>New</button>
+  <button class="tabbar-item" data-view="event"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5 2h7l4 4v12H5zm6 1.5V7h3.5z"/></svg>Event</button>
+  <button class="tabbar-item" data-view="register"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 4h14v2H3zm0 5h14v2H3zm0 5h14v2H3z"/></svg>Events</button>
+  <button class="tabbar-item" data-view="masterclass"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 3 1 7.5 10 12l7-3.5V14h2V7.5z"/></svg>Learn</button>
+</nav>
+
+<dialog id="settings" class="small" aria-labelledby="settings-title">
+  <form method="dialog" id="settings-form">
+    <div class="dialog-head"><h2 id="settings-title">Claude connection</h2></div>
+    <div class="form-body">
+      <div class="form-section">
+        <p class="hint" id="server-line"></p>
+        <div class="fields one">
+          <label>Connection
+            <select id="set-mode">
+              <option value="server">Local server (API key on the server)</option>
+              <option value="browser">This browser (my own API key)</option>
+            </select>
+          </label>
+          <label id="set-key-row">Anthropic API key
+            <input type="password" id="set-key" placeholder="sk-ant-…" autocomplete="off">
+            <small class="hint">Stored only in this browser. Anyone using this device can read it. Prefer the local server for shared computers.</small>
+          </label>
+          <label>Model<select id="set-model"></select></label>
+          <label>Effort<select id="set-effort"></select><small class="hint">Higher effort reasons longer and costs more. "high" suits investigations.</small></label>
+        </div>
+        <p class="hint privacy">The event details you enter are sent to the Anthropic API to draft the forms. Do not include patient data. Every draft must be reviewed, completed and approved by the responsible people before it is entered in Scigeniq.</p>
+      </div>
+    </div>
+    <div class="dialog-foot"><span class="spacer"></span><button class="btn" value="cancel">Cancel</button><button class="btn primary" value="save" id="settings-save">Save</button></div>
+  </form>
+</dialog>
+
+<dialog id="busy" class="small" aria-labelledby="busy-title">
+  <div class="busy-body">
+    <div class="spinner" aria-hidden="true"></div>
+    <h2 id="busy-title">Claude is drafting…</h2>
+    <p class="hint" id="busy-text">This usually takes one to three minutes.</p>
+    <p class="mono busy-time" id="busy-time">0:00</p>
+    <button class="btn" id="busy-cancel" type="button">Cancel</button>
+  </div>
+</dialog>
+
+<dialog id="confirm" class="small" aria-labelledby="confirm-title">
+  <form method="dialog">
+    <div class="dialog-head"><h2 id="confirm-title">Confirm</h2></div>
+    <p class="choice-message" id="confirm-text"></p>
+    <div class="dialog-foot"><span class="spacer"></span><button class="btn" value="cancel">Cancel</button><button class="btn primary" value="ok" id="confirm-ok">OK</button></div>
+  </form>
+</dialog>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<script type="module" src="js/app.js"></script>
+</body>
+</html>

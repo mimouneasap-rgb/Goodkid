@@ -1,4 +1,36 @@
-# Quality Risk Manager
+# Quality Risk Manager and QE Investigator
+
+This repository holds two installable web apps:
+
+- **Quality Risk Manager** (`/`): an FMEA risk register (described below).
+- **QE Investigator** (`/qe/`): drafts every stage of a Scigeniq quality event from a deviation description, with Claude, following the El Kendi Oncology site procedures SOPQA0015E/Onc ver. 04 and SOPQA0146E/Onc ver. 02.
+
+## QE Investigator
+
+1. **Describe the deviation:** the description, dates, product, batch, area, equipment, immediate actions and scope. The app shows the selections Scigeniq will make mandatory for that scope (AE05).
+2. **Analyse with Claude:** drafts the *Open* (Quality Event Form, Where/What/Who/Why), *In Review* (S × O × D with justifications, RPN class, historical review, QA decision) and *Investigation Planning* stages (investigation and standalone-action tasks per department), plus ranked candidate causes, interview questions, containment and the regulatory references that apply.
+3. **Investigation data:** a checklist of the evidence to collect for each 6M factor. It combines a built-in library filtered by scope with items Claude adds for the specific event. Mark each item *compliant*, *anomaly* or *N/A* and write what the record showed. OOS events also show the Phase 1a / 1b / 2 laboratory checklists.
+4. **Complete investigation with Claude:** drafts the Investigation Form (6M with an evidence-based assessment per factor, 5 Whys, root cause category), the *After Investigation Details* (impact on product, patient, other batches and validation status; CAPA with owners, due dates and effectiveness check; change control; the 13 impact assessment questions; final RPN; batch disposition) and the QA Manager approval with the QP decision.
+5. **Compliance check:** tests the record against the SOP and the main regulations, for example: the 1-working-day logging rule, mandatory investigations for major and critical deviations, quarantine, the 30-working-day due date and extensions, "not determined" root causes needing a risk assessment, human error needing formal justification, and 6M answers that contradict the impact questions.
+
+Every field can be copied for pasting into Scigeniq, and edited in place. *Copy all* and *Print / PDF* export the whole record. The **Masterclass** page gathers the workflow, RPN scales, Exhibit examples, scope matrix, root cause methods, the data library, OOS phases, recurring inspection findings and references (EU GMP Ch. 1/5/6/8, Annexes 11/15/16, ICH Q7/Q9(R1)/Q10, 21 CFR 211, FDA OOS and data integrity guidance, MHRA, PIC/S, WHO). The **Events** page lists saved events with the semi-annual trending tables of SOP 10.10.
+
+Without a Claude connection, **Draft without AI** fills the same forms from the SOP rules and your findings, with `[TO COMPLETE: …]` placeholders.
+
+### Connecting Claude
+
+The app uses Claude Opus 5.5 by default, with structured JSON output, adaptive thinking and server-side refusal fallback. You can choose Sonnet 5.5 or Fable 5.1 and the effort level in **Settings**. Pick one of two connection modes:
+
+- **Local server (recommended):** the API key stays on the server.
+  ```bash
+  npm install                              # once, installs @anthropic-ai/sdk
+  ANTHROPIC_API_KEY=sk-ant-... npm start   # then open http://localhost:8080/qe/
+  ```
+- **This browser:** for the hosted (GitHub Pages) version, enter your own API key in **Settings**. It is stored only in that browser.
+
+The event details are sent to the Anthropic API. Do not include patient data. Claude only drafts: every form must be reviewed, completed and approved by the responsible people in Scigeniq. The app is not a validated GMP system, and the records saved in the browser are working drafts, not GMP records.
+
+## Quality Risk Manager
 
 A lightweight quality risk management (QRM) app for identifying, scoring,
 controlling and reviewing quality risks, following the FMEA approach used in
@@ -44,11 +76,11 @@ Your risks are stored on the device where you enter them. Use **Export CSV** to 
 
 ## Running locally
 
-Requires Node.js 18 or later. There are no dependencies to install.
+Requires Node.js 18 or later. The apps themselves have no dependencies. `npm install` is only needed for the Claude server proxy.
 
 ```bash
-npm start          # serves the app at http://localhost:8080 (set PORT to change)
-npm test           # runs the unit tests for the scoring logic
+npm start          # serves both apps at http://localhost:8080 (set PORT to change)
+npm test           # runs the unit tests
 ```
 
 ## Project layout
@@ -62,7 +94,14 @@ npm test           # runs the unit tests for the scoring logic
 | `js/app.js` | UI rendering and event handling |
 | `js/sample-data.js` | Example risks loaded on first visit |
 | `manifest.webmanifest`, `sw.js`, `icons/` | App manifest, offline service worker and icons |
-| `server.js` | Tiny static server with no dependencies |
+| `qe/index.html`, `qe/css/qe.css` | QE Investigator shell and styles |
+| `qe/js/sop.js` | Site SOP rules: RPN classes, scopes and mandatory fields, workflow stages, working-day deadlines, compliance check, trending |
+| `qe/js/knowledge.js` | 6M investigation data library, OOS phase checklists, methods, regulatory references, inspection findings |
+| `qe/js/claude.js` | System prompt, JSON schemas, request building and the two Claude connection modes |
+| `qe/js/drafts.js` | Offline drafts built from the rules |
+| `qe/js/record.js` | Records, data checklist and the stage-by-stage report and text export |
+| `qe/js/app.js` | QE Investigator UI |
+| `server.js` | Static server, plus the `/api/claude` proxy when `ANTHROPIC_API_KEY` is set |
 | `tests/` | `node --test` unit tests |
 
 ## Notes

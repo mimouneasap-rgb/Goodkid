@@ -1,7 +1,7 @@
 // Service worker: makes the app installable and usable offline.
 // App files are served from cache and refreshed in the background; bump
 // VERSION to drop old caches after a large change.
-const VERSION = "qrm-v1";
+const VERSION = "qrm-v2";
 const APP_SHELL = [
   "./",
   "index.html",
@@ -11,6 +11,15 @@ const APP_SHELL = [
   "js/risk.js",
   "js/charts.js",
   "js/sample-data.js",
+  "qe/",
+  "qe/index.html",
+  "qe/css/qe.css",
+  "qe/js/app.js",
+  "qe/js/sop.js",
+  "qe/js/knowledge.js",
+  "qe/js/claude.js",
+  "qe/js/drafts.js",
+  "qe/js/record.js",
   "icons/icon.svg",
   "icons/icon-192.png",
   "icons/icon-512.png",
@@ -51,14 +60,16 @@ self.addEventListener("fetch", (event) => {
   }
 
   if (url.origin !== self.location.origin) return;
+  // Claude requests always go to the network.
+  if (url.pathname.includes("/api/")) return;
 
   // Page navigations: network first so updates arrive, cached shell when offline.
   if (request.mode === "navigate") {
     event.respondWith(fetch(request).then((res) => {
       const copy = res.clone();
-      caches.open(VERSION).then((cache) => cache.put("index.html", copy));
+      caches.open(VERSION).then((cache) => cache.put(request, copy));
       return res;
-    }).catch(() => caches.match("index.html")));
+    }).catch(async () => (await caches.match(request, { ignoreSearch: true })) || caches.match("index.html")));
     return;
   }
 

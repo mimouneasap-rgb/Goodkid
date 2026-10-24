@@ -18,6 +18,7 @@
   ],
   "shortcuts": [
     { "name": "Risk register", "url": "./#register", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] },
-    { "name": "Risk matrix", "url": "./#matrix", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] }
+    { "name": "Risk matrix", "url": "./#matrix", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "QE Investigator", "url": "./qe/", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] }
   ]
 }
