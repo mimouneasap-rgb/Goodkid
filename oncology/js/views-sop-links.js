@@ -8,7 +8,7 @@ import { SOP_TOPICS, ROUTE_TOPICS } from "./catalogs.js";
 import { SOP_DEPTS, sopKey } from "./sopkit.js";
 import { picker } from "./picker.js";
 import { fieldPicker } from "./editing.js";
-import { sopTraining, openTraining, newUnplanned, fromNeed, TR_COLOR } from "./views-training.js";
+import { sopTraining, openTraining, newUnplanned, fromNeed, TR_COLOR, trStatus } from "./views-training.js";
 
 const FR = () => getLang() === "FR";
 const codes = (v) => String(v ?? "").split(/\s*[;,\n]\s*/).map((x) => x.trim()).filter(Boolean);
@@ -98,7 +98,7 @@ export function trainingCard(ctx, s) {
       h("div", h("small", t("lk_trained_rev", s.Revision ?? "—")), h("b", `${fmtNum(T.trained.length)} / ${fmtNum(T.people.length)}`), h("span.trn-bar", h("i", { style: { width: `${Math.round((T.trained.length / T.people.length) * 100)}%`, background: T.trained.length === T.people.length ? "var(--good)" : "var(--warning)" } }), h("b", fmtPct(T.trained.length / T.people.length)))),
       pending.length ? h("div", h("small", t("lk_not_yet")), h("p", pending.map((p) => p.name).join(", "))) : null) : null,
     list.length ? h("ul.trn-req", list.slice(0, 8).map((x) => h("li",
-      h("span.pill", { style: { "--dot": TR_COLOR[x.status] ?? "var(--muted-mark)" } }, h("i"), tv(x.status)),
+      h("span.pill", { style: { "--dot": TR_COLOR[x.status] ?? "var(--muted-mark)" } }, h("i"), x.plan === "Planned" ? trStatus(x.status) : tv(x.status)),
       h("button.link", { type: "button", onclick: () => openTraining(ctx, X, x) }, `${tv(x.plan)} · ${x["Training ID"] ?? ""}`),
       h("small.muted", fmtDate(x.date ?? x.done ?? x.planned))))) : null), { sub: T.matrix ? t("lk_training_sub", fmtNum(T.matrix.positions.length)) : null });
 }

@@ -32,6 +32,11 @@ const TABS = [["overview", "trn_t_overview"], ["planned", "trn_t_planned"], ["un
 const posChips = (xs, max = 4) => h("span.trn-pos", xs.slice(0, max).map((p) => h("span.tag", p)), xs.length > max ? h("span.tag", `+${xs.length - max}`) : null);
 const pct = (v) => h("span.trn-bar", { title: v == null ? "" : fmtPct(v) }, h("i", { style: { width: `${Math.round((v ?? 0) * 100)}%`, background: v == null ? "var(--muted-mark)" : v >= 1 ? "var(--good)" : v >= 0.75 ? "var(--warning)" : "var(--critical)" } }), h("b", v == null ? "—" : fmtPct(v)));
 const yearOf = (ts) => (ts == null ? null : new Date(ts).getUTCFullYear());
+// a saved filter applies only while its value is still one of the choices: one left over from an earlier plan or an
+// earlier version of this page would otherwise empty the page while its select shows "(All)"
+const pick = (v, opts) => (opts.includes(v) ? v : ALL);
+/** A planned training's status; "Planned" there means a later month, shown as "Upcoming" so it reads apart from the Planned tab. */
+export const trStatus = (s) => (s === "Planned" ? t("trn_st_upcoming") : tv(s));
 
 export function trainingView(ctx) {
   const X = ctx.m.x.trainingX;
@@ -113,14 +118,20 @@ function overview(ctx, X, year) {
 function planned(ctx, X, year0) {
   const { m } = ctx;
   const T = X.planned;
-  const f = ctx.state.trn ?? {};
-  const setF = (k, v) => ctx.set("trn", { ...f, [k]: v });
   const years = [...new Set(T.map((x) => yearOf(x.planned)).filter(Boolean))].sort();
   const year = years.includes(year0) ? year0 : years.at(-1) ?? year0;
   const inYear = T.filter((x) => yearOf(x.planned) === year || (x.planned == null && year === new Date(m.now).getUTCFullYear()));
   const positions = [...new Set(inYear.flatMap((x) => x.positions))];
-  const L = inYear.filter((x) => (!f.dept || f.dept === ALL || x.Department === f.dept) && (!f.type || f.type === ALL || x.Type === f.type) && (!f.status || f.status === ALL || x.status === f.status)
-    && (!f.pos || f.pos === ALL || x.positions.includes(f.pos)));
+  const types = [...new Set(T.map((x) => x.Type).filter(Boolean))];
+  const depts = [...new Set(T.map((x) => x.Department).filter(Boolean))];
+  const statuses = PLANNED_ST.filter((s) => inYear.some((x) => x.status === s));
+  const f0 = ctx.state.trnPl ?? {};
+  const f = { dept: pick(f0.dept, depts), pos: pick(f0.pos, positions), type: pick(f0.type, types), status: pick(f0.status, statuses) };
+  const setF = (k, v) => ctx.set("trnPl", { ...f, [k]: v });
+  const filtered = Object.values(f).some((v) => v !== ALL);
+  const clear = () => ctx.set("trnPl", {});
+  const L = inYear.filter((x) => (f.dept === ALL || x.Department === f.dept) && (f.type === ALL || x.Type === f.type) && (f.status === ALL || x.status === f.status)
+    && (f.pos === ALL || x.positions.includes(f.pos)));
   const due = L.filter((x) => x.planned != null && x.planned <= m.now && x.status !== "Cancelled");
   const done = L.filter((x) => x.done != null);
   const exec = due.length ? due.filter((x) => x.done != null).length / due.length : null;
@@ -136,9 +147,7 @@ function planned(ctx, X, year0) {
     cp += pl; cd += co;
     return { x: k, month: k, planned: pl, completed: co, cumPlanned: cp, cumDone: Date.UTC(year, i, 1) <= m.now ? cd : null };
   });
-  const types = [...new Set(T.map((x) => x.Type).filter(Boolean))];
-  const depts = [...new Set(T.map((x) => x.Department).filter(Boolean))];
-  const series = PLANNED_ST.map((s) => ({ key: s, label: tv(s), color: TR_COLOR[s] }));
+  const series = PLANNED_ST.map((s) => ({ key: s, label: trStatus(s), color: TR_COLOR[s] }));
   const cols = [
     { key: "Training ID", label: t("col_id"), cls: "mono nowrap" }, { key: "Program", label: t("trn_program"), cls: "wrap" },
     { key: "Reference", label: t("reference_lbl"), cls: "mono nowrap", render: (x) => (x.Reference && sopKey(x.Reference) ? h("a", { href: sopHref(x.Reference), onclick: (e) => e.stopPropagation() }, x.Reference) : x.Reference ?? "") },
@@ -146,16 +155,18 @@ function planned(ctx, X, year0) {
     { key: "planned", label: t("planned_lbl"), cls: "num nowrap", render: (x) => (x.planned != null ? fmtDate(x.planned).slice(3) : "—") },
     { key: "Rescheduled to", label: t("rescheduled_lbl"), cls: "num nowrap" }, { key: "done", label: t("completed_on"), cls: "num nowrap", render: (x) => fmtDate(x.done) },
     { key: "attendance", label: t("attendance_lbl"), cls: "num", render: (x) => (x.attendance == null ? "" : fmtPct(x.attendance)) },
-    { key: "status", label: t("col_status"), render: (x) => dot(TR_COLOR[x.status] ?? "var(--muted-mark)", tv(x.status)) },
+    { key: "status", label: t("col_status"), render: (x) => dot(TR_COLOR[x.status] ?? "var(--muted-mark)", trStatus(x.status)) },
   ];
   return [
     T.length ? null : h("div.banner.info", icon("upload", 18), h("span", t("trn_empty"), " ", ctx.canEdit ? h("button.link", { type: "button", onclick: () => ctx.openImport() }, t("update_data")) : null)),
     card(null, h("div.filters",
       select(t("year_lbl"), (years.length ? years : [year]).map((y) => [y, String(y)]), year, (v) => ctx.set("trnYear", +v)),
-      select(t("col_dept"), [[ALL, t("filter_all")], ...depts.map((d) => [d, tv(d)])], f.dept ?? ALL, (v) => setF("dept", v)),
-      select(t("trn_position"), [[ALL, t("filter_all")], ...positions.map((p) => [p, p])], f.pos ?? ALL, (v) => setF("pos", v)),
-      select(t("col_type"), [[ALL, t("filter_all")], ...types.map((d) => [d, tv(d)])], f.type ?? ALL, (v) => setF("type", v)),
-      select(t("col_status"), [[ALL, t("filter_all")], ...PLANNED_ST.map((s) => [s, tv(s)])], f.status ?? ALL, (v) => setF("status", v))), { cls: "filter-card" }),
+      select(t("col_dept"), [[ALL, t("filter_all")], ...depts.map((d) => [d, tv(d)])], f.dept, (v) => setF("dept", v)),
+      select(t("trn_position"), [[ALL, t("filter_all")], ...positions.map((p) => [p, p])], f.pos, (v) => setF("pos", v)),
+      select(t("col_type"), [[ALL, t("filter_all")], ...types.map((d) => [d, tv(d)])], f.type, (v) => setF("type", v)),
+      select(t("col_status"), [[ALL, t("filter_all")], ...statuses.map((s) => [s, `${trStatus(s)} · ${fmtNum(inYear.filter((x) => x.status === s).length)}`])], f.status, (v) => setF("status", v)),
+      filtered ? h("div.field", h("span", " "), h("button.btn.ghost", { type: "button", onclick: clear }, icon("close", 15), t("trn_clear_filters"))) : null), { cls: "filter-card" }),
+    filtered && !L.length ? h("div.banner.info", icon("search", 18), h("span", t("trn_filtered_none", fmtNum(inYear.length), String(year)), " ", h("button.link", { type: "button", onclick: clear }, t("trn_clear_filters")))) : null,
     h("div.kpi-grid",
       kpi({ label: t("trn_planned"), value: fmtNum(L.filter((x) => x.status !== "Cancelled").length), accent: "var(--c1)", onclick: openList(t("trn_planned"), L) }),
       kpi({ label: t("k_completed"), value: fmtNum(done.length), accent: "var(--good)", onclick: openList(t("k_completed"), done) }),
@@ -171,8 +182,8 @@ function planned(ctx, X, year0) {
       card(t("trn_status_type"), stacks(types.map((ty) => ({ label: tv(ty), parts: Object.fromEntries(PLANNED_ST.map((s) => [s, L.filter((x) => x.Type === ty && x.status === s).length])), onclick: () => setF("type", ty) })), series)),
       positions.length ? card(t("trn_by_position"), stacks(positions.map((p) => ({ label: p, parts: Object.fromEntries(PLANNED_ST.map((s) => [s, inYear.filter((x) => x.positions.includes(p) && x.status === s).length])), onclick: () => setF("pos", p) })), series), { span: 2 }) : null,
       card(t("trn_plan"), gantt(L.filter((x) => x.planned != null).map((x) => ({ label: x.Program, sub: [x["Training ID"], x.Reference].filter(Boolean).join(" · "), start: x.planned, end: x.plannedEnd, mark: x.done, color: TR_COLOR[x.status],
-        tip: `<b>${esc(x.Program)}</b><div class="tip-row"><span>${esc(t("col_status"))}</span><b>${esc(tv(x.status))}</b></div>`, onclick: () => openTraining(ctx, X, x) })), { from: Date.UTC(year, 0, 1), months: 12, today: m.now }), { span: 2, sub: t("trn_gantt_sub") })),
-    card(`${t("trn_t_planned")} · ${fmtNum(L.length)}`, dataTable(cols, L, { pageSize: 25, onRow: (x) => openTraining(ctx, X, x), exportName: `training-plan-${year}` }), { sub: t("trn_planned_sub") }),
+        tip: `<b>${esc(x.Program)}</b><div class="tip-row"><span>${esc(t("col_status"))}</span><b>${esc(trStatus(x.status))}</b></div>`, onclick: () => openTraining(ctx, X, x) })), { from: Date.UTC(year, 0, 1), months: 12, today: m.now }), { span: 2, sub: t("trn_gantt_sub") })),
+    card(`${t("trn_t_planned")} · ${filtered ? `${fmtNum(L.length)} / ${fmtNum(inYear.length)}` : fmtNum(L.length)}`, dataTable(cols, L, { pageSize: 25, onRow: (x) => openTraining(ctx, X, x), exportName: `training-plan-${year}` }), { sub: t("trn_planned_sub") }),
   ];
 }
 
@@ -281,13 +292,14 @@ function matrixTab(ctx, X) {
 
 // ---------- people: each employee and their training card ----------
 function peopleTab(ctx, X) {
-  const f = ctx.state.trnP ?? {};
+  const positions = [...new Set(X.people.map((p) => p.position).filter(Boolean))];
+  const f0 = ctx.state.trnP ?? {};
+  const f = { ...f0, pos: pick(f0.pos, positions) };
   const setF = (k, v) => ctx.set("trnP", { ...f, [k]: v });
   const qx = String(f.q ?? "").trim().toLowerCase();
-  const L = X.people.filter((p) => (f.status === "all" || p.active) && (!f.pos || f.pos === ALL || p.position === f.pos) && (!qx || `${p.name} ${p.position ?? ""} ${p.Section ?? ""}`.toLowerCase().includes(qx)));
+  const L = X.people.filter((p) => (f.status === "all" || p.active) && (f.pos === ALL || p.position === f.pos) && (!qx || `${p.name} ${p.position ?? ""} ${p.Section ?? ""}`.toLowerCase().includes(qx)));
   const act = X.people.filter((p) => p.active && p.required);
   const items = act.flatMap((p) => p.items);
-  const positions = [...new Set(X.people.map((p) => p.position).filter(Boolean))];
   return [
     h("div.kpi-grid.six",
       kpi({ label: t("trn_k_staff"), value: fmtNum(X.people.filter((p) => p.active).length), accent: "var(--c1)" }),
@@ -296,7 +308,7 @@ function peopleTab(ctx, X) {
       ...["Not trained", "Old revision", "Re-training"].map((s) => kpi({ label: tv(s), value: fmtNum(items.filter((i) => i.state === s).length), accent: STATE_COLOR[s], hint: t("trn_k_items") }))),
     card(null, h("div.filters",
       h("label.field.grow", h("span", t("sop_find")), h("input", { type: "search", value: f.q ?? "", placeholder: t("trn_people_ph"), onchange: (e) => setF("q", e.target.value) })),
-      select(t("trn_position"), [[ALL, t("filter_all")], ...positions.map((p) => [p, p])], f.pos ?? ALL, (v) => setF("pos", v)),
+      select(t("trn_position"), [[ALL, t("filter_all")], ...positions.map((p) => [p, p])], f.pos, (v) => setF("pos", v)),
       h("div.field", h("span", t("col_status")), segmented([["active", t("trn_active")], ["all", t("filter_all")]], f.status === "all" ? "all" : "active", (v) => setF("status", v), t("col_status")))), { cls: "filter-card" }),
     card(`${t("trn_t_people")} · ${fmtNum(L.length)}`, X.people.length ? dataTable([
       { key: "name", label: t("trn_name"), cls: "nowrap", render: (p) => h("b", p.name) },
@@ -347,7 +359,7 @@ export function openTraining(ctx, X0, x0) {
     const table = x.plan === "Planned" ? "training" : "trainingUnplanned";
     return [
       h("div.d-head", h("span.d-ref", `${tv(x.plan)} · ${id ?? ""}`), h("h2", x.title || "—"),
-        h("div.d-tags", dot(TR_COLOR[x.status] ?? "var(--muted-mark)", tv(x.status)), x.Category ? h("span.tag", tv(x.Category)) : null, x.Type ? h("span.tag", tv(x.Type)) : null)),
+        h("div.d-tags", dot(TR_COLOR[x.status] ?? "var(--muted-mark)", x.plan === "Planned" ? trStatus(x.status) : tv(x.status)), x.Category ? h("span.tag", tv(x.Category)) : null, x.Type ? h("span.tag", tv(x.Type)) : null)),
       ctx.canEdit ? h("div.form-actions.rv-moves",
         x.status !== "Cancelled" ? h("button.btn.compact.primary", { type: "button", onclick: () => recordAttendance(ctx, X, x) }, icon("check", 14), t("trn_record")) : null,
         h("button.btn.compact", { type: "button", onclick: () => ctx.edit(table, x.__key, x.title) }, icon("edit", 14), t("edit"))) : null,
