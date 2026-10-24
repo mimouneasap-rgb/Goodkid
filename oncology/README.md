@@ -43,7 +43,7 @@ On first visit, drop the master workbook on the welcome screen. Afterwards, clic
 - the **batch tracker** (.xlsm) and the **WIP** workbook (.xlsx);
 - the **5S area checklists** workbook (.xlsx) and the **APQR master tracker** or a Scigeniq **APQR** export (.xlsx);
 - the Scigeniq **all-tasks report** (`allTasks_report.xlsx`): its APQR workflows and data-collection tasks are merged into the APQR task list (same reference and title = same task, so comments typed in the app are kept). When the report lists open tasks only, an APQR task that was open before and is no longer listed is marked “Closed (inferred)”; other Scigeniq tasks in the report are ignored;
-- controlled Word forms (.docx): the **annual and monthly calibration programs**, the **utility / equipment validation schedules**, **department training plans**, the **registered API list** and the **APQR annual plan**.
+- controlled Word forms (.docx): the **annual and monthly calibration programs**, the **utility / equipment validation schedules**, **department training plans** (a re-imported plan keeps the completions, trainers and attendance recorded in the app), **department training matrices** (topics × job-position codes; codes are matched to the job positions register, missing positions are added), the **registered API list** and the **APQR annual plan**.
 
 Each file replaces only its own lists, and the import reports what it read from each one. Files are read in the browser with SheetJS (`vendor/`, loaded only for imports) and are never uploaded anywhere else.
 

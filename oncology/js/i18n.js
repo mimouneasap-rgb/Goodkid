@@ -235,7 +235,7 @@ const EXTRA = {
   imp_k1: ["Master workbook (.xlsx): rooms, equipment, SOPs, FMEA, records and settings", "Classeur maître (.xlsx) : salles, équipements, procédures, AMDEC, enregistrements et paramètres"],
   imp_k2: ["Scigeniq exports (.xlsx): change controls, CAPA, quality events, audit findings, actions", "Exports Scigeniq (.xlsx) : maîtrises des changements, CAPA, événements qualité, constats d’audit, actions"],
   imp_k3: ["Batch tracker (.xlsm) and WIP workbook (.xlsx): lifecycle, yields, cycle times, WIP and rejections", "Suivi des lots (.xlsm) et classeur des en-cours (.xlsx) : cycle de vie, rendements, temps de cycle, en-cours et rejets"],
-  imp_k4: ["Word forms (.docx): annual / monthly calibration programs, validation schedules, training plans, registered API list", "Formulaires Word (.docx) : programmes d’étalonnage annuel / mensuel, plannings de validation, plans de formation, liste des PA enregistrés"],
+  imp_k4: ["Word forms (.docx): annual / monthly calibration programs, validation schedules, department training plans and training matrices, registered API list", "Formulaires Word (.docx) : programmes d’étalonnage annuel / mensuel, plannings de validation, plans et matrices de formation des départements, liste des PA enregistrés"],
   imp_k5: ["Dropping several files at once is fine: each one updates only its own lists", "Vous pouvez déposer plusieurs fichiers à la fois : chacun ne met à jour que ses propres listes"],
   // ----- quality events -----
   find_with_capa: ["Findings with CAPA", "Constats avec CAPA"],
