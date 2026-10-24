@@ -26,7 +26,7 @@ const PLANNED_ST = ["Completed", "Overdue", "Due this month", "Planned", "Not sc
 const UNPLANNED_ST = ["Overdue", "To schedule", "Scheduled", "Completed", "Cancelled"];
 export const STATE_COLOR = { Trained: "var(--good)", "Not trained": "var(--critical)", "Old revision": "var(--warning)", "Re-training": "var(--c7)", Expired: "var(--c4)" };
 const STATES = ["Trained", "Old revision", "Expired", "Re-training", "Not trained"];
-const CAT_COLOR = { "New SOP": "var(--c1)", "Revised SOP": "var(--c3)", "Quality circle": "var(--c7)", "Deviation / OOS / complaint": "var(--critical)", "External training": "var(--c4)",
+const CAT_COLOR = { "Attendance missing": "var(--c7)", "New SOP": "var(--c1)", "Revised SOP": "var(--c3)", "Quality circle": "var(--c7)", "Deviation / OOS / complaint": "var(--critical)", "External training": "var(--c4)",
   "Re-training": "var(--warning)", "Induction / new position": "var(--c5)", "GMP chapter": "var(--c2)", Other: "var(--muted-mark)" };
 const TABS = [["overview", "trn_t_overview"], ["planned", "trn_t_planned"], ["unplanned", "trn_t_unplanned"], ["positions", "trn_t_positions"], ["people", "trn_t_people"]];
 const posChips = (xs, max = 4) => h("span.trn-pos", xs.slice(0, max).map((p) => h("span.tag", p)), xs.length > max ? h("span.tag", `+${xs.length - max}`) : null);
@@ -66,6 +66,9 @@ function overview(ctx, X, year) {
     ...X.retraining.map((r) => ({ due: r.due, kind: "Re-training", ref: r.record.Reference ?? "", title: r.record.Title ?? "", who: r.record.emp, go: () => newUnplanned(ctx, X, fromRetraining(r)) })),
     ...X.unplanned.filter((x) => x.status === "Overdue").map((x) => ({ due: x.due, kind: x.Category, ref: x["Training ID"], title: x.title, who: x.positions.join(", "), go: () => openTraining(ctx, X, x) })),
     ...X.planned.filter((x) => x.status === "Overdue").map((x) => ({ due: x.plannedEnd, kind: "Planned", ref: x["Training ID"], title: x.title, who: x.positions.length ? x.positions.length + " " + t("trn_positions").toLowerCase() : "", go: () => openTraining(ctx, X, x) })),
+    // done, but nobody's training card shows it yet
+    ...[...X.planned, ...X.unplanned].filter((x) => (x.done === true || (x.plan === "Planned" && x.done != null)) && x["Training ID"] && !X.records.some((r) => r["Training ID"] === x["Training ID"]))
+      .map((x) => ({ due: x.plan === "Planned" ? x.done : x.date, kind: "Attendance missing", ref: x["Training ID"], title: x.title, who: t("trn_att_missing"), go: () => recordAttendance(ctx, X, x) })),
   ].sort((a, b) => (a.due ?? 9e15) - (b.due ?? 9e15));
   const years = [...new Set([...X.planned.map((x) => yearOf(x.planned)), ...X.unplanned.map((x) => yearOf(x.date ?? x.due)), new Date(now).getUTCFullYear()].filter(Boolean))].sort();
   return [
@@ -93,7 +96,8 @@ function overview(ctx, X, year) {
         { key: "unplannedDone", label: t("trn_s_unplanned_done"), color: "var(--c4)" }]), { span: 2, sub: t("trn_c_monthly_sub") }),
       card(t("trn_c_calendar"), h("ul.trn-cal", cal.map((c) => h("li", { class: c.days <= 30 ? "soon" : "" }, h("b", fmtDate(c.at).slice(0, 5)), h("span", t(`trn_cal_${c.key}`)), h("small", t("trn_in_days", fmtNum(c.days)))))), { sub: t("trn_c_calendar_sub") })),
     card(`${t("trn_c_todo")} · ${fmtNum(todo.length)}`, todo.length ? h("div.trn-todo", todo.slice(0, 14).map((x) => h("button.trn-todo-row", { type: "button", onclick: x.go },
-      h("span.trn-todo-when", { class: x.due != null && x.due < now ? "late" : "" }, h("b", fmtDate(x.due) || "—"), h("small", x.due == null ? "" : x.due < now ? t("ck_late", fmtNum(Math.ceil((now - x.due) / DAY))) : t("ck_in", fmtNum(Math.ceil((x.due - now) / DAY))))),
+      x.kind === "Attendance missing" ? h("span.trn-todo-when", h("b", fmtDate(x.due) || "—"), h("small", t("trn_done_short")))
+        : h("span.trn-todo-when", { class: x.due != null && x.due < now ? "late" : "" }, h("b", fmtDate(x.due) || "—"), h("small", x.due == null ? "" : x.due < now ? t("ck_late", fmtNum(Math.ceil((now - x.due) / DAY))) : t("ck_in", fmtNum(Math.ceil((x.due - now) / DAY))))),
       h("span.trn-todo-main", h("span", h("span.tag", { style: { "--tag": CAT_COLOR[x.kind] } }, tv(x.kind)), " ", h("b.mono", x.ref)), h("span.muted", short(x.title, 90))),
       h("span.trn-todo-who", x.who), icon("chevron", 15))), todo.length > 14 ? h("p.muted.center", t("sop_more", fmtNum(todo.length - 14))) : null)
       : h("p.ok-line", icon("check", 14), t("trn_todo_none")), { sub: t("trn_c_todo_sub") }),
@@ -232,7 +236,7 @@ function matrixTab(ctx, X) {
   const setF = (k, v) => ctx.set("trnM", { ...f, [k]: v });
   const depts = [...new Set([...X.positions.map((p) => p.Department), ...X.matrix.map((m) => m.Department)].filter(Boolean))];
   const dept = f.dept && (f.dept === ALL || depts.includes(f.dept)) ? f.dept : depts[0] ?? ALL;
-  const P = X.byPosition.filter((p) => dept === ALL || p.Department === dept).sort((a, b) => (a.level ?? 9) - (b.level ?? 9) || a.name.localeCompare(b.name));
+  const P = X.byPosition.filter((p) => dept === ALL || p.Department === dept).sort((a, b) => (a.level ?? 9) - (b.level ?? 9) || String(a.Section ?? "").localeCompare(String(b.Section ?? "")) || a.name.localeCompare(b.name));
   const qx = String(f.q ?? "").trim().toLowerCase();
   const rows = X.matrix.filter((m) => (dept === ALL || !m.Department || m.Department === dept) && (!qx || `${m.Topic ?? ""} ${m.Reference ?? ""}`.toLowerCase().includes(qx)))
     .sort((a, b) => String(a.Kind ?? "").localeCompare(String(b.Kind ?? "")) || String(a.Reference ?? a.Topic).localeCompare(String(b.Reference ?? b.Topic), undefined, { numeric: true }));
@@ -367,7 +371,8 @@ export function recordAttendance(ctx, X, x) {
   const ppl = X.people.filter((p) => p.active && (x.positions.some((n) => norm(n) === norm(p.position)) || x.trainees?.some((n) => norm(n) === norm(p.name))));
   const others = X.people.filter((p) => p.active && !ppl.includes(p));
   const opts = ctx.options;
-  const date = h("input", { id: "ra-date", type: "date", value: isoOf(x.date && x.date <= ctx.m.now ? x.date : ctx.m.now) });
+  const when0 = x.date ?? (x.plan === "Planned" ? x.done : null);
+  const date = h("input", { id: "ra-date", type: "date", value: isoOf(when0 != null && when0 <= ctx.m.now ? when0 : ctx.m.now) });
   const trainer = fieldPicker("person", opts, x.Trainer ?? "", "ra-trainer");
   const evalSel = h("select", { id: "ra-eval" }, V.evaluations.map((e) => h("option", { value: e, selected: e === (x.Evaluation || "Written exam") ? true : null }, tv(e))));
   // the revision trained: the training's, else the SOP's current one in the library

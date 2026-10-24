@@ -6,6 +6,7 @@
 // Each importer writes whole tables into `next` and lists them in `replaced` (the Scigeniq task report merges into the APQR task list).
 import SCHEMA from "./schema.js";
 import { EXT_COLS } from "./schema-ext.js";
+import { SOP_DEPTS } from "./sopkit.js";
 
 export const COLS = { ...SCHEMA.cols, ...EXT_COLS };
 export const emptyData = () => ({ meta: {}, mapGrid: [], ...Object.fromEntries(Object.entries(COLS).map(([k, cols]) => [k, { cols, rows: [] }])) });
@@ -645,7 +646,11 @@ export function docxTables(XLSX, buffer) {
 const findHeader = (rows, ...names) => rows.findIndex((r) => names.every((n) => r.some((c) => text(c).toLowerCase().includes(n.toLowerCase()))));
 const colOf = (hdr, name) => hdr.findIndex((c) => text(c).toLowerCase().includes(name.toLowerCase()));
 
-function importTrainingPlan(doc, next, replaced) {
+/** A table as objects, by column name (works whatever the column order). */
+const objectsOf = (t) => (t?.rows ?? []).map((r) => Object.fromEntries((t.cols ?? []).map((c, i) => [c, r[i] ?? null])));
+const progKey = (s) => text(s).toLowerCase();
+
+export function importTrainingPlan(doc, next, replaced, current) {
   const all = doc.tables.flat();
   const tbl = doc.tables.find((t) => findHeader(t, "Description of Training") >= 0);
   if (!tbl) return null;
@@ -668,17 +673,96 @@ function importTrainingPlan(doc, next, replaced) {
     const resched = my(r[c.resched]);
     const rec = {
       "Training ID": `TR-${year || "YYYY"}-${abbr}-${pad(++n)}`, Program: program, Reference: ref, Type: type, Department: dept || null,
-      "Attendee group": text(r[c.group]).replace(/\s*\n\s*/g, " / ") || null, "Planned month": my(r[c.planned]),
+      "Attendee group": text(String(r[c.group] ?? "").replace(/\s*\n\s*/g, " / ")) || null, "Planned month": my(r[c.planned]),
       Status: done ? "Completed" : resched ? "Rescheduled" : "Planned", New: text(r[c.isNew]) || null, "Rescheduled to": resched,
       "Completion date": done, Comments: text(r[c.comment]) || null,
     };
     rows.push(cols.map((k) => rec[k] ?? null));
   }
-  // a department's plan for a year replaces only that plan; other departments' plans stay
-  const keep = (next.training?.rows ?? []).filter((r) => !(r[cols.indexOf("Department")] === (dept || null) && String(r[cols.indexOf("Planned month")] ?? "").startsWith(year)));
-  next.training = { cols, rows: [...keep, ...rows] };
+  // a department's plan for a year replaces only that plan; other departments' plans stay (with their in-app changes),
+  // and a training still in the plan keeps what was recorded in the app (its id, completion, trainer, attendance, effectiveness)
+  const cur = objectsOf(current?.training ?? next.training);
+  const inPlan = (o) => o.Department === (dept || null) && String(o["Planned month"] ?? "").startsWith(year);
+  const old = cur.filter(inPlan);
+  let kept = 0;
+  const merged = rows.map((r) => {
+    const rec = Object.fromEntries(cols.map((c, i) => [c, r[i]]));
+    const o = old.find((x) => progKey(x.Program) === progKey(rec.Program)) ?? old.find((x) => x["Training ID"] === rec["Training ID"] && progKey(x.Program).slice(0, 12) === progKey(rec.Program).slice(0, 12));
+    if (o) {
+      kept += o["Completion date"] || o.Trainer || o["Trained attendees"] ? 1 : 0;
+      rec["Training ID"] = o["Training ID"] ?? rec["Training ID"];
+      for (const k of ["Completion date", "Rescheduled to", "Trainer", "Planned attendees", "Trained attendees", "Effectiveness", "Comments"]) rec[k] ??= o[k] ?? null;
+      if (/^(completed|cancel)/i.test(o.Status ?? "") && rec.Status === "Planned") rec.Status = o.Status;
+    }
+    return cols.map((c) => rec[c] ?? null);
+  });
+  next.training = { cols, rows: [...cur.filter((o) => !inPlan(o)).map((o) => cols.map((c) => o[c] ?? null)), ...merged] };
   replaced.push("training");
-  return `training plan ${dept} ${year} · ${rows.length} trainings`;
+  return `training plan ${dept} ${year} · ${rows.length} trainings${kept ? ` · ${kept} keep what was recorded in the app` : ""}`;
+}
+
+// ---------- training matrix (topics × job positions, X where the position must be trained) ----------
+const KIND_OF = (title) => (/^SOP/i.test(title) ? "SOP" : /\bHSE\b|incendie|déchets|évacuation|extincteur/i.test(title) ? "HSE"
+  : /^ISO\s?\d/i.test(title) ? "Quality system" : /eudralex|cfr|pic\/s|who|ich\s?q|gmp|bpf|guideline/i.test(title) ? "GMP"
+  : /language|langue|microsoft|office|excel|auditor in|lead auditor/i.test(title) ? "Technical" : /skill|management|presentation|problem|stress|ethic|behavio|leadership|communication/i.test(title) ? "Soft skills" : "Other");
+/** "SOPXY0004EOnc : Title" / "SOPXY0014E/ Onc : Title" → ["SOPXY0004E/Onc", "Title"]. */
+export function matrixTopic(cell) {
+  const s = text(cell);
+  const m = s.match(/^(SOP[A-Z]{2,3}\d{3,4}[A-Z]?)\s*\/?\s*Onc\b\s*(?:\/\s*\d{2}\s*)?:?\s*(.*)$/i);
+  return m ? [`${m[1].toUpperCase()}/Onc`, m[2].trim() || s] : [null, s];
+}
+
+export function importTrainingMatrix(doc, next, replaced, current) {
+  const tbl = doc.tables.find((t) => findHeader(t, "Number & Title") >= 0);
+  if (!tbl) return null;
+  const hi = findHeader(tbl, "Number & Title");
+  const hdr = tbl[hi];
+  const ti = colOf(hdr, "Number & Title");
+  const codeCols = hdr.map((c, i) => [i, text(c)]).filter(([i, c]) => i > ti && /^[A-Z][A-Z.]{0,5}$/i.test(c));
+  // department: "QA Department" above the position codes, else the document's title
+  const deptCell = text((tbl[hi - 1] ?? []).find((c) => /department/i.test(text(c))) ?? "") || (doc.text.match(/for\s+(\w+)\s+Department/i)?.[0] ?? "");
+  const abbr = (deptCell.match(/^(\w+)\s+Department/i) ?? deptCell.match(/for\s+(\w+)\s+Department/i) ?? [])[1]?.toUpperCase() ?? "";
+  const dept = SOP_DEPTS[abbr]?.[0] ?? (deptCell.replace(/\s*Department.*$/i, "") || null);
+  // the legend names each code ("DO: Documentation Officer; SDO: …"); the positions register names them for the app
+  const legendText = doc.text.split("\n").filter((l) => (l.match(/;\s*[A-Z.]{1,5}\s*:/g) ?? []).length >= 2).join(";");
+  const legend = new Map([...legendText.matchAll(/(?:^|;)\s*([A-Z][A-Za-z.]{0,5})\s*:\s*([A-Za-zÀ-ÿ' ]+?)\s*(?=;|\.|$)/g)].map((m) => [m[1].replace(/\./g, "").toUpperCase(), m[2].trim()]));
+  const posRows = objectsOf(current?.positions ?? next.positions);
+  const nameOf = (code) => {
+    const c = code.replace(/\./g, "").toUpperCase();
+    const p = posRows.find((x) => String(x.Code ?? "").replace(/\./g, "").toUpperCase() === c && (!dept || !x.Department || x.Department === dept));
+    if (p) return p.Position;
+    const label = legend.get(c) ?? code;
+    return abbr ? `${abbr} ${label}` : label;
+  };
+  const posCols = codeCols.map(([i, c]) => [i, c, nameOf(c)]);
+  // positions the register does not have yet are added, with their code
+  const missing = posCols.filter(([, c, n]) => !posRows.some((x) => x.Position === n));
+  if (missing.length) {
+    const pc = COLS.positions;
+    const rowsP = posRows.map((o) => pc.map((k) => o[k] ?? null));
+    for (const [, c, n] of missing) rowsP.push(pc.map((k) => ({ Position: n, Code: c, Department: dept, Comment: "from the training matrix" })[k] ?? null));
+    next.positions = { cols: pc, rows: rowsP };
+    replaced.push("positions");
+  }
+  const cols = COLS.trainingMatrix;
+  const cur = objectsOf(current?.trainingMatrix ?? next.trainingMatrix);
+  const rows = [];
+  let listed = 0;
+  for (const r of tbl.slice(hi + 1)) {
+    const cell = text(r[ti]);
+    if (!cell || /^number\s*&/i.test(cell)) continue;
+    listed++;
+    const positions = posCols.filter(([i]) => /^x$/i.test(text(r[i]))).map(([, , n]) => n);
+    if (!positions.length) continue;
+    const [ref, topic] = matrixTopic(cell);
+    const old = cur.find((o) => (ref && o.Reference === ref) || (!ref && text(o.Topic).toLowerCase() === topic.toLowerCase()));
+    const rec = { Topic: topic, Reference: ref, Kind: KIND_OF(ref ?? topic), Department: dept, Positions: positions.join(" / "), "Refresh (months)": old?.["Refresh (months)"] ?? null, Comment: old?.Comment ?? null };
+    rows.push(cols.map((k) => rec[k] ?? null));
+  }
+  // a department's matrix replaces only that department's topics
+  next.trainingMatrix = { cols, rows: [...cur.filter((o) => o.Department && o.Department !== dept).map((o) => cols.map((k) => o[k] ?? null)), ...rows] };
+  replaced.push("trainingMatrix");
+  return `training matrix ${dept ?? ""} · ${rows.length} of ${listed} topics required · ${posCols.length} job positions${missing.length ? ` (${missing.length} added)` : ""}`;
 }
 
 function calCategory(item, desc) {
@@ -845,14 +929,15 @@ function importApqrPlan(doc, next, replaced) {
   return `APQR annual plan · ${rows.length} products`;
 }
 
-function importDocx(XLSX, buffer, next, replaced) {
+function importDocx(XLSX, buffer, next, replaced, current) {
   const doc = docxTables(XLSX, buffer);
   const all = [doc.text, ...doc.tables.flat().flat()].join(" ");
   // the metrics report also mentions training and calibration, so it is recognised first
   if (/Quality Metrics Report/i.test(all)) return "quality metrics report · metric definitions and targets are built into the QMS metrics page; enter quarterly values there";
   if (/Planned product/i.test(all) && /Final product code/i.test(all)) return importApqrPlan(doc, next, replaced);
   if (/Annual Product Quality Review/i.test(all) && /APQR Owner/i.test(all)) return "APQR procedure · its workflow phases, departmental data streams and Cpk guidance are built into the APQR page";
-  if (/Description of Training/i.test(all)) return importTrainingPlan(doc, next, replaced);
+  if (/Description of Training/i.test(all)) return importTrainingPlan(doc, next, replaced, current);
+  if (/Training Matrix|Matrice de formation/i.test(all) && /Number & Title/i.test(all)) return importTrainingMatrix(doc, next, replaced, current);
   if (/Monthly Calibration Program/i.test(all)) return importCalibration(doc, next, replaced, true);
   if (/Calibration Program/i.test(all)) return importCalibration(doc, next, replaced, false);
   if (/Re-?validation Schedule|Requalification Frequency/i.test(all)) return importValidation(doc, next, replaced);
@@ -889,11 +974,11 @@ export async function importFiles(files, base, { needMaster, current } = {}) {
       if (it.kind === "xlsx") {
         if (isMaster(it.wb)) msg = await importMaster(XLSX, it.wb, next, replaced);
         else msg = import5S(XLSX, it.wb, next, replaced) ?? importApqrExport(XLSX, it.wb, next, replaced, it.file, current) ?? importApqr(XLSX, it.wb, next, replaced, it.file) ?? importScigeniq(XLSX, it.wb, next, replaced, it.file) ?? importWip(XLSX, it.wb, next, replaced) ?? importBatches(XLSX, it.wb, next, replaced);
-      } else if (it.kind === "docx") msg = importDocx(XLSX, it.buf, next, replaced);
+      } else if (it.kind === "docx") msg = importDocx(XLSX, it.buf, next, replaced, current);
       else if (it.kind === "slides") msg = "presentation · nothing to import; quarterly metric values are entered on the QMS metrics page";
       else msg = null;
     } catch (e) { console.error(e); msg = `✘ ${e.message ?? e}`; }
-    done.push([it.file.name, msg ?? "✘ not recognised (supported: master workbook, Scigeniq exports (incl. the all-tasks report for APQR), APQR tracker, 5S checklists, batch tracker, WIP workbook, calibration / validation / training / API / APQR plan Word forms)"]);
+    done.push([it.file.name, msg ?? "✘ not recognised (supported: master workbook, Scigeniq exports (incl. the all-tasks report for APQR), APQR tracker, 5S checklists, batch tracker, WIP workbook, calibration / validation / training plan / training matrix / API / APQR plan Word forms)"]);
   }
   if (needMaster && !next.rooms?.rows?.length) throw new Error(needMaster);
   return { next, replaced: [...new Set(replaced)], done };

@@ -90,3 +90,47 @@ test("monthly achievement, yearly deadlines and the cockpit", () => {
   assert.ok(D.some((x) => x.kind === "Revised SOP training" && x.id === "SOPXY0003E/Onc"));
   assert.ok(D.some((x) => x.kind === "Re-training" && x.bucket === "overdue"));
 });
+
+test("importing a department's training matrix and annual plan (synthetic documents)", async () => {
+  const { importTrainingMatrix, importTrainingPlan, matrixTopic, COLS } = await import("../oncology/js/importers.js");
+  assert.deepEqual(matrixTopic("SOPXY0004EOnc : Demo guidance"), ["SOPXY0004E/Onc", "Demo guidance"]);
+  assert.deepEqual(matrixTopic("SOPXY0014E/ Onc : Demo check"), ["SOPXY0014E/Onc", "Demo check"]);
+  assert.deepEqual(matrixTopic("ICH Q9 : Quality risk management"), [null, "ICH Q9 : Quality risk management"]);
+  const table = (cols, objs) => ({ cols, rows: objs.map((o) => cols.map((c) => o[c] ?? null)) });
+  const current = {
+    positions: table(COLS.positions, [{ Position: "QA Demo Officer", Code: "O", Department: "Quality Assurance" }, { Position: "QA Demo Manager", Code: "M", Department: "Quality Assurance" }]),
+    trainingMatrix: table(COLS.trainingMatrix, [{ Topic: "Old", Reference: "SOPXY0001E/Onc", Department: "Quality Assurance", "Refresh (months)": 24 }, { Topic: "Other dept", Department: "Quality Control" }]),
+    training: table(COLS.training, [{ "Training ID": "TR-2026-QA-01", Program: "SOPXY0001E/Onc : Demo  procedure", Department: "Quality Assurance", "Planned month": "2026-02", Status: "Completed", "Completion date": "2026-02-25", Trainer: "Demo Trainer" },
+      { "Training ID": "TR-2026-QA-02", Program: "Dropped topic", Department: "Quality Assurance", "Planned month": "2026-03", Status: "Planned" },
+      { "Training ID": "TR-2026-QC-01", Program: "Kept QC plan", Department: "Quality Control", "Planned month": "2026-03", Status: "Planned" }]),
+  };
+  const mdoc = { text: "O: Officer; SS: Senior Supervisor; M: Manager.\nRemark:", tables: [[
+    ["Sr. No.", "SOP/Document", "QA Department", "QA Department", "QA Department"],
+    ["Sr. No.", "Number & Title (Numéro et Titre)", "O", "SS", "M"],
+    ["", "SOPXY0001E/Onc : Demo procedure", "X", "", "X"],
+    ["", "SOPXY0002/Onc : Not for QA", "", "", ""],
+    ["", "ICH Q9 : Quality risk management", "X", "X", "X"],
+  ]] };
+  const next = { positions: current.positions, trainingMatrix: current.trainingMatrix, training: current.training }, replaced = [];
+  const msg = importTrainingMatrix(mdoc, next, replaced, current);
+  assert.match(msg, /2 of 3 topics required · 3 job positions \(1 added\)/);
+  const mx = next.trainingMatrix.rows.map((r) => Object.fromEntries(COLS.trainingMatrix.map((c, i) => [c, r[i]])));
+  assert.deepEqual(mx.map((r) => [r.Reference, r.Kind, r.Positions, r.Department, r["Refresh (months)"]]), [
+    [null, null, null, "Quality Control", null],
+    ["SOPXY0001E/Onc", "SOP", "QA Demo Officer / QA Demo Manager", "Quality Assurance", 24],
+    [null, "GMP", "QA Demo Officer / QA Senior Supervisor / QA Demo Manager", "Quality Assurance", null]]);
+  assert.ok(replaced.includes("positions") && next.positions.rows.some((r) => r[0] === "QA Senior Supervisor" && r[1] === "SS"));
+  // the annual plan: same trainings keep what was recorded; dropped ones go; other plans stay
+  const pdoc = { text: "", tables: [
+    [["Plan of Year (plan de l’année)", "Department (Département)"], ["2026", "Quality Assurance"]],
+    [["Description of Training Program", "Job Descriptions of Attendee Group", "Planned Training Date", "New", "Rescheduled", "Completion date", "Comments"],
+      ["SOPXY0001E/Onc : Demo procedure", "QA Demo Officer\nQA Demo Manager", "02/2026", "", "", "", ""],
+      ["New topic", "QA Demo Officer", "05/2026", "", "", "", ""]]] };
+  const msg2 = importTrainingPlan(pdoc, next, replaced, current);
+  assert.match(msg2, /2 trainings · 1 keep what was recorded/);
+  const tr = next.training.rows.map((r) => Object.fromEntries(COLS.training.map((c, i) => [c, r[i]])));
+  assert.deepEqual(tr.map((r) => [r["Training ID"], r.Program, r.Status, r["Completion date"], r.Trainer, r["Attendee group"]]), [
+    ["TR-2026-QC-01", "Kept QC plan", "Planned", null, null, null],
+    ["TR-2026-QA-01", "SOPXY0001E/Onc : Demo procedure", "Completed", "2026-02-25", "Demo Trainer", "QA Demo Officer / QA Demo Manager"],
+    ["TR-2026-QA-02", "New topic", "Planned", null, null, "QA Demo Officer"]]);
+});
