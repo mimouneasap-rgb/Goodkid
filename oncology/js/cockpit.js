@@ -8,7 +8,7 @@ export const BUCKETS = ["overdue", "week", "month", "quarter"];
 /** overdue · ≤7 d · ≤30 d · ≤90 d (null beyond the horizon). */
 export const bucketOf = (days, horizon = 90) => (days < 0 ? "overdue" : days <= 7 ? "week" : days <= 30 ? "month" : days <= horizon ? "quarter" : null);
 const ROUTE_OF_TYPE = { Deviation: "deviations", CAPA: "capa", "Change Control": "cc", "Audit Finding": "findings" };
-export const MODULES = ["records", "actions", "sop", "sopReview", "calibration", "validation", "training", "apqr", "fives", "activities", "suppliers", "documents", "wip", "fmea", "improvements"];
+export const MODULES = ["review", "records", "actions", "sop", "sopReview", "calibration", "validation", "training", "apqr", "fives", "activities", "suppliers", "documents", "wip", "fmea", "improvements"];
 
 /**
  * The items due within `horizon` days (and all overdue ones), most urgent first:
@@ -24,6 +24,21 @@ export function dueItems(m, now, { horizon = 90 } = {}) {
     if (!bucket) return;
     out.push({ owner: null, dept: null, ...it, days, bucket });
   };
+  // management review: the meeting due by the end of the 2nd month after the half-year, then the minutes and the report
+  // within a week of it, and the actions and regulations followed up to closure
+  const Q = x.qmr;
+  const qlink = (no, tab) => ({ route: "review", state: { mrNo: no, mrTab: tab } });
+  for (const r of Q?.reviews ?? []) {
+    if (r.cancelled || r.state === "Closed") continue;
+    if (!r.held) add({ mod: "review", kind: "Management review", id: r.no, title: r.Period ?? "", due: r.dueBy, owner: r.Chair, link: qlink(r.no, "report") });
+    else {
+      if (r.minutes == null) add({ mod: "review", kind: "Review minutes", id: r.no, title: r.Period ?? "", due: r.minutesDue, owner: r["Prepared by"], link: qlink(r.no, "meeting") });
+      if (r.report == null) add({ mod: "review", kind: "Review report to corporate", id: r.no, title: r.Period ?? "", due: r.reportDue, owner: r["Prepared by"], link: qlink(r.no, "meeting") });
+    }
+  }
+  if (Q?.toPlan && !Q.reviews.some((r) => r.period?.label === Q.toPlan.period.label)) add({ mod: "review", kind: "Management review", id: Q.toPlan.period.label, title: "", due: Q.toPlan.dueBy, link: { route: "review" } });
+  for (const a of Q?.actions ?? []) if (a.open) add({ mod: "review", kind: "Review action", id: a["Action ID"] ?? a["Report no"], title: a.Action ?? "", due: a.due, owner: a.Responsible, link: qlink(a["Report no"], "actions") });
+  for (const g of Q?.regs ?? []) if (!g.closed) add({ mod: "review", kind: "Regulation", id: g["Reg ID"] ?? "", title: g.Regulation ?? "", due: g.due, owner: g.Owner, link: { route: "review", state: { mrTab: "regs" } } });
   for (const r of m.records ?? []) if (r.isOpen) add({ mod: "records", kind: r.type, id: r.ref, title: r.title, due: r.due, owner: r.owner, dept: r.department, link: { route: ROUTE_OF_TYPE[r.type] ?? "records" }, open: { kind: "record", ref: r.ref } });
   for (const a of m.actions ?? []) if (a.isOpen) add({ mod: "actions", kind: "Action", id: a.ref, title: a.title, due: a.due, owner: a.owner, dept: a.department, link: { route: "actions" }, open: { kind: "action", ref: a.ref } });
   const sx = x.sopx;

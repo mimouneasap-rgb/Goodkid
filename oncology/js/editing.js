@@ -8,6 +8,7 @@ import { DOC_TYPES } from "./dockit.js";
 import { picker } from "./picker.js";
 import { listOf } from "./trainkit.js";
 import { REVIEW_TYPES, REVIEW_STATUS, REVIEW_OUTCOMES, REVIEW_REASONS } from "./sopwork.js";
+import { AREAS, ACTION_TYPES, ACTION_STATUS, ATTENDANCE, QMR_ROLES, INPUT_STATUS, ASSESSMENTS, REG_STATUS, REG_KINDS, QMR_DEPTS } from "./qmrkit.js";
 
 const FR = () => getLang() === "FR";
 const YN = ["Yes", "No"];
@@ -244,6 +245,34 @@ export const SPECS = {
     label: ["QA activity", "Activité AQ"], id: "Activity ID", title: "Activity", prefix: "QA-",
     fields: [["Activity ID", "text"], ["Activity", "long"], ["Category", "suggest", "col"], ["Reference", "long"], ["Frequency (months)", "pick", ["0", "0.25", "1", "3", "6", "12", "24", "36"]],
       ["Owner", "pick", V.owners], ["Last performed", "date"], ["Next due", "date"], ["Evidence", "text"], ["Comment", "long"]],
+  },
+  qmr: {
+    label: ["Management review", "Revue de direction"], id: "Report no", title: "Period",
+    fields: [["Report no", "text"], ["Period", "text"], ["Period start", "date"], ["Period end", "date"], ["Due by", "date"], ["Status", "pick", ["Active", "Cancelled"]], ["Site", "text"], ["Location", "text"],
+      ["Chair", "person"], ["Invitation sent", "date"], ["Meeting date", "date"], ["Venue", "text"], ["Summary", "long"], ["Improvements", "long"], ["Resources", "long"], ["Policy & objectives", "long"],
+      ["Escalations", "long"], ["Minutes shared on", "date"], ["Report to corporate on", "date"], ["Prepared by", "person"], ["Approved by", "person"], ["Approved by (2)", "person"], ["File ref", "text"], ["Comment", "long"]],
+  },
+  qmrInputs: {
+    label: ["Review parameter", "Paramètre de revue"], id: "Parameter", title: "Report no",
+    fields: [["Report no", "text"], ["Parameter", "text"], ["Title", "text"], ["Department", "pick", QMR_DEPTS], ["Status", "pick", INPUT_STATUS], ["Assessment", "pick", ASSESSMENTS],
+      ["Data", "long"], ["Conclusion", "long"], ["Updated by", "person"], ["Updated on", "date"]],
+  },
+  qmrAttendees: {
+    label: ["Review participant", "Participant à la revue"], id: "Role", title: "Name",
+    defaults: () => ({ Attendance: "Invited" }),
+    fields: [["Report no", "text"], ["Role", "suggest", QMR_ROLES], ["Name", "person"], ["Title", "position"], ["Attendance", "pick", ATTENDANCE], ["Signed", "pick", YN], ["Comment", "long"]],
+  },
+  qmrActions: {
+    label: ["Review action / decision", "Action / décision de revue"], id: "Action ID", title: "Action", get prefix() { return `QMRA-${new Date().getFullYear()}-`; },
+    defaults: () => ({ Status: "Open", Type: "Action" }),
+    fields: [["Action ID", "text"], ["Report no", "text"], ["Area", "pick", AREAS], ["Type", "pick", ACTION_TYPES], ["Action", "long"], ["Responsible", "person"], ["Due", "date"],
+      ["Status", "pick", ACTION_STATUS], ["Closed on", "date"], ["Linked record", "record"], ["Comments", "long"]],
+  },
+  qmrRegs: {
+    label: ["Regulation (watch)", "Réglementation (veille)"], id: "Reg ID", title: "Regulation", get prefix() { return `REG-${new Date().getFullYear()}-`; },
+    defaults: () => ({ Status: "New", Kind: "New regulation" }),
+    fields: [["Reg ID", "text"], ["Regulation", "long"], ["Kind", "pick", REG_KINDS], ["Authority / market", "suggest", "col"], ["Published", "date"], ["Impact", "long"], ["Status", "pick", REG_STATUS],
+      ["Owner", "person"], ["Due", "date"], ["Comment", "long"]],
   },
   metrics: {
     label: ["Metric value", "Valeur d’indicateur"], id: "Metric", title: "Period",

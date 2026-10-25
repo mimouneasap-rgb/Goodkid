@@ -1,6 +1,6 @@
 // Home, Dashboard, Management review and SPC & trends.
 import { h, card, kpi, viewHeader, select, segmented, dataTable, pill, typeTag, fmtDate, fmtNum, fmtPct, fmtValue, TYPE_COLOR, STATUS_COLOR, defList } from "./ui.js";
-import { hbars, stacks, columns, lineChart, gauge, sparkline, legend, ring } from "./charts.js";
+import { hbars, stacks, columns, lineChart, sparkline, legend, ring } from "./charts.js";
 import { t, tv } from "./i18n.js";
 import { icon } from "./icons.js";
 import * as M from "./model.js";
@@ -60,7 +60,7 @@ export function home(ctx) {
   const modules = [
     ["cockpit", "calendar", "ck_title", "ck_m_desc", `${fmtNum(due.filter((x) => x.bucket === "overdue").length)} ${t("s_overdue").toLowerCase()} · ${fmtNum(due.filter((x) => x.bucket === "week").length)} ${t("ck_b_week").toLowerCase()}`],
     ["dashboard", "dashboard", "dash_title", "m_dash", `${fmtNum(k.total)} ${t("s_records").toLowerCase()}`],
-    ["review", "review", "mr_title", "m_mr", `${sc.rows.filter((r) => r.status === 1).length} × ${t("st_action")}`],
+    ["review", "review", "mr_title", "m_mr", X.qmr.current ? `${X.qmr.current.no} · ${tv(X.qmr.current.state)}` : X.qmr.toPlan ? t("mr_plan_for", X.qmr.toPlan.period.label) : `${sc.rows.filter((r) => r.status === 1).length} × ${t("st_action")}`],
     ["metrics", "target", "met_title", "m_met", `${fmtNum(METRICS.length)} KPI`],
     ["deviations", "deviation", "nav_dev_t", "m_dev", `${fmtNum(typeCount("Deviation", (r) => r.isOpen))} ${t("s_open").toLowerCase()}`],
     ["capa", "capa", "nav_capa_t", "m_cd", `${fmtNum(capaOd)} ${t("s_overdue").toLowerCase()}`],
@@ -247,75 +247,6 @@ export function dashboard(ctx) {
       card(t("c_pareto"), hbars(rcAll.map(([label, n]) => { cum += n; return { label, value: n, color: "var(--c3)", cum: cum / rcTotal }; }), { suffix: (i) => ` · ${fmtPct(i.cum)}` }), { sub: t("pareto_note") }),
       card(t("c_age"), hbars(ages))),
     card(t("sec_watch"), dataTable(recordCols(["ref", "type", "due", "late", "title", "owner", "dept"]), overdue.sort((a, b) => (a.due ?? 0) - (b.due ?? 0)), { onRow: (r) => ctx.open.record(r.ref), searchText: recordSearch, exportName: "overdue-watch-list" })),
-  );
-}
-
-// ---------- MANAGEMENT REVIEW ----------
-export function review(ctx) {
-  const { m } = ctx;
-  const sc = M.scorecard(m);
-  const v = sc.values, T = m.targets;
-  const meet = ctx.local.get("meeting") ?? { period: m.meta.reviewPeriod ?? "", date: "", chair: "", attendees: "" };
-  const saveMeet = (k, val) => ctx.local.set("meeting", { ...meet, [k]: val });
-  const decisions = structuredClone(ctx.local.get("decisions") ?? []); // shared data arrives frozen
-  const field = (label, key, type = "text") => h("label.field", h("span", label), h("input", { type, value: meet[key] ?? "", onchange: (e) => saveMeet(key, e.target.value) }));
-
-  // trend vs 30 days ago for open / overdue rate
-  const ago = m.now - 30 * DAY;
-  const openThen = m.records.filter((r) => r.status !== "Canceled" && M.openAt(r, ago)).length;
-  const trendFor = (key) => key === "mk_open" ? v.open - openThen : key === "mk_odr" ? Math.round((v.odr - sc.kpis.overdueRateThen) * 100) : null;
-  const statusChip = (s) => (s ? h(`span.rag.rag-${s}`, h("i"), [null, t("st_action"), t("st_watch"), t("st_on")][s]) : h("span.muted", "–"));
-  const counts = [1, 2, 3].map((s) => sc.rows.filter((r) => r.status === s).length);
-
-  const open = m.records.filter((r) => r.isOpen).sort((a, b) => b.priority - a.priority);
-  const due30 = m.records.filter((r) => r.daysToDue != null && r.daysToDue >= 0 && r.daysToDue <= 30).sort((a, b) => a.daysToDue - b.daysToDue);
-
-  const decTable = h("div.decisions",
-    decisions.length ? h("table.data.compact", h("thead", h("tr", ["#", t("mr_comment"), t("mr_owner"), t("mr_duec"), t("col_status"), ""].map((x) => h("th", x)))),
-      h("tbody", decisions.map((d, i) => h("tr",
-        h("td.num", i + 1), h("td.wrap", d.text), h("td", d.owner), h("td.nowrap", d.due ? fmtDate(M.toDay(d.due)) : ""),
-        h("td", h("select.inline", { onchange: (e) => { decisions[i].status = e.target.value; ctx.local.set("decisions", decisions); } }, ["Open", "In progress", "Done", "Cancelled"].map((s) => h("option", { selected: s === d.status ? true : null, value: s }, tv(s))))),
-        h("td", h("button.icon-btn", { type: "button", title: t("cancel"), "aria-label": "Remove", onclick: () => { decisions.splice(i, 1); ctx.local.set("decisions", decisions); ctx.rerender(); } }, icon("close", 14))))))) : null,
-    h("form.dec-form", {
-      onsubmit: (e) => {
-        e.preventDefault();
-        const fd = new FormData(e.target);
-        if (!fd.get("text")) return;
-        decisions.push({ text: fd.get("text"), owner: fd.get("owner"), due: fd.get("due"), status: "Open" });
-        ctx.local.set("decisions", decisions); ctx.rerender();
-      },
-    },
-    h("input", { name: "text", placeholder: t("mr_comment"), required: true }),
-    h("input", { name: "owner", placeholder: t("mr_owner") }),
-    h("input", { name: "due", type: "date", "aria-label": t("mr_duec") }),
-    h("button.btn.primary", { type: "submit" }, t("decision_add"))),
-    h("p.fine", ctx.workspace.mode === "shared" ? t("shared_note") : t("local_note")));
-
-  return h("div.view",
-    viewHeader(t("mr_title"), t("mr_sub"), window.OKQA_EMBED ? null : h("button.btn", { type: "button", onclick: () => window.print() }, icon("print", 16), t("print"))),
-    card(t("mr_meet"), h("div.meet-grid", field(t("mr_period"), "period"), field(t("mr_date"), "date", "date"), field(t("mr_chair"), "chair"), field(t("mr_att"), "attendees"))),
-    card(t("mr_glance"), h("div.gauges",
-      gauge(v.clos, { ...T.closure, label: t("g_closure"), sub: `${t("mr_target")} ≥ ${fmtPct(T.closure.target)}` }),
-      gauge(1 - v.odr, { target: 1 - T.overdue.target, warning: 1 - T.overdue.warning, label: t("g_ontime"), sub: `${t("mr_target")} ≥ ${fmtPct(1 - T.overdue.target)}` }),
-      gauge(v.ec, { ...T.capa_ec, label: t("g_ec"), sub: `${t("mr_target")} ≥ ${fmtPct(T.capa_ec.target)}` }),
-      gauge(v.cal, { ...T.cal, label: t("g_cal"), sub: `${t("mr_target")} ≥ ${fmtPct(T.cal.target)}` }))),
-    card(t("mr_score"), [
-      h("div.rag-summary", [3, 2, 1].map((s) => h(`span.rag.rag-${s}.big`, h("i"), `${counts[s - 1]} · ${[null, t("st_action"), t("st_watch"), t("st_on")][s]}`))),
-      h("div.table-scroll", h("table.data.scorecard",
-        h("thead", h("tr", [t("mr_kpi"), t("mr_area"), t("mr_actual"), t("mr_target"), t("mr_status"), t("mr_trend")].map((x) => h("th", x)))),
-        h("tbody", sc.rows.map((r) => {
-          const tr = trendFor(r.key);
-          return h(`tr.st-${r.status}`,
-            h("td", t(r.key)), h("td.muted", t(r.area)),
-            h("td.num", h("b", fmtValue(r.value, r.unit))),
-            h("td.num.muted", r.target ? `${r.hib ? "≥" : "≤"} ${fmtValue(r.target.target, r.unit)}` : "—"),
-            h("td", statusChip(r.status)),
-            h("td.num", tr == null ? "" : tr === 0 ? "► 0" : tr > 0 ? `▲ +${tr}${r.unit === "%" ? " pt" : ""}` : `▼ ${tr}${r.unit === "%" ? " pt" : ""}`));
-        }))))]),
-    h("div.grid.cols-2",
-      card(t("mr_act"), dataTable(recordCols(["ref", "type", "prio", "late", "due", "title", "owner", "room"]), open, { pageSize: 15, onRow: (r) => ctx.open.record(r.ref), searchText: recordSearch, exportName: "priority-list" }), { span: 2, sub: t("mr_prio_note") }),
-      card(t("mr_due30"), dataTable(recordCols(["ref", "type", "due", "dtd", "title", "owner"]), due30, { onRow: (r) => ctx.open.record(r.ref) }), { span: 2 })),
-    card(t("mr_dec"), decTable),
   );
 }
 

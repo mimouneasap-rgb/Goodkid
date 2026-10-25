@@ -9,7 +9,7 @@ import { dueItems, loadBy, BUCKETS, MODULES } from "./cockpit.js";
 const ALL = "__all";
 const DAY = 86400000;
 export const BUCKET_COLOR = { overdue: "var(--critical)", week: "var(--warning)", month: "var(--c7)", quarter: "var(--c1)" };
-const MOD_ICON = { records: "deviation", actions: "tasks", sop: "sop", sopReview: "review", calibration: "thermo", validation: "badge", training: "cap", apqr: "report", fives: "sparkle",
+const MOD_ICON = { review: "review", records: "deviation", actions: "tasks", sop: "sop", sopReview: "review", calibration: "thermo", validation: "badge", training: "cap", apqr: "report", fives: "sparkle",
   activities: "calendar", suppliers: "truck", documents: "layers", wip: "layers", fmea: "fmea", improvements: "improve" };
 const modName = (k) => t(`ck_m_${k}`);
 const when = (it) => (it.days < 0 ? t("ck_late", fmtNum(-it.days)) : it.days === 0 ? t("ck_today") : t("ck_in", fmtNum(it.days)));

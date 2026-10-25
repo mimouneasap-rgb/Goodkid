@@ -81,6 +81,16 @@ export const EXT_COLS = {
   qaact: ["Activity ID", "Activity", "Category", "Reference", "Frequency (months)", "Owner", "Last performed", "Next due", "Evidence", "Comment"],
   // Manually entered QMS metric values per quarter
   metrics: ["Metric", "Period", "Numerator", "Denominator", "Value", "Comment"],
+  // Quality management reviews (twice a year): the review and its meeting, minutes and approvals; each mandatory parameter
+  // as collected and assessed (Parameter: its key, or other-… for a further topic; Figures: hand-entered figures as JSON;
+  // Snapshot: the app's figures frozen when the review closed, as JSON); the participants by role; the actions and decisions
+  // followed up to closure; the regulatory watch (new GMP regulations and their implementation)
+  qmr: ["Report no", "Period", "Period start", "Period end", "Due by", "Status", "Site", "Location", "Chair", "Invitation sent", "Meeting date", "Venue",
+    "Summary", "Improvements", "Resources", "Policy & objectives", "Escalations", "Minutes shared on", "Report to corporate on", "Prepared by", "Approved by", "Approved by (2)", "File ref", "Comment"],
+  qmrInputs: ["Report no", "Parameter", "Title", "Department", "Status", "Assessment", "Figures", "Data", "Conclusion", "Snapshot", "Updated by", "Updated on"],
+  qmrAttendees: ["Report no", "Role", "Name", "Title", "Attendance", "Signed", "Comment"],
+  qmrActions: ["Action ID", "Report no", "Area", "Type", "Action", "Responsible", "Due", "Status", "Closed on", "Linked record", "Comments"],
+  qmrRegs: ["Reg ID", "Regulation", "Kind", "Authority / market", "Published", "Impact", "Status", "Owner", "Due", "Comment"],
 };
 
 export const EXT_TABLES = Object.keys(EXT_COLS);

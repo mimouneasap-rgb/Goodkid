@@ -7,6 +7,7 @@ import { METRICS, QA_ACTIVITIES, FIVES, FIVES_ITEMS, fivesKey, fivesRating, RISK
 import { sopKey, topicsOf, summaryOf, formsOf, formKey, formKind } from "./sopkit.js";
 import { formOverride, joinReviews } from "./sopwork.js";
 import { buildTraining } from "./trainkit.js";
+import { buildQmr } from "./qmrkit.js";
 import { docKey, productOf as docProductOf, productCodeOf, strengthOf, entryAnomalies, TYPE_BY_ID, zoneOf } from "./dockit.js";
 
 const DAY = 86400000;
@@ -219,10 +220,14 @@ export function buildDomains(m, wb, review) {
   const trainingX = buildTraining({ positions: objects(wb.positions ?? none), staff: objects(wb.staff ?? none), matrix: objects(wb.trainingMatrix ?? none), planned: training,
     unplanned: objects(wb.trainingUnplanned ?? none), records: objects(wb.trainingRecords ?? none), sops: sopx.list, now, dayOf: toDay });
 
+  // ----- quality management reviews -----
+  const qmr = buildQmr({ reviews: objects(wb.qmr ?? none), inputs: objects(wb.qmrInputs ?? none), attendees: objects(wb.qmrAttendees ?? none),
+    actions: objects(wb.qmrActions ?? none), regs: objects(wb.qmrRegs ?? none), now, dayOf: toDay });
+
   // ----- GMP activity register (catalogue + entries recorded in the app) -----
   const latest = (xs) => xs.filter((x) => x != null).reduce((a, b) => Math.max(a, b), -Infinity);
   const lastBy = {
-    review: toDay(review?.meeting?.date),
+    review: qmr.lastMeeting ?? toDay(review?.meeting?.date),
     apqr: latest([...apqr.map((a) => a.approved), ...apqrProg.tasks.map((t) => t.closed)]),
     batches: latest(batches.map((b) => b.release)),
     deviations: latest(m.records.filter((r) => r.type === "Deviation").map((r) => r.closed)),
@@ -255,7 +260,7 @@ export function buildDomains(m, wb, review) {
   // ----- manual metric values -----
   const metricValues = objects(wb.metrics).filter((x) => x.Metric && x.Period);
 
-  m.x = { training, trainingX, calplan, validation, suppliers, rejections, batches, wip, lifecycle, apqr, apqrProg, sopx, docx, fives, fivesX, qaact, metricValues };
+  m.x = { training, trainingX, calplan, validation, suppliers, rejections, batches, wip, lifecycle, apqr, apqrProg, sopx, docx, fives, fivesX, qaact, metricValues, qmr };
   return m;
 }
 

@@ -23,6 +23,7 @@ import * as AU from "./views-audit.js";
 import * as CK from "./views-cockpit.js";
 import * as TR from "./views-training.js";
 import * as FV from "./views-fives.js";
+import * as RV from "./views-review.js";
 import { importFiles, COLS, emptyData, upsertRows } from "./importers.js";
 import { buildDomains } from "./domain.js";
 
@@ -102,7 +103,7 @@ const NAV = [
   ["nav_gov", [["data", "edit", "dt_title"], ["audit", "history", "aud_title"], ["quality", "quality", "dq_title"]]],
 ];
 const VIEWS = {
-  home: O.home, cockpit: CK.cockpitView, dashboard: O.dashboard, review: O.review, metrics: PE.metricsView, spc: O.spc,
+  home: O.home, cockpit: CK.cockpitView, dashboard: O.dashboard, review: RV.reviewView, metrics: PE.metricsView, spc: O.spc,
   deviations: QV.deviations, capa: QV.capaView, cc: QV.ccView, findings: QV.findings, actions: QV.actionsView, records: Q.records,
   products: S.products, lifecycle: OP.lifecycle, apqr: AP.apqrView, wip: OP.wipView, suppliers: OP.suppliersView,
   map: S.map, rooms: S.rooms, equipment: S.equipment, calibration: OP.calibration, validation: OP.validation,
