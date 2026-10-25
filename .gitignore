@@ -1,2 +1,7 @@
 node_modules/
 .DS_Store
+
+# Confidential workbook data: never commit (users import the .xlsx in the browser)
+oncology/js/workbook-data.js
+oncology/assets/layout-*.jpg
+*.xlsx
