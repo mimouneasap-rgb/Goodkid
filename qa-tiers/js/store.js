@@ -4,6 +4,7 @@
 
 import { DEMO_T1, DEMO_T2 } from "./demo-data.js";
 import { DEFAULT_ACTIVITIES } from "./engine.js";
+import { ensureKeys, stateFrom } from "./sync.js";
 
 const KEYS = { t1: "qaTiers.t1.v1", t2: "qaTiers.t2.v1", prefs: "qaTiers.prefs.v1" };
 const AUDIT_MAX = 300;
@@ -65,25 +66,51 @@ export const store = {
   t2: null,
   prefs: { theme: "system", learned: {}, quiz: {} },
   listeners: new Set(),
+  /** The team sync, once the shared database is connected (see sync.js). */
+  sync: null,
 
   load() {
     for (const tier of ["t1", "t2"]) {
       const saved = read(KEYS[tier]);
       // boards saved by an earlier version get the lists and registers added since
-      this[tier] = saved ? seedLists(tier, { audit: [], ...saved }) : fresh(tier);
+      this[tier] = ensureKeys(tier, saved ? seedLists(tier, { audit: [], ...saved }) : fresh(tier));
     }
     this.prefs = { ...this.prefs, ...(read(KEYS.prefs) || {}) };
   },
   save(tier) {
-    if (tier) write(KEYS[tier], this[tier]);
+    if (tier) {
+      ensureKeys(tier, this[tier]);
+      write(KEYS[tier], this[tier]);
+      this.sync?.push(tier, this[tier]);
+    }
     write(KEYS.prefs, this.prefs);
-    this.listeners.forEach((fn) => fn(tier));
+    this.listeners.forEach((fn) => fn(tier, "local"));
+  },
+  /** Start sharing: `upload` sends this browser's boards to an empty store. */
+  attachSync(sync, { upload = false } = {}) {
+    this.sync = sync;
+    if (upload) { sync.push("t1", this.t1); sync.push("t2", this.t2); }
+  },
+  /** A teammate changed something: rebuild that board from the shared copy. */
+  applyRemote(tier) {
+    if (tier === "audit") { this.listeners.forEach((fn) => fn(tier, "remote")); return; }
+    if (!this.sync?.ready(tier)) return;
+    const raw = stateFrom(tier, this.sync.remote[tier], this[tier]);
+    this.sync.rebase(tier, raw);
+    const next = seedLists(tier, raw);
+    next.audit = this[tier]?.audit || [];
+    this[tier] = ensureKeys(tier, next);
+    write(KEYS[tier], this[tier]);
+    this.sync.push(tier, this[tier]); // lists added by this version, if any
+    this.listeners.forEach((fn) => fn(tier, "remote"));
   },
   onChange(fn) { this.listeners.add(fn); },
 
   log(tier, entry) {
     const a = this[tier].audit;
-    a.unshift({ ts: new Date().toISOString(), ...entry });
+    const row = { ts: new Date().toISOString(), ...entry };
+    a.unshift(row);
+    this.sync?.pushAudit([{ tier, ...row }]);
     if (a.length > AUDIT_MAX) a.length = AUDIT_MAX;
   },
 
@@ -91,6 +118,10 @@ export const store = {
   upsert(tier, reg, index, record, label) {
     const rows = this[tier][reg];
     const before = index == null ? null : rows[index];
+    // keep the record's identity (shared-document key and display order)
+    record._k = before?._k ?? record._k;
+    record._o = before?._o ?? (rows.length ? Math.max(...rows.map((r) => r._o ?? 0)) + 1 : 0);
+    if (index == null) delete record._k;
     const changes = diff(before || {}, record);
     if (index == null) { rows.push(record); index = rows.length - 1; }
     else rows[index] = record;
@@ -139,6 +170,7 @@ function diff(a, b) {
   const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
   const out = [];
   for (const k of keys) {
+    if (k.startsWith("_")) continue;
     const x = a[k] ?? "", y = b[k] ?? "";
     if (String(x) !== String(y)) out.push({ field: k, from: x, to: y });
   }

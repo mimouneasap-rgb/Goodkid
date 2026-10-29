@@ -129,7 +129,7 @@ function kpiTable(tier) {
 function dataCard(tier) {
   const label = tier === "t1" ? "Tier 1 board" : "Tier 2 board";
   return `<div class="card card-pad"><div class="card-head"><h2>Data & backup</h2></div>
-    <p class="muted" style="margin:0 0 12px;font-size:13px">Data is saved in this browser. Export a backup regularly, or to move the boards to another device. The eQMS stays the GMP record of truth — this board mirrors it.</p>
+    <p class="muted" style="margin:0 0 12px;font-size:13px">${store.sync ? "This board is shared: every change is saved for the whole team and appears live on their screens." : "Data is saved in this browser."} Export a backup regularly, or to move the boards to another device. The eQMS stays the GMP record of truth — this board mirrors it.</p>
     <div class="row"><button class="btn" data-export>⬇ Export backup (both tiers)</button>
     <label class="btn">⬆ Import backup<input type="file" accept=".json,application/json" data-import hidden></label>
     <button class="btn" data-reset>Reload the September demo</button><button class="btn danger" data-blank>Start a blank ${label}</button></div></div>`;
@@ -142,16 +142,16 @@ function bindData(root, tier, rerender) {
     if (!file) return;
     try {
       const text = await file.text();
-      const ok = await confirmDialog({ title: "Replace both boards?", body: `<p>The data of <b>${esc(file.name)}</b> replaces the Tier 1 and Tier 2 boards in this browser.</p>`, ok: "Import" });
+      const ok = await confirmDialog({ title: "Replace both boards?", body: `<p>The data of <b>${esc(file.name)}</b> replaces the Tier 1 and Tier 2 boards ${store.sync ? "<b>for the whole team</b>" : "in this browser"}.</p>`, ok: "Import" });
       if (ok) { store.importJSON(text); toast("Backup imported"); rerender(); }
     } catch (err) { toast(err.message || "Import failed"); }
     e.target.value = "";
   };
   $("[data-reset]", root).onclick = async () => {
-    if (await confirmDialog({ title: "Reload the demo?", body: "<p>All entries of this board are replaced by the El Kendi September 2026 demo data.</p>", ok: "Reload demo", danger: true })) { store.reset(tier); toast("Demo reloaded"); rerender(); }
+    if (await confirmDialog({ title: "Reload the demo?", body: `<p>All entries of this board are replaced by the El Kendi September 2026 demo data${store.sync ? " — <b>for everyone on the team</b>" : ""}.</p>`, ok: "Reload demo", danger: true })) { store.reset(tier); toast("Demo reloaded"); rerender(); }
   };
   $("[data-blank]", root).onclick = async () => {
-    if (await confirmDialog({ title: "Start a blank board?", body: "<p>Every register is emptied. Setup, targets, roster and drop-down lists are kept. Export a backup first if you need the current data.</p>", ok: "Empty the registers", danger: true })) { store.blank(tier); toast("Registers emptied"); rerender(); }
+    if (await confirmDialog({ title: "Start a blank board?", body: `<p>Every register is emptied${store.sync ? " <b>for everyone on the team</b>" : ""}. Setup, targets, roster and drop-down lists are kept. Export a backup first if you need the current data.</p>`, ok: "Empty the registers", danger: true })) { store.blank(tier); toast("Registers emptied"); rerender(); }
   };
 }
 
@@ -306,12 +306,22 @@ export function renderSetupT1(root) {
 /* ── Audit trail ────────────────────────────────────────── */
 
 export function renderAudit(root) {
-  const rows = [...store.t1.audit.map((a) => ({ ...a, tier: "Tier 1" })), ...store.t2.audit.map((a) => ({ ...a, tier: "Tier 2" }))].sort((a, b) => b.ts.localeCompare(a.ts));
+  const shared = !!store.sync;
+  const rows = shared
+    ? store.sync.auditEntries().map((a) => ({ ...a, tier: a.tier === "t1" ? "Tier 1" : "Tier 2" }))
+    : [...store.t1.audit.map((a) => ({ ...a, tier: "Tier 1" })), ...store.t2.audit.map((a) => ({ ...a, tier: "Tier 2" }))];
+  rows.sort((a, b) => b.ts.localeCompare(a.ts));
   const fmt = (v) => (v === "" || v == null ? "∅" : typeof v === "number" && v < 1 && v > 0 ? `${Math.round(v * 1000) / 10} %` : String(v));
   root.innerHTML = `
     <div class="page-head"><div><div class="eyebrow">Data integrity</div><h1>Change history</h1>
-      <p>Every entry made in this browser — what changed, from what to what, and when. A visual-management aid: the eQMS audit trail remains the GMP record.</p></div></div>
-    ${rows.length ? `<div class="audit">${rows.slice(0, 400).map((a) => `<div class="a-row"><span class="when">${a.ts.slice(0, 16).replace("T", " ")}</span><span>${a.tier}</span>
+      <p>${shared ? "Every change made on the shared board by anyone on the team over the last 31 days — who, what, from what to what, and when." : "Every entry made in this browser — what changed, from what to what, and when."} A visual-management aid: the eQMS audit trail remains the GMP record.</p></div></div>
+    ${rows.length ? `<div class="audit">${rows.slice(0, 400).map((a) => `<div class="a-row"><span class="when">${a.ts.slice(0, 16).replace("T", " ")}</span><span>${a.tier}${shared ? `<br><b data-by="${esc(a.by || "")}">${a.by ? "…" : "—"}</b>` : ""}</span>
       <span><b>${esc(a.action)}</b> · ${esc(a.reg)} · <span class="mono">${esc(a.ref || "")}</span>${a.changes?.length ? `<br><span class="muted">${a.changes.slice(0, 8).map((c) => `${esc(c.field)}: ${esc(fmt(c.from))} → ${esc(fmt(c.to))}`).join(" · ")}${a.changes.length > 8 ? " …" : ""}</span>` : ""}</span></div>`).join("")}</div>`
       : `<div class="empty">No change recorded yet. Edit any record and it appears here.</div>`}`;
+  const ids = [...new Set(rows.slice(0, 400).map((a) => a.by).filter(Boolean))];
+  if (shared && store.user && ids.length) {
+    store.user.profiles(ids.slice(0, 64)).then((ps) => {
+      root.querySelectorAll("[data-by]").forEach((el) => { const p = ps?.[el.dataset.by]; if (el.dataset.by) el.textContent = p?.name || "Someone"; });
+    }).catch(() => {});
+  }
 }

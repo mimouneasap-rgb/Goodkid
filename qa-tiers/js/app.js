@@ -10,7 +10,8 @@ import * as T1 from "./views-t1.js";
 import * as T2 from "./views-t2.js";
 import { renderSetupT1, renderSetupT2, renderAudit } from "./setup.js";
 import { renderLearnHome, renderModule, learnProgress, RHYTHM } from "./learn.js";
-import { esc, pill, fmtLong, fmtMonth, closeDrawer, initTooltips, $, $$ } from "./ui.js";
+import { esc, pill, fmtLong, fmtMonth, closeDrawer, initTooltips, modal, toast, $, $$ } from "./ui.js";
+import { createSync } from "./sync.js";
 
 store.load();
 E.linkTier1(() => store.t1);
@@ -60,6 +61,7 @@ function navHTML() {
     </nav>
     <div class="rail-foot">
       <div class="row" role="group" aria-label="Theme">${["system", "light", "dark"].map((t) => `<button class="rail-btn" data-theme-btn="${t}" aria-pressed="${(store.prefs.theme || "system") === t}">${t[0].toUpperCase() + t.slice(1)}</button>`).join("")}</div>
+      <div data-team>${teamHTML()}</div>
       <span>The eQMS is the record of truth — this board mirrors it.</span>
     </div>`;
 }
@@ -180,15 +182,19 @@ function parse() {
   return { parts: current.path.split("/"), query: current.query };
 }
 
-function route() {
-  closeDrawer();
-  $$(".overlay, .dialog").forEach((x) => x.remove());
-  document.body.classList.remove("nav-open");
+function route({ soft = false } = {}) {
+  const y = scrollY;
+  if (!soft) {
+    closeDrawer();
+    $$(".overlay, .dialog").forEach((x) => x.remove());
+    document.body.classList.remove("nav-open");
+  }
   const main = $("#main");
   main.innerHTML = "";
   const view = document.createElement("div");
   main.append(view);
-  const { parts, query } = parse();
+  const { parts } = parse();
+  const query = soft ? {} : parse().query;
   const [a, b, c] = parts;
   const titles = [];
   if (a === "home") { renderHome(view); titles.push("Overview"); }
@@ -208,7 +214,105 @@ function route() {
   document.title = `${titles[0]} · QA Tier Boards`;
   $(".topbar b").textContent = titles[0];
   markNav();
-  if (!query.keep) scrollTo(0, 0);
+  if (soft) scrollTo(0, y); else if (!query.keep) scrollTo(0, 0);
+}
+
+/* ── Team sync ─────────────────────────────────────────── */
+// "local" (this browser only) · "connecting" · "live" · "readonly" · "empty"
+let team = { mode: "connecting", pending: 0, failed: false };
+let redrawPending = false;
+
+function teamHTML() {
+  const m = team.mode;
+  const dot = m === "live" ? (team.failed ? "var(--r)" : "var(--g)") : m === "readonly" ? "var(--a)" : "var(--navy-muted)";
+  const text = m === "live" ? (team.failed ? "Shared · some changes not saved — reload" : team.pending ? `Shared · saving ${team.pending} change${team.pending > 1 ? "s" : ""}…` : "Shared with your team · live")
+    : m === "readonly" ? "Shared · view only (ask the owner for Contributor access)"
+    : m === "empty" ? "Shared board not set up yet"
+    : m === "connecting" ? "Connecting to the shared board…" : "Saved in this browser only";
+  return `<span style="display:flex;gap:6px;align-items:center;color:var(--navy-ink)"><i style="width:8px;height:8px;border-radius:50%;background:${dot};flex:none"></i>${esc(text)}</span>`;
+}
+function paintTeam() { const el = $("[data-team]"); if (el) el.innerHTML = teamHTML(); }
+
+/** Redraw after a teammate's change, unless the viewer is typing or has a form open. */
+function softRedraw() {
+  const busy = $("aside.drawer, .dialog") || document.activeElement?.closest?.("#main input, #main textarea, #main select");
+  if (busy) { redrawPending = true; return; }
+  redrawPending = false;
+  route({ soft: true });
+}
+new MutationObserver(() => { if (redrawPending && !$("aside.drawer, .dialog")) softRedraw(); }).observe(document.body, { childList: true });
+document.addEventListener("focusout", () => setTimeout(() => { if (redrawPending) softRedraw(); }, 50));
+
+let setupDialog = null;
+
+function firstRun(sync) {
+  setupDialog = modal(`<div class="eyebrow">Share with your team</div><h2>Set up the shared board</h2>
+    <p style="margin:0">From now on everyone who opens this page works on the same Tier 1 and Tier 2 boards, and sees each other's changes live. Choose what the team starts from:</p>
+    <div class="lcards">
+      <button class="lcard" data-start="mine" style="text-align:left;cursor:pointer"><b>The boards in this browser</b><span>Everything you have entered or changed here so far.</span></button>
+      <button class="lcard" data-start="demo" style="text-align:left;cursor:pointer"><b>The September 2026 demo</b><span>The El Kendi demo data, as delivered.</span></button>
+      <button class="lcard" data-start="blank" style="text-align:left;cursor:pointer"><b>Empty registers</b><span>Keeps setup, targets, roster and lists; registers start empty.</span></button>
+    </div><p class="muted" style="margin:0;font-size:12.5px">The first upload sends several hundred records; keep the page open until the status in the menu says “Shared with your team · live”.</p>`,
+  { onClose: () => { setupDialog = null; } });
+  setupDialog.el.addEventListener("click", async (e) => {
+    const b = e.target.closest("[data-start]");
+    if (!b) return;
+    setupDialog.el.querySelectorAll("button").forEach((x) => { x.disabled = true; });
+    // someone else may have set it up meanwhile: join theirs instead
+    if (await sync.probe().catch(() => false)) { setupDialog.close(); join(sync); toast("A teammate has already set up the shared board — you joined it"); return; }
+    if (b.dataset.start === "demo") { store.reset("t1"); store.reset("t2"); }
+    if (b.dataset.start === "blank") { store.blank("t1"); store.blank("t2"); }
+    store.attachSync(sync, { upload: true });
+    team.mode = "live"; paintTeam();
+    setupDialog.close();
+    route({ soft: true });
+    toast("Shared board created — your team now sees the same data");
+  });
+}
+
+/** Switch this page to the shared copy that now exists. */
+function join(sync) {
+  if (store.sync) return;
+  store.attachSync(sync);
+  store.applyRemote("t1"); store.applyRemote("t2");
+  team.mode = sync.readOnly ? "readonly" : "live"; paintTeam();
+  route({ soft: true });
+}
+
+async function connectTeam() {
+  const api = window.claude?.use ? window.claude : null;
+  const db = api ? await api.use("db").catch(() => null) : null;
+  if (!db) { team.mode = "local"; paintTeam(); return; }
+  const user = await api.use("user").catch(() => null);
+  store.user = user;
+  const dirty = new Set();
+  let timer = null;
+  const sync = createSync({
+    db, user,
+    onStatus: (st) => { team.pending = st.pending; team.failed = st.failed; if (st.readOnly) team.mode = "readonly"; paintTeam(); },
+    onRemote: (tier) => {
+      if (tier === "readonly") { team.mode = "readonly"; paintTeam(); toast("You can view the shared board but not change it"); return; }
+      dirty.add(tier);
+      clearTimeout(timer);
+      // a burst of changes (a first upload, a reload of the demo) is applied once
+      timer = setTimeout(() => {
+        const tiers = [...dirty]; dirty.clear();
+        if (!store.sync) {
+          if (sync.ready("t1") && sync.ready("t2")) { setupDialog?.close(); join(sync); }
+          return;
+        }
+        for (const t of tiers) store.applyRemote(t);
+        softRedraw();
+      }, 150);
+    },
+  });
+  let exists;
+  try { exists = await sync.probe(); } catch { team.mode = "local"; paintTeam(); return; }
+  sync.listen();
+  if (exists) return; // join() runs once both boards have arrived
+  const canWrite = user ? await user.can("data.write") : null;
+  team.mode = "empty"; paintTeam();
+  if (canWrite !== false) firstRun(sync);
 }
 
 /* ── Boot ──────────────────────────────────────────────── */
@@ -251,6 +355,7 @@ document.addEventListener("keydown", (e) => {
   }
 });
 route();
+connectTeam();
 
 if ("serviceWorker" in navigator && location.protocol.startsWith("http") && window.top === window) {
   addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {}));
