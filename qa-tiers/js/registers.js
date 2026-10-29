@@ -5,6 +5,7 @@
 import { store } from "./store.js";
 import * as E from "./engine.js";
 import { T1_REGISTERS, T2_REGISTERS, LOCKED_LISTS } from "./schema.js";
+import { stackedH } from "./charts.js";
 import { esc, pill, fmtDate, pct, fmtNum, toast, confirmDialog, promptDialog, drawer, download, toCSV, $, $$, today } from "./ui.js";
 
 const has = (v) => v !== "" && v != null;
@@ -37,9 +38,19 @@ const FX = {
   ],
   load: [
     { key: "workDays", label: "Working Days", num: true, cell: (c) => c.workDays },
+    { key: "absence", label: "Absence (d)", num: true, cell: (c) => `${fmtNum(c.absence)}${c.logged ? ` <span class="muted" title="${c.logged} day(s) from the Tier 1 daily log">(${c.logged} logged)</span>` : ""}` },
     { key: "available", label: "Available Days", num: true, cell: (c) => fmtNum(c.available) },
+    { key: "workload", label: "Planned Workload (pd)", num: true, cell: (c) => `<b>${fmtNum(c.workload)}</b>` },
     { key: "util", label: "Utilisation", num: true, cell: (c) => pct(c.util) },
+    { key: "delayed", label: "Delayed Tasks", num: true, cell: (c) => (c.delayed ? `<b style="color:var(--r)">${c.delayed}</b>` : "0") },
     { key: "status", label: "Load Status", cell: (c) => pill(c.status) },
+    { key: "count", label: "Items", num: true, cell: (c) => c.count },
+  ],
+  tasks: [
+    { key: "effort", label: "Effort (pd)", num: true, cell: (c) => (c.effort === "" ? "" : `${fmtNum(c.effort)}${c.std !== "" && c.effort !== c.std ? ` <span class="muted">(std ${fmtNum(c.std)})</span>` : ""}`) },
+    { key: "live", label: "Live Status", cell: (c) => pill(c.live) },
+    { key: "toDue", label: "Days to Due", num: true, cell: (c) => daysCell(c.toDue) },
+    { key: "check", label: "Data Check", cell: (c) => checkCell(c.check) },
   ],
   dl: [
     { key: "act", label: "Total Activities", num: true, cell: (c) => c.act },
@@ -68,7 +79,7 @@ FX.ac = FX.fn;
 FX.apqr = [...FX.generic.slice(0, 1), { key: "effPct", label: "Effective %", num: true, cell: (c) => pct(c.effPct) }, ...FX.generic.slice(1)];
 
 function fxSpec(tier, reg) {
-  if (tier === "t2") return reg === "rel" ? FX.rel : reg === "trn" ? FX.trn2 : reg === "load" ? FX.load : reg === "apqr" ? FX.apqr : FX.generic;
+  if (tier === "t2") return reg === "rel" ? FX.rel : reg === "trn" ? FX.trn2 : reg === "load" ? FX.load : reg === "tasks" ? FX.tasks : reg === "apqr" ? FX.apqr : FX.generic;
   return reg === "tr" ? FX.tr1 : FX[reg];
 }
 
@@ -85,7 +96,13 @@ function computeOne(tier, reg, rec, index) {
   if (tier === "t2") {
     if (reg === "rel") return E.t2Release(rec, s.setup);
     if (reg === "trn") return E.t2Training(rec, s.setup);
-    if (reg === "load") return E.t2Load(rec, s.setup);
+    if (reg === "load") return E.t2Load(rec, s, store.t1);
+    if (reg === "tasks") {
+      const act = E.activityFor(s.activities || E.DEFAULT_ACTIVITIES, "tasks", rec);
+      const std = act ? +act.effort : "";
+      const c = E.t2Row("tasks", rec, s.setup.statusDate);
+      return { ...c, std, effort: has(rec.effort) ? +rec.effort : std, check: c.check === "OK" && !act ? "Activity not in the catalogue" : c.check };
+    }
     return E.t2Row(reg, rec, s.setup.statusDate);
   }
   const sel = s.setup.selDate;
@@ -104,11 +121,17 @@ function computeOne(tier, reg, rec, index) {
 export function optionsFor(tier, field) {
   const s = store[tier];
   if (field.type === "roster") return s.roster.map((r) => r.name);
+  if (field.type === "activity") return (s.activities || E.DEFAULT_ACTIVITIES).filter((a) => a.reg === "task").map((a) => a.name);
   return s.lists[field.list] || [];
 }
 
 export function inputHTML(tier, field, value, { name = field.key, cls = "" } = {}) {
   const v = value ?? "";
+  if (field.type === "activity") {
+    const acts = (store[tier].activities || E.DEFAULT_ACTIVITIES).filter((a) => a.reg === "task");
+    const extra = has(v) && !acts.some((a) => a.name === v) ? `<option value="${esc(v)}" selected>${esc(v)} (not in catalogue)</option>` : "";
+    return `<select name="${name}" class="${cls}"><option value="">—</option>${extra}${acts.map((a) => `<option value="${esc(a.name)}" ${a.name === v ? "selected" : ""}>${esc(a.name)} · ${a.effort} pd${a.role ? ` · ${esc(a.role)}` : ""}</option>`).join("")}</select>`;
+  }
   if (field.type === "list" || field.type === "roster") {
     const opts = optionsFor(tier, field);
     const extra = has(v) && !opts.includes(v) ? `<option value="${esc(v)}" selected>${esc(v)} (not in list)</option>` : "";
@@ -179,11 +202,11 @@ export function openEditor({ tier, reg, index = null, prefill = null, onSaved })
     groups += `<label class="field${full}" data-f="${f.key}"><span>${esc(f.label)}${f.req ? '<i class="req">*</i>' : ""}</span>
       ${inputHTML(tier, f, rec[f.key])}${f.help ? `<small>${esc(f.help)}</small>` : ""}</label>`;
   }
-  const body = `<div data-fx></div><div data-flag></div><form class="form-grid" autocomplete="off">${groups}</form>`;
+  const body = `<div data-fx></div><div data-flag></div><form class="form-grid" autocomplete="off">${groups}</form>${reg === "load" ? `<div data-breakdown style="margin-top:18px"></div>` : ""}`;
   const footer = `${isNew ? "" : `<button class="btn danger" data-del>Delete</button><button class="btn" data-dup>Duplicate</button>`}
     <span class="spacer"></span><span class="muted" style="font-size:12px">Ctrl + Enter saves</span><button class="btn" data-cancel>Cancel</button><button class="btn primary" data-save>${isNew ? "Add record" : "Save changes"}</button>`;
   const sub = `<div class="meta-row"><span>${esc(sc.no)} · ${esc(sc.title)}</span>${sc.source ? `<span>Source: <b>${esc(sc.source)}</b></span>` : ""}<span>Cream = you type · ƒx = automatic</span></div>`;
-  const { el, close } = drawer({ title: isNew ? `New · ${esc(sc.title)}` : `Edit · ${esc(label(rec))}`, sub, body, footer });
+  const { el, close } = drawer({ title: isNew ? `New · ${esc(sc.title)}` : `Edit · ${esc(label(rec))}`, sub, body, footer, wide: reg === "load" });
   const form = $("form", el);
 
   const read = () => {
@@ -201,6 +224,7 @@ export function openEditor({ tier, reg, index = null, prefill = null, onSaved })
     $("[data-fx]", el).innerHTML = items ? `<div class="fx-panel">${items}</div>` : "";
     const flag = c.check && c.check !== "OK" ? `<div class="flag-msg">⚠ Data check: ${esc(c.check)}</div>` : c.check === "OK" ? `<div class="ok-msg">✓ Data check: record consistent</div>` : "";
     $("[data-flag]", el).innerHTML = flag;
+    if (reg === "load") $("[data-breakdown]", el).innerHTML = breakdownHTML(c, s.setup);
   };
   wireInputs(el, tier, sc.fields, refresh);
   form.addEventListener("input", refresh);
@@ -249,6 +273,34 @@ export function openEditor({ tier, reg, index = null, prefill = null, onSaved })
     toast(`${label(rec)} deleted`, { label: "Undo", run: () => { store.upsert(tier, reg, null, removed, label(removed)); onSaved?.(null); } });
   });
   setTimeout(() => form.querySelector("input,select,textarea")?.focus(), 50);
+}
+
+/** Where a team member's workload comes from (QA Load form). */
+function breakdownHTML(c, setup) {
+  if (!c.items?.length) return `<div class="empty">No record is assigned to this name in ${esc(setup.month.slice(0, 7))}. Assign work in the registers (Owner, Inspector, Trainer, Releasing Officer) or in the Task planner.</div>`;
+  const bySrc = {};
+  for (const it of c.items) bySrc[it.source] = (bySrc[it.source] || 0) + it.days;
+  return `<div class="card-head"><h2>ƒx Workload breakdown <span class="sub">${c.count} items · ${fmtNum(c.workload)} person-days this month</span></h2></div>
+    <div class="chips" style="margin-bottom:10px">${Object.entries(bySrc).sort((a, b) => b[1] - a[1]).map(([k, v]) => `<span class="pill info">${esc(k)} · ${fmtNum(Math.round(v * 10) / 10)} pd</span>`).join("")}</div>
+    <div class="table-wrap"><table class="plain"><thead><tr><th>Source</th><th>Ref.</th><th>Activity</th><th class="num">Std effort</th><th class="num">In month</th><th class="num">This month (pd)</th><th></th></tr></thead><tbody>
+    ${c.items.map((it) => `<tr><td>${esc(it.source)}</td><td class="mono">${esc(it.ref)}</td><td>${esc(it.activity)}<br><span class="muted" style="font-size:12px">${esc(it.desc)}</span></td><td class="num">${fmtNum(it.effort)}</td><td class="num">${pct(it.share)}</td><td class="num"><b>${fmtNum(Math.round(it.days * 100) / 100, 2)}</b></td><td>${it.overdue ? pill("Overdue", "R") : it.done ? pill("Done", "G") : ""}</td></tr>`).join("")}
+    </tbody></table></div>
+    <p class="muted" style="font-size:12px;margin:8px 0 0">Each record's standard effort (Setup › QA activities) is spread evenly from its start to its closure — or to its due date / the as-of date while open — and only the part falling in this month counts. Delayed tasks = open items past their due date.</p>`;
+}
+
+/** Team workload chart above the QA Load register. */
+function loadPanel(comp, setup) {
+  const sources = Object.values(E.LOAD_SOURCES);
+  const cls = ["f-R", "f-s3", "f-s4", "f-s2", "f-s1", "f-s5", "f-s6", "f-A", "f-N", "f-s7", "f-s8"];
+  const rows = store.t2.load.map((r, i) => {
+    const by = {};
+    for (const it of comp[i].items) by[it.source] = (by[it.source] || 0) + it.days;
+    return { label: r.member, parts: sources.map((src, k) => ({ name: src, value: Math.round((by[src] || 0) * 10) / 10, cls: cls[k] })) };
+  });
+  const used = sources.map((src, k) => ({ src, k })).filter(({ src }) => rows.some((r) => r.parts.find((p) => p.name === src).value));
+  return `<div class="card card-pad" style="margin-bottom:14px"><div class="card-head"><h2>Planned workload by source <span class="sub">person-days in ${esc(setup.month.slice(0, 7))} · click a member below for the detail</span></h2><a class="btn sm" href="#/t2/setup">Effort catalogue ›</a></div>
+    ${stackedH(rows, { width: 720, labelW: 150 })}
+    <div class="chart-legend">${used.map(({ src, k }) => `<span><i class="bg-${cls[k].slice(2)}"></i>${esc(src)}</span>`).join("")}</div></div>`;
 }
 
 /* ── Register page ──────────────────────────────────────── */
@@ -313,7 +365,14 @@ export function renderRegister(root, { tier, reg, query = {} }) {
     };
     const body = shown.map(({ r, c, i }) => `<tr data-i="${i}" class="${c.check && c.check !== "OK" ? "flag" : ""}">${cols.map((f) => cell(f, r[f.key])).join("")}${fx.map((x) => `<td class="fx ${x.num ? "num" : ""}">${x.cell(c) ?? ""}</td>`).join("")}</tr>`).join("");
 
-    const stats = [
+    const loadTotal = (k) => rows.reduce((a, x) => a + (+x.c[k] || 0), 0);
+    const teamUtil = loadTotal("available") > 0 ? loadTotal("workload") / loadTotal("available") : "";
+    const stats = reg === "load" ? [
+      ["Team members", total, ""], ["Planned workload (pd)", fmtNum(Math.round(loadTotal("workload") * 10) / 10), ""],
+      ["Available (pd)", fmtNum(loadTotal("available")), ""],
+      ["Team utilisation", pct(teamUtil), teamUtil === "" ? "" : teamUtil > s.setup.overLoad ? "R" : teamUtil >= s.setup.highLoad ? "A" : "G"],
+      ["Delayed tasks", loadTotal("delayed"), loadTotal("delayed") ? "R" : "G"],
+    ] : [
       ["Total", total, ""], ["Active", active, ""],
       ...(reg === "load" || reg === "dl" || reg === "hd" ? [] : [["Overdue", overdue, overdue ? "R" : "G"]]),
       ...(fresh != null ? [[tier === "t1" ? "Month to date" : "New this month", fresh, ""]] : []),
@@ -334,6 +393,7 @@ export function renderRegister(root, { tier, reg, query = {} }) {
         ${stats.map(([l, v, c]) => `<div class="stat ${c}"><div class="s-l">${l}</div><div class="s-v">${v}</div></div>`).join("")}
         ${fx.some((x) => x.key === "check") ? `<button class="check-strip ${flaggedN ? "bad" : "ok"}" data-flagbtn>${flaggedN ? `⚠ Data check: ${flaggedN} record${flaggedN > 1 ? "s" : ""} need attention — ${vs.flagged ? "show all" : "show them"}` : "✓ Data check: all records consistent"}</button>` : ""}
       </div>
+      ${tier === "t2" && reg === "load" ? loadPanel(comp, s.setup) : ""}
       <div class="toolbar">
         <input type="search" placeholder="Search this register…" value="${esc(vs.q)}" data-q aria-label="Search">
         <select data-status aria-label="Filter by status"><option value="">All statuses</option>${liveValues.map((v) => `<option ${v === vs.status ? "selected" : ""}>${esc(v)}</option>`).join("")}</select>

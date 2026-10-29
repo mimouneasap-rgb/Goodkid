@@ -14,7 +14,7 @@ function bound(tier, path, label, { type = "text", help = "", options = null, pc
   const v = obj ?? "";
   const attrs = `data-path="${path.join(".")}" data-kind="${pctVal ? "pct" : type}" ${readonly ? "disabled" : ""}`;
   let input;
-  if (options) input = `<select ${attrs}><option value="">—</option>${options.map((o) => `<option ${o === v ? "selected" : ""}>${esc(o)}</option>`).join("")}</select>`;
+  if (options) input = `<select ${attrs}><option value="">—</option>${v !== "" && !options.includes(v) ? `<option selected>${esc(v)}</option>` : ""}${options.map((o) => `<option ${o === v ? "selected" : ""}>${esc(o)}</option>`).join("")}</select>`;
   else if (type === "long") input = `<textarea ${attrs} rows="3">${esc(v)}</textarea>`;
   else if (pctVal) input = `<div class="suffix"><input type="number" step="1" ${attrs} value="${v === "" ? "" : Math.round(v * 100)}"><span>%</span></div>`;
   else input = `<input type="${type}" ${attrs} value="${esc(v)}">`;
@@ -91,6 +91,25 @@ function bindLists(root, tier, rerender) {
 }
 
 /* ── KPI target table ───────────────────────────────────── */
+
+/* ── QA activity catalogue (standard effort) ────────────── */
+
+function activityTable() {
+  const s = store.t2;
+  const acts = s.activities;
+  const roles = s.lists.Roles || [];
+  const src = (a) => (a.reg === "task" ? "Task planner" : `${E.LOAD_SOURCES[a.reg] || a.reg}${a.field ? ` · ${a.value}` : ""}`);
+  const used = (a) => (a.reg === "task" ? (s.tasks || []).filter((t) => t.activity === a.name).length : null);
+  return `<div class="table-wrap"><table class="data"><thead><tr><th>QA activity</th><th>Counted from</th><th>Typical position / role</th><th class="num">Standard effort (person-days)</th><th></th></tr></thead><tbody>
+    ${acts.map((a, i) => `<tr style="cursor:default"><td><b>${esc(a.name)}</b></td><td>${esc(src(a))}</td>
+      <td><select class="cell-in" data-path="activities.${i}.role" data-kind="text"><option value="">—</option>${roles.map((r) => `<option ${r === a.role ? "selected" : ""}>${esc(r)}</option>`).join("")}</select></td>
+      <td class="num"><input class="cell-in num" data-path="activities.${i}.effort" data-kind="number" value="${a.effort}" inputmode="decimal" aria-label="Effort for ${esc(a.name)}"></td>
+      <td>${a.reg === "task" ? `<button class="btn sm ghost" data-delact="${i}" title="Remove from the catalogue" ${used(a) ? `disabled title="Used by ${used(a)} task(s)"` : ""}>Remove</button>` : ""}</td></tr>`).join("")}
+    </tbody></table></div>
+    <form class="add-row" data-addact style="margin-top:10px;max-width:640px"><input class="input" name="n" placeholder="New planner activity, e.g. ‘Stability programme review’" autocomplete="off" required>
+      <input class="input" name="e" type="number" step="0.25" min="0" placeholder="Effort" style="max-width:100px" required><button class="btn sm">Add activity</button></form>
+    <p class="muted" style="font-size:12.5px">QA Load is calculated from this table: every record a team member owns brings its standard effort, spread over its dates, into the month. Change an effort and every utilisation updates.</p>`;
+}
 
 function kpiTable(tier) {
   const kpis = store[tier].kpis;
@@ -175,6 +194,7 @@ export function renderSetupT2(root) {
         ${bound("t2", ["setup", "remarks"], "Monthly remarks", { type: "long", full: true, help: "Count first · name the trend · state what was escalated and why · end with next month's focus" })}
       </div></div>
       <div class="card card-pad"><div class="card-head"><h2>3 · KPI targets & thresholds</h2></div>${kpiTable("t2")}</div>
+      <div class="card card-pad"><div class="card-head"><h2>4 · QA activities & standard effort <span class="sub">drives the calculated QA Load and the Task planner drop-down</span></h2><a class="btn sm" href="#/t2/reg/load">QA Load ›</a></div>${activityTable()}</div>
       <div class="card card-pad"><div class="card-head"><h2>Month-end roll-over <span class="sub">last working day of ${fmtMonth(st.month)}</span></h2></div>
         <div class="lcards">
           <div class="lcard"><span class="n">1</span><b>Capture the board</b><span>Save the dashboard as PDF (browser print, A3 landscape) for the Tier 3 pack.</span><a class="btn sm" href="#/t2/board" style="justify-self:start">Open dashboard</a></div>
@@ -188,6 +208,23 @@ export function renderSetupT2(root) {
       ${dataCard("t2")}
     </div>`;
   const rerender = () => renderSetupT2(root);
+  root.addEventListener("submit", (e) => {
+    const f = e.target.closest("[data-addact]");
+    if (!f) return;
+    e.preventDefault();
+    const name = f.n.value.trim(), effort = +f.e.value;
+    if (s.activities.some((a) => a.name === name)) { toast("That activity already exists"); return; }
+    s.activities.push({ name, reg: "task", effort, role: "" });
+    store.log("t2", { reg: "activities", ref: name, action: "create", changes: [{ field: "effort", from: "", to: effort }] });
+    store.save("t2"); rerender(); toast(`“${name}” added to the catalogue`);
+  });
+  root.addEventListener("click", (e) => {
+    const b = e.target.closest("[data-delact]");
+    if (!b) return;
+    const [a] = s.activities.splice(+b.dataset.delact, 1);
+    store.log("t2", { reg: "activities", ref: a.name, action: "delete", changes: [] });
+    store.save("t2"); rerender(); toast(`“${a.name}” removed`);
+  });
   bindPaths(root, "t2", (path) => { if (["month", "weekend1", "weekend2"].includes(path[path.length - 1])) rerender(); });
   bindLists(root, "t2", rerender);
   bindData(root, "t2", rerender);

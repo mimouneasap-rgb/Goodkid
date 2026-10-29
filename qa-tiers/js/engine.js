@@ -76,6 +76,7 @@ export const T2_FLOW = {
   doc: { done: ["Closed"] },
   apqr: { done: ["Closed"] },
   esc: { done: ["Resolved"] },
+  tasks: { done: ["Done", "Cancelled"] },
 };
 
 /** ƒx columns of a generic Tier 2 register row (Live Status, Age, Days to Due, Closed On Time, Data Check). */
@@ -120,21 +121,135 @@ export function t2Training(r, setup) {
   return { completion, live, check, open: !closed };
 }
 
-export function t2Load(r, setup) {
-  const wd = workingDays(setup.month, setup);
-  const available = wd - num(r.absence);
-  const util = available > 0 ? num(r.planned) / available : "";
-  const status = util === "" ? "" : util > setup.overLoad ? "Overloaded" : util >= setup.highLoad ? "High load" : "Normal";
-  return { workDays: wd, available, util, status, check: has(r.member) ? "OK" : "Member missing" };
+/* ── QA load: workload calculated from the registers ─────────────────── */
+
+/** Standard effort catalogue (person-days). `reg` is the source register,
+ * `field`/`value` pick a sub-type; reg "task" rows are the activities the
+ * Task planner assigns. Editable in Setup. */
+export const DEFAULT_ACTIVITIES = [
+  { name: "Deviation investigation · Minor", reg: "dev", field: "cls", value: "Minor", effort: 1, role: "QA Officer — oncology line" },
+  { name: "Deviation investigation · Major", reg: "dev", field: "cls", value: "Major", effort: 2.5, role: "QA Officer — oncology line" },
+  { name: "Deviation investigation · Critical", reg: "dev", field: "cls", value: "Critical", effort: 5, role: "Senior QA Officer — board owner" },
+  { name: "CAPA action", reg: "capa", effort: 1, role: "QA Officer — oncology line" },
+  { name: "Change control · Minor", reg: "cc", field: "cat", value: "Minor", effort: 0.5, role: "QA Officer — oncology line" },
+  { name: "Change control · Major", reg: "cc", field: "cat", value: "Major", effort: 1.5, role: "QA Officer — oncology line" },
+  { name: "Change control · Critical", reg: "cc", field: "cat", value: "Critical", effort: 3, role: "Senior QA Officer — board owner" },
+  { name: "Gemba finding follow-up", reg: "insp", effort: 0.25, role: "QA Officer — oncology line" },
+  { name: "Batch disposition (BMR review + release)", reg: "rel", effort: 1, role: "QA Batch Release" },
+  { name: "Document · New", reg: "doc", field: "action", value: "New", effort: 2, role: "QA Documentation" },
+  { name: "Document · Revision", reg: "doc", field: "action", value: "Revision", effort: 1.5, role: "QA Documentation" },
+  { name: "Document · Periodic review", reg: "doc", field: "action", value: "Periodic Review", effort: 0.75, role: "QA Documentation" },
+  { name: "Document · Withdrawal", reg: "doc", field: "action", value: "Withdrawal", effort: 0.25, role: "QA Documentation" },
+  { name: "APQR preparation", reg: "apqr", effort: 8, role: "Senior QA Officer — board owner" },
+  { name: "Training session delivery", reg: "trn", effort: 1, role: "Senior QA Officer — board owner" },
+  { name: "Tier 3 escalation follow-up", reg: "esc", effort: 0.5, role: "Senior QA Officer — board owner" },
+  { name: "Tier 1 action", reg: "t1ac", effort: 0.25, role: "QA Officer — oncology line" },
+  { name: "Batch record review (routine)", reg: "task", effort: 1, role: "QA Batch Release" },
+  { name: "Gemba walks & line support (routine)", reg: "task", effort: 1, role: "QA Officer — oncology line" },
+  { name: "Internal audit / self-inspection", reg: "task", effort: 4, role: "Senior QA Officer — board owner" },
+  { name: "Supplier audit", reg: "task", effort: 3, role: "Senior QA Officer — board owner" },
+  { name: "Validation / qualification protocol review", reg: "task", effort: 2, role: "QA Validation" },
+  { name: "Cleaning validation", reg: "task", effort: 5, role: "QA Validation" },
+  { name: "Complaint investigation", reg: "task", effort: 3, role: "QA Officer — oncology line" },
+  { name: "Data-integrity / audit-trail review", reg: "task", effort: 1, role: "QA Officer — oncology line" },
+  { name: "eQMS administration", reg: "task", effort: 1, role: "Senior QA Officer — board owner" },
+  { name: "Management review / KPI reporting", reg: "task", effort: 2, role: "Senior QA Officer — board owner" },
+  { name: "Document control & issuance (routine)", reg: "task", effort: 1, role: "QA Documentation" },
+  { name: "Other planned QA work", reg: "task", effort: 1, role: "" },
+];
+
+export const LOAD_SOURCES = {
+  dev: "Deviations", capa: "CAPA", cc: "Change control", insp: "Inspections", rel: "Batch release", doc: "Documentation",
+  apqr: "APQR", trn: "Training", esc: "Escalations", tasks: "Task planner", t1ac: "Tier 1 actions",
+};
+
+/** Who does the QA work on a record, and over which dates. */
+const LOAD_MAP = {
+  dev: { who: "owner" }, capa: { who: "owner" }, cc: { who: "owner" }, insp: { who: "inspector" },
+  doc: { who: "owner" }, apqr: { who: "owner" }, esc: { who: "owner" },
+  rel: { who: "officer", start: (r) => r.bmr || r.mfg, end: (r) => r.decision, due: (r, s) => (has(r.mfg) ? addDays(r.mfg, num(s.brTarget)) : ""), done: ["Released", "Rejected"] },
+  trn: { who: "trainer", start: (r) => r.date, end: (r) => r.date, due: (r) => r.date, done: ["Completed"], skip: ["Cancelled"] },
+  tasks: { who: "member", done: ["Done"], skip: ["Cancelled"] },
+  t1ac: { who: "officer", done: ["Done"], skip: ["Cancelled"] },
+};
+
+export function activityFor(activities, reg, r) {
+  if (reg === "tasks") return activities.find((a) => a.reg === "task" && a.name === r.activity) || null;
+  return activities.find((a) => a.reg === reg && (!a.field || r[a.field] === a.value)) || activities.find((a) => a.reg === reg && !a.field) || null;
 }
+
+/** Every piece of work one team member carries in the reporting month. */
+export function workloadItems(state, member, t1 = null) {
+  const s = state.setup;
+  const mS = toDay(monthStart(s.month)), mE = toDay(monthEnd(s.month)), now = s.statusDate;
+  const acts = state.activities || DEFAULT_ACTIVITIES;
+  const regs = [...Object.keys(LOAD_MAP).filter((k) => k !== "t1ac").map((k) => [k, state[k] || []]), ["t1ac", t1 ? t1.ac : []]];
+  const out = [];
+  for (const [reg, rows] of regs) {
+    const m = LOAD_MAP[reg];
+    const doneList = m.done || T2_FLOW[reg].done;
+    for (const r of rows) {
+      if (!member || r[m.who] !== member || (m.skip || []).includes(r.status)) continue;
+      const start = m.start ? m.start(r) : r.opened;
+      if (!has(start)) continue;
+      const done = doneList.includes(r.status);
+      const due = m.due ? m.due(r, s) : r.due;
+      const closeDate = m.end ? m.end(r) : r.closed;
+      const endIso = done ? closeDate || due || start : [due || start, now].sort().pop();
+      const a = toDay(start), b = Math.max(a, toDay(endIso));
+      const overlap = Math.min(b, mE) - Math.max(a, mS) + 1;
+      const act = activityFor(acts, reg, r);
+      const effort = reg === "tasks" && has(r.effort) ? +r.effort : act ? num(act.effort) : 0;
+      const share = overlap > 0 ? overlap / (b - a + 1) : 0;
+      const overdue = !done && has(due) && due < now && start <= now;
+      if (share <= 0 && !overdue) continue;
+      out.push({ reg, source: LOAD_SOURCES[reg], ref: r.id || "", desc: r.desc || r.title || r.topic || r.product || "", activity: act ? act.name : "—",
+        effort, share, days: effort * share, start, end: fromDay(b), due: due || "", overdue, done });
+    }
+  }
+  return out.sort((x, y) => y.days - x.days);
+}
+
+/** Absence days logged on the Tier 1 daily log (leave, training, absent) in the month. */
+export function loggedAbsence(state, member, t1) {
+  if (!t1) return 0;
+  const mS = monthStart(state.setup.month), mE = monthEnd(state.setup.month);
+  return t1.dl.filter((r) => r.officer === member && r.date >= mS && r.date <= mE && ["Leave", "Training", "Absent"].includes(r.att)).length;
+}
+
+export function t2Load(r, state, t1 = null) {
+  const s = state.setup;
+  const wd = workingDays(s.month, s);
+  const logged = loggedAbsence(state, r.member, t1);
+  const absence = num(r.absence) + logged;
+  const available = wd - absence;
+  const items = workloadItems(state, r.member, t1);
+  const workload = Math.round(items.reduce((a, x) => a + x.days, 0) * 10) / 10;
+  const delayed = items.filter((x) => x.overdue).length;
+  const util = available > 0 ? workload / available : "";
+  const status = util === "" ? "" : util > s.overLoad ? "Overloaded" : util >= s.highLoad ? "High load" : "Normal";
+  return { workDays: wd, logged, absence, available, items, workload, delayed, util, status, count: items.length, check: has(r.member) ? "OK" : "Member missing" };
+}
+
+/** The Tier 1 board feeding Tier 2 (its actions and attendance count in QA load). */
+let tier1Source = () => null;
+export function linkTier1(getter) { tier1Source = getter; }
 
 /** All computed columns for every Tier 2 register. */
 export function t2Computed(state) {
   const s = state.setup, out = {};
-  for (const reg of Object.keys(T2_FLOW)) out[reg] = state[reg].map((r) => t2Row(reg, r, s.statusDate));
+  for (const reg of Object.keys(T2_FLOW)) out[reg] = (state[reg] || []).map((r) => t2Row(reg, r, s.statusDate));
   out.rel = state.rel.map((r) => t2Release(r, s));
   out.trn = state.trn.map((r) => t2Training(r, s));
-  out.load = state.load.map((r) => t2Load(r, s));
+  const t1 = tier1Source();
+  out.load = state.load.map((r) => t2Load(r, state, t1));
+  out.tasks = (state.tasks || []).map((r, i) => {
+    const act = activityFor(state.activities || DEFAULT_ACTIVITIES, "tasks", r);
+    const std = act ? num(act.effort) : "";
+    const effort = has(r.effort) ? +r.effort : std;
+    const c = out.tasks[i];
+    return { ...c, std, effort, check: c.check === "OK" && !act ? "Activity not in the catalogue" : c.check };
+  });
   return out;
 }
 
@@ -153,7 +268,7 @@ export function t2Kpis(state, comp = t2Computed(state)) {
     onTimeRate("insp"),
     ratio(count(comp.rel, (c) => c.late === "No"), released),
     overdue("doc"),
-    ratio(sum(state.load, (r) => r.planned), loadAvail),
+    ratio(sum(comp.load, (c) => c.workload), loadAvail),
     overdue("apqr"),
     ratio(sum(trnRows, (r) => r.trained), sum(trnRows, (r) => r.planned)),
   ];
@@ -229,7 +344,7 @@ export function t2Summary(state, comp = t2Computed(state)) {
     insp: { total: state.insp.length, new: count(state.insp, (r) => inMonth(r.opened)), lines: [["Open", st("insp", "Open")], ["In progress", st("insp", "In Progress")], ["Closed", st("insp", "Closed")], ["Overdue", od("insp")]] },
     rel: { total: state.rel.length, new: count(state.rel, (r) => inMonth(r.mfg)), lines: [["Waiting / review", st("rel", "Waiting", "Under Review", "On Hold")], ["Released", st("rel", "Released")], ["Released late", count(comp.rel, (c) => c.late === "Yes")], ["Overdue", od("rel")]] },
     doc: { total: state.doc.length, new: count(state.doc, (r) => inMonth(r.opened)), lines: [["Open", st("doc", "Open")], ["In course", st("doc", "In Course", "In Approval")], ["Closed", st("doc", "Closed")], ["Avg revision (d)", avg(state.doc.map((r, i) => (r.status === "Closed" ? comp.doc[i].age : null)).filter((v) => v !== null && v !== ""))]] },
-    load: { total: state.load.length, new: workingDays(s.month, s), newLabel: "working days", lines: [["Absence (days)", sum(state.load, (r) => r.absence)], ["High load (n)", count(comp.load, (c) => c.status === "High load" || c.status === "Overloaded")], ["Delayed tasks", sum(state.load, (r) => r.delayed)], ["Utilisation", ratio(sum(state.load, (r) => r.planned), sum(comp.load, (c) => c.available))]] },
+    load: { total: state.load.length, new: workingDays(s.month, s), newLabel: "working days", lines: [["Absence (days)", sum(comp.load, (c) => c.absence)], ["High load (n)", count(comp.load, (c) => c.status === "High load" || c.status === "Overloaded")], ["Delayed tasks", sum(comp.load, (c) => c.delayed)], ["Utilisation", ratio(sum(comp.load, (c) => c.workload), sum(comp.load, (c) => c.available))]] },
     apqr: { total: state.apqr.length, new: count(state.apqr, (r) => inMonth(r.opened)), lines: [["Not started", st("apqr", "Not Started")], ["In progress", st("apqr", "In Progress", "In Review")], ["Closed", st("apqr", "Closed")], ["Completion", avg(comp.apqr.map((c) => c.effPct))]] },
     trn: { total: state.trn.length, new: count(state.trn, (r) => inMonth(r.date)), lines: [["Completed", st("trn", "Completed")], ["Planned / ongoing", st("trn", "Planned", "In Progress")], ["New hires trained", sum(state.trn, (r) => r.newhires)], ["Overdue", od("trn")]] },
     esc: { total: state.esc.length, new: count(state.esc, (r) => inMonth(r.opened)), lines: [["Open", st("esc", "Open")], ["In progress", st("esc", "In Progress")], ["Resolved", st("esc", "Resolved")], ["Overdue", od("esc")]] },

@@ -406,7 +406,7 @@ export function renderAnalytics(root) {
   const pctK = kpis.map((k, i) => ({ k, i })).filter(({ k }) => k.unit === "%");
   const palette = ["f-s1", "f-s2", "f-s3", "f-s4", "f-s5"];
   const series = pctK.map(({ k, i }, n) => ({ name: k.name, cls: palette[n % 5], values: s.trend.rows[i].map((v, j) => (j === m && k.actual !== "" ? k.actual : v)) }));
-  const load = s.load.map((r, i) => ({ label: r.member, value: comp.load[i].util || 0, cls: comp.load[i].status === "Overloaded" ? "f-R" : comp.load[i].status === "High load" ? "f-A" : "f-G", tip: `**${r.member}**\n${r.planned} planned ÷ ${comp.load[i].available} available = ${pct(comp.load[i].util)}\n${comp.load[i].status}` }));
+  const load = s.load.map((r, i) => ({ label: r.member, value: comp.load[i].util || 0, cls: comp.load[i].status === "Overloaded" ? "f-R" : comp.load[i].status === "High load" ? "f-A" : "f-G", tip: `**${r.member}**\n${fmtNum(comp.load[i].workload)} planned (calculated) ÷ ${comp.load[i].available} available = ${pct(comp.load[i].util)}\n${comp.load[i].status}` }));
   const bars = (pairs, c = "f-s1") => hbars(pairs.filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]).map(([label, value]) => ({ label, value, cls: c })));
   const card = (no, title, q, body, extra = "") => `<div class="card card-pad"><div class="card-head"><h2><span class="mono" style="color:var(--accent)">${no}</span> ${esc(title)}</h2></div><p class="muted" style="margin:-6px 0 12px;font-size:12.5px">${esc(q)}</p>${body}${extra}</div>`;
 

@@ -3,11 +3,24 @@
 // written to a small audit trail (what, which record, before → after).
 
 import { DEMO_T1, DEMO_T2 } from "./demo-data.js";
+import { DEFAULT_ACTIVITIES } from "./engine.js";
 
 const KEYS = { t1: "qaTiers.t1.v1", t2: "qaTiers.t2.v1", prefs: "qaTiers.prefs.v1" };
 const AUDIT_MAX = 300;
 
 const clone = (o) => JSON.parse(JSON.stringify(o));
+/** Planned QA work for the September 2026 demo (Task planner register). */
+const DEMO_TASKS = [
+  { id: "TSK-2609-01", member: "Release Officer", activity: "Batch record review (routine)", desc: "BMR / BPR review of the September oncology batches", opened: "2026-09-01", due: "2026-09-30", effort: 14, status: "In Progress" },
+  { id: "TSK-2609-02", member: "Validation Specialist", activity: "Cleaning validation", desc: "Cleaning validation runs — OEB 5 compression isolator", opened: "2026-09-01", due: "2026-09-30", effort: 8, status: "In Progress" },
+  { id: "TSK-2609-03", member: "Validation Specialist", activity: "Validation / qualification protocol review", link: "CC-26-030", desc: "OQ protocol review — capsule filler change parts (size 0)", opened: "2026-09-07", due: "2026-09-24", effort: 4, status: "Done", closed: "2026-09-23" },
+  { id: "TSK-2609-04", member: "Validation Specialist", activity: "Validation / qualification protocol review", desc: "HVAC requalification report — warehouse quarantine zone", opened: "2026-09-21", due: "2026-10-09", effort: 5, status: "In Progress" },
+  { id: "TSK-2609-05", member: "Documentation Officer", activity: "Document control & issuance (routine)", desc: "Issuance, retrieval and archiving of controlled copies", opened: "2026-09-01", due: "2026-09-30", effort: 8, status: "In Progress" },
+  { id: "TSK-2609-06", member: "Documentation Officer", activity: "Other planned QA work", desc: "SOP periodic-review backlog clean-up (warehouse SOPs)", opened: "2026-09-08", due: "2026-09-25", effort: 5, status: "In Progress", comments: "Two SOPs still with reviewers" },
+  { id: "TSK-2609-07", member: "QA Officer 1", activity: "Supplier audit", link: "CC-26-033", desc: "On-site audit of the secondary-packaging supplier", opened: "2026-09-21", due: "2026-09-23", status: "Done", closed: "2026-09-23" },
+  { id: "TSK-2609-08", member: "QA Officer 2", activity: "Data-integrity / audit-trail review", desc: "Monthly HPLC and dissolution audit-trail review", opened: "2026-09-01", due: "2026-09-30", effort: 2, status: "In Progress" },
+];
+
 const uniq = (arr) => [...new Set(arr.filter((v) => v != null && v !== "" && v !== "—"))];
 
 /** Extra drop-down lists that the workbooks kept as free text. */
@@ -21,6 +34,11 @@ function seedLists(tier, s) {
     ]);
     s.lists.Departments ??= uniq([...pick(["cc"], ["initiator"]), ...pick(["doc"], ["dept"])]);
     s.lists.Products ??= uniq([...pick(["rel", "apqr"], ["product"])]);
+    s.lists.Roles ??= uniq([...s.load.map((r) => r.role), "QA Inspector"]);
+    s.lists.TaskStatus ??= ["Planned", "In Progress", "Done", "Cancelled"];
+    s.activities ??= clone(DEFAULT_ACTIVITIES);
+    // a stored demo gets the demo planner; any other board starts with an empty one
+    s.tasks ??= /El Kendi/.test(s.setup.site) && s.setup.month === "2026-09-01" ? clone(DEMO_TASKS) : [];
     s.lists.Tier3 ??= uniq(["Site Quality Head", "Plant Management", ...pick(["esc"], ["to"])]);
   } else {
     s.lists.Owners ??= uniq(s.fn.map((r) => r.owner));
@@ -49,7 +67,11 @@ export const store = {
   listeners: new Set(),
 
   load() {
-    for (const tier of ["t1", "t2"]) this[tier] = read(KEYS[tier]) || fresh(tier);
+    for (const tier of ["t1", "t2"]) {
+      const saved = read(KEYS[tier]);
+      // boards saved by an earlier version get the lists and registers added since
+      this[tier] = saved ? seedLists(tier, { audit: [], ...saved }) : fresh(tier);
+    }
     this.prefs = { ...this.prefs, ...(read(KEYS.prefs) || {}) };
   },
   save(tier) {
@@ -96,7 +118,7 @@ export const store = {
   /** Empty registers, keeping setup, lists, KPI targets and roster. */
   blank(tier) {
     const s = fresh(tier);
-    const regs = tier === "t1" ? ["dl", "br", "fn", "ac", "hd", "tr"] : ["dev", "capa", "cc", "insp", "rel", "doc", "apqr", "trn", "esc"];
+    const regs = tier === "t1" ? ["dl", "br", "fn", "ac", "hd", "tr"] : ["dev", "capa", "cc", "insp", "rel", "doc", "apqr", "trn", "esc", "tasks"];
     for (const r of regs) s[r] = [];
     if (tier === "t2") { s.daily = {}; s.trend.rows = s.trend.rows.map(() => Array(12).fill(null)); }
     this[tier] = s; this.save(tier);

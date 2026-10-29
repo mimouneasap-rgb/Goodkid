@@ -36,7 +36,7 @@
   --wk: #c9cdd4;
   --future: #ffffff;
 
-  --s1: #0c8f8a; --s2: #3a6fd8; --s3: #e3a008; --s4: #b65bd1; --s5: #e0644f; --s6: #6b7689;
+  --s1: #0c8f8a; --s2: #3a6fd8; --s3: #e3a008; --s4: #b65bd1; --s5: #e0644f; --s6: #6b7689; --s7: #7d9a2b; --s8: #2fa7d8;
 
   --shadow-1: 0 1px 0 rgba(15, 28, 46, .04), 0 1px 3px rgba(15, 28, 46, .07);
   --shadow-2: 0 18px 50px rgba(8, 18, 34, .28);
@@ -449,6 +449,8 @@ svg.chart .thr-r { stroke: var(--r); stroke-dasharray: 4 3; }
 svg.chart [data-tip] { cursor: default; }
 svg.chart [data-tip]:hover { opacity: .82; }
 .f-G { fill: var(--g); } .f-A { fill: var(--a); } .f-R { fill: var(--r); } .f-N { fill: var(--n); } .f-W { fill: var(--wk); }
+.f-s7 { fill: var(--s7); } .f-s8 { fill: var(--s8); }
+.bg-s7 { background: var(--s7); } .bg-s8 { background: var(--s8); }
 .f-s1 { fill: var(--s1); } .f-s2 { fill: var(--s2); } .f-s3 { fill: var(--s3); } .f-s4 { fill: var(--s4); } .f-s5 { fill: var(--s5); } .f-s6 { fill: var(--s6); }
 .st-s1 { stroke: var(--s1); } .st-s2 { stroke: var(--s2); } .st-s3 { stroke: var(--s3); } .st-s4 { stroke: var(--s4); } .st-s5 { stroke: var(--s5); }
 .st-G { stroke: var(--g); } .st-A { stroke: var(--a); } .st-R { stroke: var(--r); } .st-N { stroke: var(--n); }

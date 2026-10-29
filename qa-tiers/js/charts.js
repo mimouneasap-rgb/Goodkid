@@ -55,7 +55,7 @@ export function stackedH(rows, { width = 520, labelW = 120, barH = 20, gap = 9 }
       if (w > 18) s += `<text x="${x + w / 2}" y="${y + barH / 2 + 4}" text-anchor="middle" style="fill:#fff;font-weight:600">${p.value}</text>`;
       x += w;
     }
-    s += `<text class="val" x="${x + 6}" y="${y + barH / 2 + 4}">${total}</text>`;
+    s += `<text class="val" x="${x + 6}" y="${y + barH / 2 + 4}">${Math.round(total * 10) / 10}</text>`;
   });
   return `${s}</svg>`;
 }

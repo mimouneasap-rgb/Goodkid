@@ -13,6 +13,7 @@ import { renderLearnHome, renderModule, learnProgress, RHYTHM } from "./learn.js
 import { esc, pill, fmtLong, fmtMonth, closeDrawer, initTooltips, $, $$ } from "./ui.js";
 
 store.load();
+E.linkTier1(() => store.t1);
 
 /* ── Theme ─────────────────────────────────────────────── */
 function applyTheme() {

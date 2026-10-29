@@ -201,23 +201,41 @@ export const T2_REGISTERS = {
   },
   load: {
     no: "07", title: "QA Load", icon: "◔", short: "QA load", idKey: "member",
-    lead: "Capacity in three numbers: working days − absence = available; planned ÷ available = utilisation.",
-    source: "Leave planner · team work plan", who: "Senior QA (board owner)", when: "1st of month + on change",
+    lead: "Capacity, calculated: working days − absence = available; the workload of every record each person owns ÷ available = utilisation.",
+    source: "The registers, the Task planner and the Tier 1 logs — workload is calculated", who: "Senior QA (board owner)", when: "1st of month + when a team member or leave changes",
     lifecycle: [], kpi: 6,
     fields: [
-      f("member", "Team Member", "list", { list: "People", req: true, help: "One row per QA person (up to 14)" }),
-      f("role", "Role / Function", "text", { help: "Role on the team" }),
-      f("absence", "Absence Days", "num", { help: "Leave, sickness, external training this month" }),
-      f("planned", "Planned Workload (person-days)", "num", { help: "Person-days of planned work this month" }),
-      f("delayed", "Delayed Tasks (n)", "int", { help: "Tasks behind plan today" }),
+      f("member", "Team Member", "list", { list: "People", req: true, help: "One row per QA person. Workload counts every record where this name is the owner, inspector, trainer, releasing officer or task assignee" }),
+      f("role", "Position / Role", "list", { list: "Roles", help: "Position in the QA team — shown as the typical role of each activity in Setup" }),
+      f("absence", "Planned leave not yet logged (days)", "num", { help: "Leave, sickness or external training this month that is not in the Tier 1 daily log yet. Logged Leave / Training / Absent days are added automatically" }),
       f("comments", "Main Assignments / Comments", "long", { help: "What the person covers" }),
     ],
-    table: ["member", "role", "absence", "planned", "delayed", "comments"],
+    table: ["member", "role", "absence", "comments"],
+  },
+  tasks: {
+    no: "07·T", title: "Task Planner", icon: "☷", short: "Task planner",
+    lead: "Planned QA work that no register tracks — audits, validation, routine reviews. Assign each task to a team member from the activity catalogue; its effort flows into QA Load.",
+    source: "Team work plan · audit and validation schedules", who: "Senior QA (board owner)", when: "Weekly planning + on change",
+    lifecycle: ["Planned", "In Progress", "Done"], kpi: 6, idHint: "TSK-2610-01",
+    fields: [
+      f("id", "Task No.", "text", { req: true, help: "e.g. TSK-2610-01" }),
+      f("member", "Assigned To", "list", { list: "People", req: true, help: "Team member doing the work — must match the name in QA Load" }),
+      f("activity", "QA Activity", "activity", { req: true, help: "From the activity catalogue in Setup — sets the standard effort" }),
+      f("desc", "Task", "long", { help: "Start with a verb: ‘Review…’, ‘Audit…’" }),
+      f("link", "Linked Ref.", "text", { help: "CC-, CAPA-, DEV- or audit number, if any" }),
+      f("opened", "Start Date", "date", { req: true, help: "Effort is spread from start to due date and counted month by month" }),
+      f("due", "Due Date", "date", { help: "Committed completion date" }),
+      f("effort", "Effort (person-days)", "num", { help: "Leave blank to use the activity's standard effort" }),
+      f("status", "Status", "list", { list: "TaskStatus", req: true, help: "Planned · In Progress · Done · Cancelled (cancelled tasks carry no load)" }),
+      f("closed", "Completion Date", "date", { help: "Only when Done" }),
+      f("comments", "Comments", "long"),
+    ],
+    table: ["id", "member", "activity", "desc", "opened", "due", "status"],
   },
 };
 
 /** Order of the registers on the Tier 2 navigation. */
-export const T2_ORDER = ["dev", "capa", "cc", "insp", "rel", "doc", "load", "apqr", "trn", "esc"];
+export const T2_ORDER = ["dev", "capa", "cc", "insp", "rel", "doc", "load", "tasks", "apqr", "trn", "esc"];
 
 /** Tier 2 Daily Log (calendar) inputs. */
 export const T2_DAILY_FIELDS = [
@@ -376,7 +394,7 @@ export const T1_ORDER = ["dl", "br", "fn", "ac", "hd", "tr"];
 export const LOCKED_LISTS = new Set([
   "DevClass", "DevStatus", "CAPAStatus", "CCCat", "CCStatus", "YesNoTBD", "YesNo", "Severity", "InspStatus",
   "BRStatus", "DocStatus", "APQRStatus", "TrStatus", "EscStatus", "DayStatus", "ManualKPI",
-  "Att", "FnStatus", "AcStatus", "FnTypes", "Weekdays",
+  "Att", "FnStatus", "AcStatus", "FnTypes", "Weekdays", "TaskStatus",
 ]);
 
 /** Human names for the drop-down lists. */
@@ -390,7 +408,7 @@ export const LIST_LABELS = {
   EscStatus: "Escalation status", DayStatus: "Day status", ManualKPI: "Manual KPI status",
   People: "People & functions", Departments: "Departments", Products: "Products", Tier3: "Tier 3 escalation contacts",
   FnTypes: "Finding types", ErrCats: "Error categories", Shifts: "Shifts", Att: "Attendance", RecType: "Record type",
-  FnStatus: "Finding status", AcSource: "Action source", Priority: "Priority", AcStatus: "Action status", Owners: "Action owners",
+  FnStatus: "Finding status", Roles: "Positions / roles", TaskStatus: "Task status", AcSource: "Action source", Priority: "Priority", AcStatus: "Action status", Owners: "Action owners",
 };
 
 export const SKILL_LEVELS = [

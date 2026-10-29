@@ -35,7 +35,17 @@ const EXTRA = {
     ]),
     callout("ƒx Target release = Mfg completion + target (Setup) · ƒx Lead time = decision date (or as-of date) − Mfg completion · Overdue when the as-of date passes the target with no decision. Right First Time = no BMR correction requested."),
   ],
-  load: [{ type: "loadcalc" }],
+  load: [
+    flow([
+      { small: "ƒx", title: "Working days", text: "Counted from the calendar (weekend days in Setup)" },
+      { small: "ƒx + TYPE", title: "− Absence", text: "Leave / Training / Absent days in the Tier 1 log + planned leave you type" },
+      { small: "ƒx", title: "= Available days", text: "Capacity of the person this month" },
+      { small: "ƒx", title: "Planned workload", text: "Standard effort of every record the person owns, spread over its dates" },
+    ]),
+    callout("Nobody types the workload any more. A deviation, CAPA, change, finding follow-up, batch, document, APQR, training session, escalation, planner task or Tier 1 action assigned to a name adds its standard effort (Setup § 4) to that person. <b>Delayed tasks</b> = their open items past due. Open a member in QA Load to see the breakdown, record by record."),
+    { type: "loadcalc" },
+  ],
+  tasks: [callout("Use the Task planner for the work no register tracks: audits, validation runs, routine BMR review, document control. Pick the activity — its standard effort and typical role come from the catalogue — or type a specific effort for that task.")],
   trn: [callout("ƒx Completion % = participants trained ÷ participants planned. Status Overdue when the planned date has passed and the session is not Completed or Cancelled.")],
   esc: [callout("<b>Escalate when…</b> critical deviation or patient-safety impact · containment breach or HSE event · overdue > 5 working days without a plan · batch on hold > 1 week · QA load high for 2 weeks · unresolved after 2 Tier 2 meetings.", "warn")],
   capa: [callout("Life cycle: Open → In Progress → Effectiveness Check → Closed. Effectiveness Verified stays ‘Pending’ until the check is done.")],
@@ -411,7 +421,7 @@ const PRACTICE = [
     answer: "Register 05 · B2610-05 · product · Mfg 12-Oct · BMR 13-Oct · CoA 16-Oct · Released · decision 17-Oct · errors 1 · RFT No · releasing officer. ƒx lead time 5 d; ‘Released Late’ depends on the Setup target.",
     href: `#/t2/reg/rel?new=1&prefill=${enc({ id: "B2610-05", product: "ONC-T01 Tab 500 mg", mfg: "2026-10-12", bmr: "2026-10-13", coa: "2026-10-16", status: "Released", decision: "2026-10-17", errors: 1, rft: "No", officer: "Release Officer" })}` },
   { when: "Oct", text: "QA Officer 2 will be on leave three days this month.",
-    answer: "Register 07 · QA Officer 2 row → Absence Days = 3. ƒx Available Days and Utilisation recalculate; check the Load Status.", href: "#/t2/reg/load?id=QA%20Officer%202" },
+    answer: "Register 07 · QA Officer 2 row → Planned leave = 3 (until the days are logged as Leave in the Tier 1 daily log). ƒx Available Days and Utilisation recalculate; check the Load Status.", href: "#/t2/reg/load?id=QA%20Officer%202" },
   { when: "14 Oct", text: "The team decides CAPA is Critical today: a vendor delay needs Tier 3 support.",
     answer: "Daily Log 14-Oct → Override CAPA = Critical · Escalated to Tier 3 = Yes · reason in Remarks. Register 10 · ESC-26-xxx · 14-Oct-26 · CAPA · CAPA number · ‘Vendor delay blocks CAPA’ · ‘Purchasing decision on alternative vendor’ · Site Quality Head · owner · Open · response due date.",
     href: "#/t2/calendar?day=2026-10-14", href2: `#/t2/reg/esc?new=1&prefill=${enc({ opened: "2026-10-14", source: "CAPA", desc: "Vendor delay blocks CAPA", support: "Purchasing decision on alternative vendor", to: "Site Quality Head", owner: "QA Lead", status: "Open", due: "2026-10-21" })}` },
@@ -438,7 +448,7 @@ function columnsBlock(tier, reg) {
   const sc = (tier === "t1" ? T1_REGISTERS : T2_REGISTERS)[reg];
   const lists = store[tier].lists;
   const rows = sc.fields.map((f) => {
-    const src = f.type === "list" ? `Drop-down · ${(lists[f.list] || []).slice(0, 6).join(" · ")}${(lists[f.list] || []).length > 6 ? " …" : ""}` : f.type === "roster" ? "Drop-down · team roster" : f.type === "date" ? "Date" : ["int", "num"].includes(f.type) ? "Number" : f.type === "pct" ? "Percent" : "Text";
+    const src = f.type === "list" ? `Drop-down · ${(lists[f.list] || []).slice(0, 6).join(" · ")}${(lists[f.list] || []).length > 6 ? " …" : ""}` : f.type === "roster" ? "Drop-down · team roster" : f.type === "activity" ? "Drop-down · QA activity catalogue" : f.type === "date" ? "Date" : ["int", "num"].includes(f.type) ? "Number" : f.type === "pct" ? "Percent" : "Text";
     return `<tr><td><b>${esc(f.label)}</b>${f.req ? ' <span style="color:var(--r)">*</span>' : ""}</td><td>${esc(f.help || "")}</td><td class="muted" style="font-size:12px">${esc(src)}</td></tr>`;
   }).join("");
   const meta = sc.source ? `<div class="meta-row" style="margin:0"><span>Source <b>${esc(sc.source)}</b></span><span>Collected by <b>${esc(sc.who)}</b></span><span>When <b>${esc(sc.when)}</b></span>${sc.lifecycle?.length ? `<span class="lifecycle">${sc.lifecycle.map((x) => `<span>${esc(x)}</span>`).join("<i>→</i>")}</span>` : ""}</div>` : `<div class="meta-row" style="margin:0"><span>Collected by <b>${esc(sc.who)}</b></span><span>When <b>${esc(sc.when)}</b></span></div>`;

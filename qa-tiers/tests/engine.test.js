@@ -8,11 +8,32 @@ import * as E from "../js/engine.js";
 const close = (a, b) => assert.ok(Math.abs(a - b) < 1e-9, `${a} ≠ ${b}`);
 
 test("Tier 2 KPI actuals match the KPI Engine sheet", () => {
-  const { kpis, pulse } = E.t2Kpis(DEMO_T2);
-  const expected = [1, 0.857142857142857, 0, 0.875, 0.888888888888889, 0, 0.892561983471074, 0, 0.955357142857143];
-  kpis.forEach((k, i) => close(k.actual, expected[i]));
-  assert.deepEqual(kpis.map((k) => k.rag), ["A", "A", "G", "A", "A", "G", "A", "G", "G"]);
-  assert.equal(pulse.score, 0.75);
+  // QA load (index 6) is now calculated from the registers — tested below.
+  const { kpis } = E.t2Kpis(DEMO_T2);
+  const expected = [1, 0.857142857142857, 0, 0.875, 0.888888888888889, 0, null, 0, 0.955357142857143];
+  kpis.forEach((k, i) => expected[i] !== null && close(k.actual, expected[i]));
+  assert.deepEqual(kpis.map((k) => k.rag).filter((_, i) => i !== 6), ["A", "A", "G", "A", "A", "G", "G", "G"]);
+});
+
+test("QA load: workload, delays and absence come from the data", () => {
+  E.linkTier1(() => DEMO_T1);
+  const state = { ...DEMO_T2, activities: E.DEFAULT_ACTIVITIES, tasks: [
+    { id: "T1", member: "Validation Specialist", activity: "Cleaning validation", opened: "2026-09-01", due: "2026-09-30", status: "In Progress" },
+    { id: "T2", member: "Validation Specialist", activity: "Supplier audit", opened: "2026-09-21", due: "2026-09-25", status: "In Progress" },
+    { id: "T3", member: "Validation Specialist", activity: "Supplier audit", opened: "2026-09-01", due: "2026-09-10", effort: 9, status: "Cancelled" },
+  ] };
+  const comp = E.t2Computed(state);
+  const vs = comp.load[state.load.findIndex((r) => r.member === "Validation Specialist")];
+  close(vs.workload, 8);               // 5 d cleaning validation + 3 d audit; the cancelled task carries no load
+  assert.equal(vs.delayed, 1);         // the audit was due 25-Sep and is still open on 30-Sep
+  const o1 = comp.load[state.load.findIndex((r) => r.member === "QA Officer 1")];
+  assert.equal(o1.logged, 1);          // one Leave/Training/Absent day in the Tier 1 log
+  assert.equal(o1.absence, 3);         // + 2 days typed as planned leave
+  assert.ok(o1.items.some((x) => x.reg === "t1ac") && o1.items.some((x) => x.reg === "dev"));
+  // an item spread over two months only counts its September share
+  const apqr = o1.items.find((x) => x.reg === "apqr");
+  assert.ok(apqr.share > 0 && apqr.share < 1);
+  E.linkTier1(() => null);
 });
 
 test("Tier 2 Q-calendar matches the Daily Log display codes (6–30 Sep)", () => {
