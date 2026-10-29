@@ -179,7 +179,22 @@ export function initTooltips() {
   addEventListener("scroll", hide, true);
 }
 
+/** Offer a file: a panel with Copy and Download, since some hosts block direct downloads. */
 export function download(name, text, type = "text/plain") {
+  const { el, close } = modal(`<div class="row"><h2>${esc(name)}</h2><span class="spacer"></span><button class="btn ghost" data-x aria-label="Close">✕</button></div>
+    <p class="muted" style="margin:0">Copy the content and paste it into a file, or download it where your browser allows.</p>
+    <textarea readonly id="export-text" class="input" style="width:100%;height:260px;font:12px var(--font-mono)">${esc(text)}</textarea>
+    <div class="actions"><button class="btn" data-dl>Download</button><button class="btn primary" data-copy>Copy</button></div>`);
+  const ta = el.querySelector("textarea");
+  el.querySelector("[data-x]").onclick = close;
+  el.querySelector("[data-copy]").onclick = () => {
+    navigator.clipboard?.writeText(text).then(() => toast("Copied"), () => { ta.select(); toast("Press Ctrl + C to copy"); })
+      ?? (ta.select(), toast("Press Ctrl + C to copy"));
+  };
+  el.querySelector("[data-dl]").onclick = () => saveFile(name, text, type);
+}
+
+function saveFile(name, text, type) {
   const a = document.createElement("a");
   a.href = URL.createObjectURL(new Blob([text], { type }));
   a.download = name;

@@ -177,7 +177,7 @@ export function renderSetupT2(root) {
       <div class="card card-pad"><div class="card-head"><h2>3 · KPI targets & thresholds</h2></div>${kpiTable("t2")}</div>
       <div class="card card-pad"><div class="card-head"><h2>Month-end roll-over <span class="sub">last working day of ${fmtMonth(st.month)}</span></h2></div>
         <div class="lcards">
-          <div class="lcard"><span class="n">1</span><b>Print the board</b><span>Dashboard → Print A3 → save as PDF for the Tier 3 pack.</span><a class="btn sm" href="#/t2/board" style="justify-self:start">Open dashboard</a></div>
+          <div class="lcard"><span class="n">1</span><b>Capture the board</b><span>Save the dashboard as PDF (browser print, A3 landscape) for the Tier 3 pack.</span><a class="btn sm" href="#/t2/board" style="justify-self:start">Open dashboard</a></div>
           <div class="lcard"><span class="n">2</span><b>Freeze the KPIs</b><span>Copy every Live value into the ${E.MONTHS[m]} column of KPI Trend.</span><button class="btn sm" data-freeze style="justify-self:start">❄ Freeze ${E.MONTHS[m]}</button></div>
           <div class="lcard"><span class="n">3</span><b>Roll the month</b><span>Set the reporting month to ${fmtMonth(next)}. Update the remarks.</span><button class="btn sm" data-roll style="justify-self:start">→ ${fmtMonth(next)}</button></div>
           <div class="lcard"><span class="n">4</span><b>Clear the Daily Log</b><span>Only the cream cells of the new month: overrides, priorities, remarks, attendees.</span><button class="btn sm" data-clearlog style="justify-self:start">Clear ${fmtMonth(st.month)} log</button></div>

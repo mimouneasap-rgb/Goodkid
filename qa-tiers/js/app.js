@@ -213,6 +213,6 @@ document.addEventListener("keydown", (e) => {
 });
 route();
 
-if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
+if ("serviceWorker" in navigator && location.protocol.startsWith("http") && window.top === window) {
   addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {}));
 }

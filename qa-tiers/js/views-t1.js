@@ -89,7 +89,6 @@ export function renderBoard(root) {
       <div style="display:grid;gap:10px;justify-items:end">
         <div class="ladder"><div class="on">Tier 1<small>you are here</small></div><div>Tier 2<small>${esc(store.t2.setup.meetingTime)}</small></div><div>Tier 3<small>site</small></div></div>
         <div class="chip" style="max-width:360px">⏱ Huddle <b>${esc(st.huddleTime)}</b> · ${esc(st.location)}</div>
-        <div class="row"><button class="btn" data-print>Print board</button></div>
       </div>
     </div>
   </section>
@@ -162,7 +161,6 @@ export function renderBoard(root) {
   const rerender = () => renderBoard(root);
   $("[data-sel]", root).onchange = (e) => { if (e.target.value) { store.patch("t1", ["setup", "selDate"], e.target.value, "Selected date"); rerender(); } };
   $("[data-officer]", root).onchange = (e) => { view.officer = e.target.value; rerender(); };
-  $("[data-print]", root).onclick = () => print();
   $$("[data-date]", root).forEach((b) => b.onclick = () => { store.patch("t1", ["setup", "selDate"], b.dataset.date, "Selected date"); rerender(); });
   $$("[data-pick]", root).forEach((a) => a.onclick = (e) => { e.preventDefault(); view.officer = view.officer === a.dataset.pick ? "All team" : a.dataset.pick; rerender(); });
   $("[data-newaction]", root).onclick = () => openEditor({ tier: "t1", reg: "ac", prefill: { id: E.nextId(s.ac), opened: st.selDate, status: "Open", source: "Huddle", esc: "No", officer: view.officer !== "All team" ? view.officer : undefined }, onSaved: rerender });

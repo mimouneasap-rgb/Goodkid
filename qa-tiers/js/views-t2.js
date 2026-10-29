@@ -94,7 +94,7 @@ export function renderBoard(root) {
       </div>
       <div style="display:grid;gap:10px;justify-items:end">
         <div class="ladder"><div>Tier 1<small>08:30 huddle</small></div><div class="on">Tier 2<small>you are here</small></div><div>Tier 3<small>site management</small></div></div>
-        <div class="row"><button class="btn primary" data-standup>▶ Run the 15-min stand-up</button><button class="btn" data-print>Print A3</button></div>
+        <div class="row"><button class="btn primary" data-standup>▶ Run the 15-min stand-up</button></div>
       </div>
     </div>
   </section>
@@ -162,7 +162,6 @@ export function renderBoard(root) {
   </div>`;
 
   $("[data-asof]", root).onchange = (e) => { if (e.target.value) { store.patch("t2", ["setup", "statusDate"], e.target.value, "Status date"); renderBoard(root); } };
-  $("[data-print]", root).onclick = () => print();
   $("[data-standup]", root).onclick = () => standup(() => renderBoard(root));
   root.addEventListener("click", (e) => {
     const b = e.target.closest("[data-day]");
