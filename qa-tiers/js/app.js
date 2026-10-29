@@ -72,7 +72,7 @@ function renderNav() {
 }
 
 function markNav() {
-  const path = location.hash.replace(/^#\/?/, "").split("?")[0] || "home";
+  const path = current.path;
   $$("[data-nav]").forEach((a) => {
     const n = a.dataset.nav;
     const on = path === n || (n === "learn" && path.startsWith("learn"));
@@ -152,11 +152,31 @@ function renderHome(root) {
 }
 
 /* ── Router ────────────────────────────────────────────── */
+// In-page router. Links keep the readable form "#/t2/reg/dev?id=…", but the
+// address bar only ever shows a plain name ("#t2-reg-dev"): hosts such as the
+// Artifact viewer pass plain #names only, so a click never relies on the
+// browser following "#/…" links. Query parameters live in memory.
+let current = { path: "home", query: {} };
+
+function fromHash() {
+  const raw = decodeURIComponent(location.hash.slice(1));
+  if (raw.startsWith("/")) {
+    const [p, qs = ""] = raw.slice(1).split("?");
+    return { path: p || "home", query: Object.fromEntries(new URLSearchParams(qs)) };
+  }
+  return { path: raw.replace(/-/g, "/") || "home", query: {} };
+}
+
+function navigate(href) {
+  const [p, qs = ""] = href.replace(/^#\/?/, "").split("?");
+  current = { path: p || "home", query: Object.fromEntries(new URLSearchParams(qs)) };
+  const name = `#${current.path.replace(/\//g, "-")}`;
+  try { if (location.hash !== name) history.pushState(null, "", name); } catch { /* history may be blocked */ }
+  route();
+}
+
 function parse() {
-  const raw = location.hash.replace(/^#\/?/, "");
-  const [path, qs = ""] = raw.split("?");
-  const query = Object.fromEntries(new URLSearchParams(qs));
-  return { parts: (path || "home").split("/"), query };
+  return { parts: current.path.split("/"), query: current.query };
 }
 
 function route() {
@@ -177,7 +197,7 @@ function route() {
   else if (a === "t1" && b === "setup") { renderSetupT1(view); titles.push("Tier 1 setup"); }
   else if (a === "t1" && b === "reg" && T1_REGISTERS[c]) { renderRegister(view, { tier: "t1", reg: c, query }); titles.push(T1_REGISTERS[c].title); }
   else if (a === "t2" && b === "board") { T2.renderBoard(view); titles.push("Tier 2 dashboard"); }
-  else if (a === "t2" && b === "calendar") { T2.renderCalendar(view); titles.push("Daily Log"); if (query.day) T2.dayEditor(query.day, () => route()); }
+  else if (a === "t2" && b === "calendar") { T2.renderCalendar(view); titles.push("Daily Log"); if (query.day) T2.dayEditor(query.day, () => { current.query = {}; route(); }); }
   else if (a === "t2" && b === "trend") { T2.renderTrend(view); titles.push("KPI Trend"); }
   else if (a === "t2" && b === "analytics") { T2.renderAnalytics(view); titles.push("Analytics"); }
   else if (a === "t2" && b === "setup") { renderSetupT2(view); titles.push("Tier 2 setup"); }
@@ -197,7 +217,20 @@ document.body.innerHTML = `
   <div class="shell"><aside class="rail" aria-label="Navigation"></aside><main class="main" id="main"></main></div>`;
 renderNav();
 initTooltips();
-addEventListener("hashchange", route);
+current = fromHash();
+const onHash = () => {
+  const next = fromHash();
+  if (next.path === current.path && !Object.keys(next.query).length) return;
+  current = next; route();
+};
+addEventListener("hashchange", onHash);
+addEventListener("popstate", onHash);
+document.addEventListener("click", (e) => {
+  const a = e.target.closest('a[href^="#/"]');
+  if (!a || e.ctrlKey || e.metaKey || e.shiftKey) return;
+  e.preventDefault();
+  navigate(a.getAttribute("href"));
+}, true);
 store.onChange(() => renderNav());
 document.addEventListener("click", (e) => {
   if (e.target.closest("[data-menu]")) document.body.classList.add("nav-open");
