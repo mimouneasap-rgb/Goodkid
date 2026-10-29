@@ -1,0 +1,20 @@
+{
+  "name": "QA Tier Boards",
+  "short_name": "Tier Boards",
+  "description": "QA Tier 1 huddle board and Tier 2 daily management board, with the data-entry masterclass.",
+  "id": "./",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#0f2340",
+  "theme_color": "#0f2340",
+  "categories": ["business", "productivity", "medical"],
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ],
+  "shortcuts": [
+    { "name": "Tier 1 huddle board", "url": "./#/t1/board" },
+    { "name": "Tier 2 dashboard", "url": "./#/t2/board" },
+    { "name": "Masterclass", "url": "./#/learn" }
+  ]
+}

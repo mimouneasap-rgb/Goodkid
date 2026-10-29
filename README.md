@@ -42,6 +42,19 @@ The app is a Progressive Web App. Once hosted, you can install it from the brows
 
 Your risks are stored on the device where you enter them. Use **Export CSV** to back them up or move them to another device.
 
+## QA Tier Boards (`qa-tiers/`)
+
+A second app in this repository: the **QA Tier 1 huddle board** and the **QA Tier 2 daily management board**, built from the Excel workbooks and the data-entry masterclass deck. It is pre-loaded with the El Kendi Oncology OSD demo data for September 2026. Once Pages is on, it lives at **https://mimouneasap-rgb.github.io/Goodkid/qa-tiers/** (locally: `npm start`, then http://localhost:8080/qa-tiers/).
+
+- **Tier 1 huddle board.** The SQDCP letter calendars, today's tiles, 20 KPIs (4 per pillar), team performance, open actions, today's huddle and the skills matrix. A date and officer selector switches the whole board.
+- **Tier 2 dashboard.** Quality Pulse, 9 KPIs with trend arrows and sparklines, the Q-calendar, top 3 priorities, escalations to Tier 3 *and the open escalations coming up from Tier 1*, the top 5 urgent items for registers 01–04, and monthly summary cards. A guided **15-minute stand-up mode** with a timer.
+- **Every register is editable.** That covers 10 Tier 2 registers plus the Daily Log, and 6 Tier 1 logs. Forms use cream input fields with column-by-column guidance, and drop-down lists for every list field (areas, statuses, owners, products…). Values can be added from the form or in Setup. Status lists are locked because the KPIs count them by name. The ƒx columns (live status, age, days to due, on time, data check) recalculate as you type.
+- **Same numbers as Excel.** `qa-tiers/js/engine.js` mirrors the workbook formulas. `qa-tiers/tests/engine.test.js` checks every Tier 1 and Tier 2 KPI, the Q-calendar codes and the SQDCP day counts against the values Excel calculated.
+- **KPI Trend** (12-month history, freeze the month), **Analytics** (8 charts), **Setup** (period, weekend, thresholds, roster, KPI targets, drop-down lists, month-end roll-over), **Change history**, and JSON backup/import.
+- **Masterclass.** 8 modules taken from the training deck and the Tier 1 guide. It includes interactive RAG / Quality Pulse / QA-load calculators, the 7 practice events (each opens the right form, pre-filled), a 12-question quiz and progress tracking.
+
+Data is stored in the browser (`localStorage`). The boards mirror the eQMS; they don't replace it.
+
 ## Running locally
 
 Requires Node.js 18 or later. There are no dependencies to install.
