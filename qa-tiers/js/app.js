@@ -110,7 +110,7 @@ function renderHome(root) {
         <p>The Tier 1 huddle board and the Tier 2 daily management board, connected: officers log the floor, the boards build themselves, and what cannot be solved climbs a tier the same day.</p>
         <div class="hero-meta"><span class="chip">Tier 1 date <b>${fmtLong(t1.setup.selDate)}</b></span><span class="chip">Tier 2 month <b>${fmtMonth(t2.setup.month)}</b> · as of <b>${fmtLong(t2.setup.statusDate)}</b></span></div>
       </div>
-      <a class="card card-pad" href="#/learn" style="text-decoration:none;color:inherit;display:grid;gap:8px;min-width:240px">
+      <a class="card card-pad" href="#/learn" style="text-decoration:none;color:var(--ink);display:grid;gap:8px;min-width:240px">
         <span class="eyebrow">Masterclass</span><b style="font:600 18px var(--font-display)">Data entry, step by step</b>
         <div class="progress"><i style="width:${lp.pct * 100}%"></i></div><span class="muted" style="font-size:12.5px">${lp.done} of ${lp.total} modules completed ›</span></a></div>
     </section>
@@ -211,7 +211,12 @@ function route() {
 }
 
 /* ── Boot ──────────────────────────────────────────────── */
-document.body.innerHTML = `
+// Mount next to whatever the host put in <body> (a publish step may place the
+// page's <style> there), never over it.
+const mount = document.createElement("div");
+mount.id = "app";
+document.body.append(mount);
+mount.innerHTML = `
   <div class="topbar"><button aria-label="Open menu" data-menu>☰</button><b>QA Tier Boards</b></div>
   <div class="scrim" data-scrim></div>
   <div class="shell"><aside class="rail" aria-label="Navigation"></aside><main class="main" id="main"></main></div>`;
