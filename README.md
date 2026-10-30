@@ -54,6 +54,8 @@ A second app in this repository: the **QA Tier 1 huddle board** and the **QA Tie
 - **KPI Trend** (12-month history, freeze the month), **Analytics** (8 charts), **Setup** (period, weekend, thresholds, roster, KPI targets, drop-down lists, month-end roll-over), **Change history**, and JSON backup/import.
 - **Masterclass.** 8 modules taken from the training deck and the Tier 1 guide. It includes interactive RAG / Quality Pulse / QA-load calculators, the 7 practice events (each opens the right form, pre-filled), a 12-question quiz and progress tracking.
 
+**Site data.** The repository holds no real site data. `qa-tiers/js/real-data.js` is an empty stand-in, so a copy built from the repository opens with the September 2026 demo. The published board ships a version of that file generated outside the repository from the site's exports (personnel list, shop-floor workbooks, APQR tracker, Scigeniq quality events, CAPA, change controls and actions). With it, Setup also offers "Load the El Kendi data". KPIs whose source data is missing read "No data" instead of a false result.
+
 **Team sharing.** When the app runs as the published Artifact, both boards live in its shared database (`qa-tiers/js/sync.js`). Each record is its own document, so two people editing different records never overwrite each other, and every open copy updates live. Change history records who changed what. The first person to open it chooses what the team starts from. Anywhere else (a local copy, a signed-out visitor) the app keeps its data in the browser (`localStorage`). The boards mirror the eQMS; they don't replace it.
 
 ## Running locally

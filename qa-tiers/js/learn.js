@@ -507,7 +507,8 @@ function flaggedBlock() {
 }
 
 function practiceBlock() {
-  return `<div class="callout">Set up the demo first: <b>Reporting month = 01-Oct-2026 · Data as of = 17-Oct-2026</b>. <button class="btn sm primary" data-practice-setup>Set it up for me</button> <span class="muted">(Reload the demo in Setup afterwards to get September back.)</span></div>
+  const shared = !!store.sync, real = store.t2.dataset !== "demo-2026-09";
+  return `${real ? `<div class="callout warn">These events are written for the <b>September 2026 demo</b> (DEV-26-052, QA Officer 2…). ${shared ? "This board is shared with your team and holds real data: <b>do not practise on it</b> — open the app from a copy that is not shared, then Setup › Load the September 2026 demo." : "Load it first: Setup › Load the September 2026 demo, and Load the El Kendi data again when you are done."}</div>` : ""}<div class="callout">Set up the demo first: <b>Reporting month = 01-Oct-2026 · Data as of = 17-Oct-2026</b>. <button class="btn sm primary" data-practice-setup ${shared && real ? "disabled" : ""}>Set it up for me</button> <span class="muted">(Reload the demo in Setup afterwards to get September back.)</span></div>
     <div class="stack" style="gap:10px">${PRACTICE.map((p, i) => `<div class="card practice"><div class="when">${esc(p.when)}</div><div><b>Event ${i + 1}</b><p style="margin:2px 0 0">${esc(p.text)}</p><div class="answer" hidden data-ans="${i}"><b>Answer key · </b>${esc(p.answer)}</div></div>
       <div class="row" style="justify-content:flex-end"><a class="btn sm primary" href="${p.href}">Do it ›</a>${p.href2 ? `<a class="btn sm" href="${p.href2}">Escalation ›</a>` : ""}<button class="btn sm" data-show="${i}">Answer</button></div></div>`).join("")}</div>`;
 }
@@ -555,7 +556,7 @@ export function renderLearnHome(root) {
     <div class="modules">${MODULES.map((m) => `<a class="card module ${store.prefs.learned?.[m.id] ? "done" : ""}" href="#/learn/${m.id}">
       <span class="m-no">${store.prefs.learned?.[m.id] ? "✓" : m.no}</span><h3>${esc(m.title)}</h3><p>${esc(m.lead)}</p>
       <div class="m-foot"><span>${m.lessons.length} lessons</span><span>${m.min} min</span></div></a>`).join("")}</div>
-    <div class="callout" style="margin-top:16px">Everything you see is the El Kendi September 2026 demo data. Practise freely — <b>Setup › Reload the September demo</b> puts it back at any time.</div>`;
+    <div class="callout" style="margin-top:16px">${store.t2.dataset === "demo-2026-09" ? "The boards hold the September 2026 demo data — practise freely." : "The boards hold real El Kendi data. The practice events in module 8 are written for the September 2026 demo: do them on a copy of the app that is not shared with the team."}</div>`;
 }
 
 export function renderModule(root, id) {

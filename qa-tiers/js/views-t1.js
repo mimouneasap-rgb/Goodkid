@@ -175,13 +175,13 @@ export function renderSkills(root) {
   // keep the matrix in step with the roster
   for (const o of s.roster) if (!s.skills.some((k) => k.officer === o.name)) s.skills.push({ officer: o.name, levels: names.map(() => 0), assessed: "" });
   const rows = s.skills.filter((k) => s.roster.some((o) => o.name === k.officer));
-  const qualified = names.map((_, j) => rows.filter((r) => +r.levels[j] >= 3).length);
+  const qualified = names.map((_, j) => rows.filter((r) => r.levels[j] != null && +r.levels[j] >= 3).length);
   root.innerHTML = `
     <div class="page-head"><div><div class="eyebrow">Tier 1 · People</div><h1>Skills matrix · who can do what on the line</h1>
       <p>Level 0 not trained · 1 in training · 2 qualified under supervision · 3 qualified · 4 qualified trainer. Coverage (level ≥ 3) feeds the People pillar. A red count means fewer than two qualified people — a single point of failure: plan cross-training at the next huddle.</p></div></div>
     <div class="table-wrap"><table class="data"><thead><tr><th>Officer</th>${names.map((n) => `<th style="white-space:normal;min-width:84px">${esc(n)}</th>`).join("")}<th class="fx num">ƒx Coverage ≥ 3</th><th class="fx num">ƒx Trainers</th><th>Last assessed</th></tr></thead>
-      <tbody>${rows.map((r) => `<tr style="cursor:default"><td><b>${esc(r.officer)}</b></td>${r.levels.map((v, j) => `<td><select class="skill-sel lv${v ?? 0}" data-o="${esc(r.officer)}" data-j="${j}" aria-label="${esc(r.officer)} — ${esc(names[j])}">${SKILL_LEVELS.map((l) => `<option value="${l.v}" ${+v === l.v ? "selected" : ""} title="${esc(l.label)}">${l.v}</option>`).join("")}</select></td>`).join("")}
-        <td class="fx num"><b>${pct(E.skillCoverage(r.levels))}</b></td><td class="fx num">${r.levels.filter((v) => +v === 4).length}</td>
+      <tbody>${rows.map((r) => `<tr style="cursor:default"><td><b>${esc(r.officer)}</b></td>${r.levels.map((v, j) => `<td><select class="skill-sel ${v == null ? "" : `lv${v}`}" data-o="${esc(r.officer)}" data-j="${j}" aria-label="${esc(r.officer)} — ${esc(names[j])}"><option value="" ${v == null ? "selected" : ""} title="Not assessed yet">—</option>${SKILL_LEVELS.map((l) => `<option value="${l.v}" ${v != null && +v === l.v ? "selected" : ""} title="${esc(l.label)}">${l.v}</option>`).join("")}</select></td>`).join("")}
+        <td class="fx num"><b>${pct(E.skillCoverage(r.levels))}</b></td><td class="fx num">${r.levels.filter((v) => v != null && +v === 4).length}</td>
         <td><input type="date" class="cell-in" data-assessed="${esc(r.officer)}" value="${esc(r.assessed || "")}"></td></tr>`).join("")}
         <tr style="cursor:default"><td class="fx"><b>ƒx People qualified (≥ 3)</b></td>${qualified.map((q) => `<td class="fx num"><span class="pill ${q < 2 ? "R" : "G"}">${q}</span></td>`).join("")}<td class="fx num"><b>${pct(E.skillCoverage(rows.flatMap((r) => r.levels)))}</b></td><td class="fx"></td><td class="fx"></td></tr>
       </tbody></table></div>
@@ -191,8 +191,8 @@ export function renderSkills(root) {
     const rec = sel ? s.skills.find((k) => k.officer === sel.dataset.o) : null;
     if (rec) {
       const j = +sel.dataset.j, old = rec.levels[j];
-      rec.levels[j] = +sel.value;
-      store.log("t1", { reg: "skills", ref: rec.officer, action: "edit", changes: [{ field: names[j], from: old, to: +sel.value }] });
+      rec.levels[j] = sel.value === "" ? null : +sel.value;
+      store.log("t1", { reg: "skills", ref: rec.officer, action: "edit", changes: [{ field: names[j], from: old ?? "", to: sel.value }] });
       store.save("t1"); renderSkills(root); toast(`${rec.officer} · ${names[j]} → level ${sel.value}`);
       return;
     }

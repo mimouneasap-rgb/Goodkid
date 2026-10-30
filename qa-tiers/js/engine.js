@@ -69,14 +69,15 @@ export function nextId(records, key = "id", fallback = "NEW-001") {
 
 /** Life-cycle columns of the Tier 2 registers that share the generic formulas. */
 export const T2_FLOW = {
-  dev: { done: ["Closed"] },
-  capa: { done: ["Closed"] },
-  cc: { done: ["Implemented", "Closed", "Rejected"] },
+  dev: { done: ["Closed", "Canceled"] },
+  capa: { done: ["Closed", "Canceled"] },
+  cc: { done: ["Implemented", "Closed", "Rejected", "Canceled"] },
   insp: { done: ["Closed"] },
   doc: { done: ["Closed"] },
   apqr: { done: ["Closed"] },
   esc: { done: ["Resolved"] },
   tasks: { done: ["Done", "Cancelled"] },
+  act: { done: ["Done", "Cancelled"] },
 };
 
 /** ƒx columns of a generic Tier 2 register row (Live Status, Age, Days to Due, Closed On Time, Data Check). */
@@ -144,6 +145,7 @@ export const DEFAULT_ACTIVITIES = [
   { name: "Training session delivery", reg: "trn", effort: 1, role: "Senior QA Officer — board owner" },
   { name: "Tier 3 escalation follow-up", reg: "esc", effort: 0.5, role: "Senior QA Officer — board owner" },
   { name: "Tier 1 action", reg: "t1ac", effort: 0.25, role: "QA Officer — oncology line" },
+  { name: "eQMS action (QE / CAPA / CC)", reg: "act", effort: 0.5, role: "QA Officer — oncology line" },
   { name: "Batch record review (routine)", reg: "task", effort: 1, role: "QA Batch Release" },
   { name: "Gemba walks & line support (routine)", reg: "task", effort: 1, role: "QA Officer — oncology line" },
   { name: "Internal audit / self-inspection", reg: "task", effort: 4, role: "Senior QA Officer — board owner" },
@@ -155,12 +157,14 @@ export const DEFAULT_ACTIVITIES = [
   { name: "eQMS administration", reg: "task", effort: 1, role: "Senior QA Officer — board owner" },
   { name: "Management review / KPI reporting", reg: "task", effort: 2, role: "Senior QA Officer — board owner" },
   { name: "Document control & issuance (routine)", reg: "task", effort: 1, role: "QA Documentation" },
+  { name: "APQR data collection (QA annex)", reg: "task", effort: 0.5, role: "QA Senior Officer" },
+  { name: "APQR approval signature", reg: "task", effort: 0.1, role: "QA Manager" },
   { name: "Other planned QA work", reg: "task", effort: 1, role: "" },
 ];
 
 export const LOAD_SOURCES = {
   dev: "Deviations", capa: "CAPA", cc: "Change control", insp: "Inspections", rel: "Batch release", doc: "Documentation",
-  apqr: "APQR", trn: "Training", esc: "Escalations", tasks: "Task planner", t1ac: "Tier 1 actions",
+  apqr: "APQR", trn: "Training", esc: "Escalations", tasks: "Task planner", t1ac: "Tier 1 actions", act: "eQMS actions",
 };
 
 /** Who does the QA work on a record, and over which dates. */
@@ -170,6 +174,7 @@ const LOAD_MAP = {
   rel: { who: "officer", start: (r) => r.bmr || r.mfg, end: (r) => r.decision, due: (r, s) => (has(r.mfg) ? addDays(r.mfg, num(s.brTarget)) : ""), done: ["Released", "Rejected"] },
   trn: { who: "trainer", start: (r) => r.date, end: (r) => r.date, due: (r) => r.date, done: ["Completed"], skip: ["Cancelled"] },
   tasks: { who: "member", done: ["Done"], skip: ["Cancelled"] },
+  act: { who: "owner", done: ["Done"], skip: ["Cancelled"] },
   t1ac: { who: "officer", done: ["Done"], skip: ["Cancelled"] },
 };
 
@@ -239,6 +244,17 @@ export function linkTier1(getter) { tier1Source = getter; }
 export function t2Computed(state) {
   const s = state.setup, out = {};
   for (const reg of Object.keys(T2_FLOW)) out[reg] = (state[reg] || []).map((r) => t2Row(reg, r, s.statusDate));
+  // linked eQMS actions of every quality event, CAPA and change control
+  const links = new Map();
+  (state.act || []).forEach((a, i) => {
+    if (!a.parent) return;
+    const l = links.get(a.parent) || { total: 0, open: 0, overdue: 0 };
+    l.total++;
+    if (out.act[i].open) l.open++;
+    if (out.act[i].live === "Overdue") l.overdue++;
+    links.set(a.parent, l);
+  });
+  for (const reg of ["dev", "capa", "cc"]) out[reg].forEach((c, i) => { c.actions = links.get(state[reg][i].id) || null; });
   out.rel = state.rel.map((r) => t2Release(r, s));
   out.trn = state.trn.map((r) => t2Training(r, s));
   const t1 = tier1Source();
@@ -272,6 +288,8 @@ export function t2Kpis(state, comp = t2Computed(state)) {
     overdue("apqr"),
     ratio(sum(trnRows, (r) => r.trained), sum(trnRows, (r) => r.planned)),
   ];
+  // a count over an empty register is "no data" until the first record is entered
+  [["dev", 0], ["cc", 2], ["doc", 5], ["apqr", 7]].forEach(([reg, i]) => { if (!state[reg].length) actuals[i] = ""; });
   const m = +s.month.slice(5, 7);
   const kpis = state.kpis.map((k, i) => {
     const actual = actuals[i];
@@ -394,18 +412,21 @@ export function t1DailyCheck(r, all) {
   return "OK";
 }
 
+/** A record marked Completed whose closing date was not recorded: closed, but flagged. */
+const closedNoDate = (r) => !has(r.done) && r.status === "Completed";
+
 export function t1Review(r, setup, sel) {
-  const lead = has(r.recv) ? diffDays(has(r.done) ? r.done : sel, r.recv) : "";
+  const lead = has(r.recv) && !closedNoDate(r) ? diffDays(has(r.done) ? r.done : sel, r.recv) : "";
   const within = has(r.done) && has(r.recv) ? (diffDays(r.done, r.recv) <= num(setup.brTarget) ? "Yes" : "No") : "";
   const rft = has(r.done) ? (num(r.errors) === 0 ? "Yes" : "No") : "";
-  const live = !has(r.id) ? "" : has(r.done) ? "Completed" : has(r.recv) && diffDays(sel, r.recv) > num(setup.brTarget) ? "Overdue" : r.status || "Pending";
+  const live = !has(r.id) ? "" : has(r.done) || closedNoDate(r) ? "Completed" : has(r.recv) && diffDays(sel, r.recv) > num(setup.brTarget) ? "Overdue" : r.status || "Pending";
   let check = "OK";
   if (!has(r.officer)) check = "Reviewer missing";
   else if (has(r.done) && !has(r.errors)) check = "Error count missing";
   else if (has(r.done) && r.status !== "Completed" && r.status !== "Returned") check = "Date entered, status open";
   else if (r.status === "Completed" && !has(r.done)) check = "Completion date missing";
   else if (has(r.done) && r.done < r.recv) check = "Completed before received";
-  return { lead, within, rft, live, check, open: !has(r.done) };
+  return { lead, within, rft, live, check, open: !has(r.done) && !closedNoDate(r) };
 }
 
 export function t1Finding(r, sel) {
@@ -514,6 +535,15 @@ export function t1Kpis(ctx) {
     ratio(sum(dlM, (r) => t1Activities(r)), present),
     skillCoverage(allLevels),
   ];
+  // activities the daily log does not track at all this month read as "no data", not as zero
+  const untracked = (f) => !dlM.some((r) => has(r[f]));
+  if (untracked("nm")) actuals[1] = "";
+  if (untracked("cont")) actuals[2] = "";
+  if (untracked("logb")) actuals[15] = "";
+  if (!brM.some((r) => has(r.errors))) { actuals[5] = ""; actuals[6] = ""; }
+  // a count over an empty register is "no data" until the first record is entered
+  if (!state.fn.length) { actuals[3] = ""; actuals[7] = ""; }
+  if (!state.ac.length) actuals[9] = "";
   const kpis = state.kpis.map((k, i) => ({ ...k, actual: actuals[i], rag: rag(actuals[i], k.better, k.target, k.amber), targetText: targetText(k) }));
   return { kpis, health: pulse(kpis.map((k) => k.rag)) };
 }
@@ -528,7 +558,7 @@ export function t1DayAuto(ctx, date) {
   const S = sum(day, (r) => r.inc) + hse("High") > 0 ? 3 : sum(day, (r) => r.nm) + hse("Medium") > 0 ? 2 : 1;
   const Q = sum(day, (r) => r.lcf) + other("High") > 0 ? 3 : count(br, (r) => r.done === date && num(r.errors) > 0) + other("Medium") > 0 ? 2 : 1;
   const late = count(ac, (r) => has(r.due) && r.due < date && r.status !== "Cancelled" && openOn(r, date, "opened", "closed"))
-    + count(br, (r) => has(r.recv) && r.recv < addDays(date, -num(setup.brTarget)) && (!has(r.done) || r.done > date));
+    + count(br, (r) => has(r.recv) && r.recv < addDays(date, -num(setup.brTarget)) && (!has(r.done) ? !closedNoDate(r) : r.done > date));
   const dueToday = count(ac, (r) => r.due === date && r.status !== "Cancelled" && (!has(r.closed) || r.closed > date));
   const D = late > 0 ? 3 : dueToday > 0 ? 2 : 1;
   const missed = Math.max(0, sum(day, (r) => r.gp) - sum(day, (r) => r.gd)) + Math.max(0, sum(day, (r) => r.atp) - sum(day, (r) => r.atd));
@@ -566,7 +596,7 @@ export function t1PillarCounts(days) {
 export function t1Today(ctx) {
   const { setup, sel, dl, br, fn, ac, officer, state } = ctx;
   const day = dl.filter((r) => r.date === sel);
-  const backlog = br.filter((r) => has(r.recv) && r.recv <= sel && (!has(r.done) || r.done > sel));
+  const backlog = br.filter((r) => has(r.recv) && r.recv <= sel && (!has(r.done) ? !closedNoDate(r) : r.done > sel));
   return {
     present: count(day, PRESENT),
     roster: officer === "All team" ? state.roster.length : 1,

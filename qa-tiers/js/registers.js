@@ -16,6 +16,8 @@ export const schemaOf = (tier, reg) => (tier === "t1" ? T1_REGISTERS : T2_REGIST
 const daysCell = (v) => (v === "" ? "" : `<span style="color:${v < 0 ? "var(--r)" : v <= 1 ? "var(--a-ink)" : "inherit"};font-weight:600">${v}</span>`);
 const checkCell = (v) => (!v ? "" : v === "OK" ? `<span class="pill G">OK</span>` : `<span class="pill R">⚠ ${esc(v)}</span>`);
 
+const actionsCell = (c) => (!c.actions ? "" : `${c.actions.open ? `<b>${c.actions.open}</b> open` : "all done"}${c.actions.overdue ? ` · <b style="color:var(--r)">${c.actions.overdue} overdue</b>` : ""} <span class="muted">/ ${c.actions.total}</span>`);
+
 const FX = {
   generic: [
     { key: "live", label: "Live Status", cell: (c) => pill(c.live) },
@@ -79,6 +81,7 @@ FX.ac = FX.fn;
 FX.apqr = [...FX.generic.slice(0, 1), { key: "effPct", label: "Effective %", num: true, cell: (c) => pct(c.effPct) }, ...FX.generic.slice(1)];
 
 function fxSpec(tier, reg) {
+  if (tier === "t2" && ["dev", "capa", "cc"].includes(reg)) return [...FX.generic.slice(0, 3), { key: "actions", label: "Actions", cell: actionsCell }, ...FX.generic.slice(3)];
   if (tier === "t2") return reg === "rel" ? FX.rel : reg === "trn" ? FX.trn2 : reg === "load" ? FX.load : reg === "tasks" ? FX.tasks : reg === "apqr" ? FX.apqr : FX.generic;
   return reg === "tr" ? FX.tr1 : FX[reg];
 }
@@ -103,7 +106,9 @@ function computeOne(tier, reg, rec, index) {
       const c = E.t2Row("tasks", rec, s.setup.statusDate);
       return { ...c, std, effort: has(rec.effort) ? +rec.effort : std, check: c.check === "OK" && !act ? "Activity not in the catalogue" : c.check };
     }
-    return E.t2Row(reg, rec, s.setup.statusDate);
+    const c = E.t2Row(reg, rec, s.setup.statusDate);
+    if (["dev", "capa", "cc"].includes(reg) && index != null) c.actions = E.t2Computed(s)[reg][index]?.actions || null;
+    return c;
   }
   const sel = s.setup.selDate;
   const rows = s[reg].slice();
@@ -202,7 +207,7 @@ export function openEditor({ tier, reg, index = null, prefill = null, onSaved })
     groups += `<label class="field${full}" data-f="${f.key}"><span>${esc(f.label)}${f.req ? '<i class="req">*</i>' : ""}</span>
       ${inputHTML(tier, f, rec[f.key])}${f.help ? `<small>${esc(f.help)}</small>` : ""}</label>`;
   }
-  const body = `<div data-fx></div><div data-flag></div><form class="form-grid" autocomplete="off">${groups}</form>${reg === "load" ? `<div data-breakdown style="margin-top:18px"></div>` : ""}`;
+  const body = `<div data-fx></div><div data-flag></div><form class="form-grid" autocomplete="off">${groups}</form>${reg === "load" ? `<div data-breakdown style="margin-top:18px"></div>` : ""}${tier === "t2" && ["dev", "capa", "cc"].includes(reg) && !isNew ? linkedActionsHTML(rec.id) : ""}${tier === "t2" && reg === "act" && rec.parent ? parentLinkHTML(rec.parent) : ""}`;
   const footer = `${isNew ? "" : `<button class="btn danger" data-del>Delete</button><button class="btn" data-dup>Duplicate</button>`}
     <span class="spacer"></span><span class="muted" style="font-size:12px">Ctrl + Enter saves</span><button class="btn" data-cancel>Cancel</button><button class="btn primary" data-save>${isNew ? "Add record" : "Save changes"}</button>`;
   const sub = `<div class="meta-row"><span>${esc(sc.no)} · ${esc(sc.title)}</span>${sc.source ? `<span>Source: <b>${esc(sc.source)}</b></span>` : ""}<span>Cream = you type · ƒx = automatic</span></div>`;
@@ -275,6 +280,22 @@ export function openEditor({ tier, reg, index = null, prefill = null, onSaved })
   setTimeout(() => form.querySelector("input,select,textarea")?.focus(), 50);
 }
 
+/** The eQMS actions raised under a quality event, CAPA or change control. */
+function linkedActionsHTML(ref) {
+  const s = store.t2;
+  if (!ref || !s.act?.length) return "";
+  const comp = E.t2Computed(s).act;
+  const rows = s.act.map((a, i) => ({ a, c: comp[i] })).filter(({ a }) => a.parent === ref);
+  if (!rows.length) return `<div class="empty" style="margin-top:18px">No eQMS action linked to ${esc(ref)}.</div>`;
+  return `<div style="margin-top:18px"><div class="card-head"><h2>Linked actions <span class="sub">${rows.length} · ${rows.filter(({ c }) => c.open).length} open</span></h2>
+    <a class="btn sm" href="#/t2/reg/act?new=1&prefill=${encodeURIComponent(JSON.stringify({ parent: ref, ptype: ref.startsWith("QE") ? "Quality Event" : ref.startsWith("CAPA") ? "CAPA" : "Change Control", status: "Open", opened: today() }))}">＋ Action</a></div>
+    <div class="urgent">${rows.map(({ a, c }) => `<a href="#/t2/reg/act?id=${encodeURIComponent(a.id)}"><span class="ref">${esc(a.id)}</span><span class="desc" title="${esc(a.desc)}">${esc(a.desc)} <span class="muted">· ${esc(a.owner || "—")}</span></span>${pill(c.live)}</a>`).join("")}</div></div>`;
+}
+function parentLinkHTML(ref) {
+  const reg = ref.startsWith("QE") ? "dev" : ref.startsWith("CAPA") ? "capa" : ref.startsWith("CC") ? "cc" : null;
+  return reg ? `<div style="margin-top:16px"><a class="btn sm" href="#/t2/reg/${reg}?id=${encodeURIComponent(ref)}">Open ${esc(ref)} ›</a></div>` : "";
+}
+
 /** Where a team member's workload comes from (QA Load form). */
 function breakdownHTML(c, setup) {
   if (!c.items?.length) return `<div class="empty">No record is assigned to this name in ${esc(setup.month.slice(0, 7))}. Assign work in the registers (Owner, Inspector, Trainer, Releasing Officer) or in the Task planner.</div>`;
@@ -291,7 +312,7 @@ function breakdownHTML(c, setup) {
 /** Team workload chart above the QA Load register. */
 function loadPanel(comp, setup) {
   const sources = Object.values(E.LOAD_SOURCES);
-  const cls = ["f-R", "f-s3", "f-s4", "f-s2", "f-s1", "f-s5", "f-s6", "f-A", "f-N", "f-s7", "f-s8"];
+  const cls = ["f-R", "f-s3", "f-s4", "f-s2", "f-s1", "f-s5", "f-s6", "f-A", "f-N", "f-s7", "f-s8", "f-s9"];
   const rows = store.t2.load.map((r, i) => {
     const by = {};
     for (const it of comp[i].items) by[it.source] = (by[it.source] || 0) + it.days;

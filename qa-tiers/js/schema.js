@@ -199,6 +199,27 @@ export const T2_REGISTERS = {
     ],
     table: ["id", "opened", "source", "desc", "to", "owner", "status", "due"],
   },
+  act: {
+    no: "03·A", title: "eQMS Actions", icon: "☑", short: "eQMS actions",
+    lead: "Every action raised under a quality event, a CAPA or a change control — who owns it, by when, and whether it is done.",
+    source: "Scigeniq actions (allTasks export)", who: "Action owner / QA", when: "On every status change",
+    lifecycle: ["Open", "In Progress", "QA Approval", "Done"], kpi: null, idHint: "ACTION-KO-1800",
+    fields: [
+      f("id", "Action No.", "text", { req: true, help: "Number exactly as in Scigeniq, e.g. ACTION-KO-1782" }),
+      f("ptype", "Raised under", "list", { list: "ActParent", help: "Quality Event · CAPA · Change Control" }),
+      f("parent", "Parent Ref.", "text", { help: "QE-KO-…, CAPA-KO-… or CC-KO-… — the action shows on that record" }),
+      f("desc", "Action", "long", { help: "Start with a verb" }),
+      f("owner", "Owner", "list", { list: "People", help: "Assigned user, or the department when Scigeniq assigns a role" }),
+      f("dept", "Department", "list", { list: "Departments" }),
+      f("opened", "Date Raised", "date", { req: true }),
+      f("due", "Due Date", "date"),
+      f("status", "Status", "list", { list: "ActStatus", req: true, help: "Open · In Progress · QA Approval · Done · Cancelled" }),
+      f("closed", "Completed", "date", { help: "Only when Done or Cancelled" }),
+      f("comments", "Description / Comments", "long"),
+    ],
+    table: ["id", "ptype", "parent", "desc", "owner", "status", "due"],
+    sortDesc: true,
+  },
   load: {
     no: "07", title: "QA Load", icon: "◔", short: "QA load", idKey: "member",
     lead: "Capacity, calculated: working days − absence = available; the workload of every record each person owns ÷ available = utilisation.",
@@ -235,7 +256,7 @@ export const T2_REGISTERS = {
 };
 
 /** Order of the registers on the Tier 2 navigation. */
-export const T2_ORDER = ["dev", "capa", "cc", "insp", "rel", "doc", "load", "tasks", "apqr", "trn", "esc"];
+export const T2_ORDER = ["dev", "capa", "cc", "act", "insp", "rel", "doc", "load", "tasks", "apqr", "trn", "esc"];
 
 /** Tier 2 Daily Log (calendar) inputs. */
 export const T2_DAILY_FIELDS = [
@@ -394,7 +415,7 @@ export const T1_ORDER = ["dl", "br", "fn", "ac", "hd", "tr"];
 export const LOCKED_LISTS = new Set([
   "DevClass", "DevStatus", "CAPAStatus", "CCCat", "CCStatus", "YesNoTBD", "YesNo", "Severity", "InspStatus",
   "BRStatus", "DocStatus", "APQRStatus", "TrStatus", "EscStatus", "DayStatus", "ManualKPI",
-  "Att", "FnStatus", "AcStatus", "FnTypes", "Weekdays", "TaskStatus",
+  "Att", "FnStatus", "AcStatus", "FnTypes", "Weekdays", "TaskStatus", "ActStatus", "ActParent",
 ]);
 
 /** Human names for the drop-down lists. */
@@ -408,7 +429,7 @@ export const LIST_LABELS = {
   EscStatus: "Escalation status", DayStatus: "Day status", ManualKPI: "Manual KPI status",
   People: "People & functions", Departments: "Departments", Products: "Products", Tier3: "Tier 3 escalation contacts",
   FnTypes: "Finding types", ErrCats: "Error categories", Shifts: "Shifts", Att: "Attendance", RecType: "Record type",
-  FnStatus: "Finding status", Roles: "Positions / roles", TaskStatus: "Task status", AcSource: "Action source", Priority: "Priority", AcStatus: "Action status", Owners: "Action owners",
+  FnStatus: "Finding status", ActStatus: "eQMS action status", ActParent: "eQMS action parent", Roles: "Positions / roles", TaskStatus: "Task status", AcSource: "Action source", Priority: "Priority", AcStatus: "Action status", Owners: "Action owners",
 };
 
 export const SKILL_LEVELS = [

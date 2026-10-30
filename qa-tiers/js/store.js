@@ -3,6 +3,7 @@
 // written to a small audit trail (what, which record, before → after).
 
 import { DEMO_T1, DEMO_T2 } from "./demo-data.js";
+import { REAL_T1, REAL_T2 } from "./real-data.js";
 import { DEFAULT_ACTIVITIES } from "./engine.js";
 import { ensureKeys, stateFrom } from "./sync.js";
 
@@ -40,6 +41,10 @@ function seedLists(tier, s) {
     s.activities ??= clone(DEFAULT_ACTIVITIES);
     // a stored demo gets the demo planner; any other board starts with an empty one
     s.tasks ??= /El Kendi/.test(s.setup.site) && s.setup.month === "2026-09-01" ? clone(DEMO_TASKS) : [];
+    s.activities = s.activities.concat(DEFAULT_ACTIVITIES.filter((a) => !s.activities.some((x) => x.name === a.name)).map((a) => ({ ...a, role: REAL_ROLES[a.role] ?? a.role })));
+    s.act ??= [];
+    s.lists.ActStatus ??= ["Open", "In Progress", "QA Approval", "Done", "Cancelled"];
+    s.lists.ActParent ??= ["Quality Event", "CAPA", "Change Control"];
     s.lists.Tier3 ??= uniq(["Site Quality Head", "Plant Management", ...pick(["esc"], ["to"])]);
   } else {
     s.lists.Owners ??= uniq(s.fn.map((r) => r.owner));
@@ -48,9 +53,25 @@ function seedLists(tier, s) {
   return s;
 }
 
-function fresh(tier) {
-  const s = clone(tier === "t1" ? DEMO_T1 : DEMO_T2);
+/** Typical roles of the effort catalogue, in the job titles of the QA personnel list. */
+const REAL_ROLES = {
+  "QA Officer — oncology line": "QA Officer", "Senior QA Officer — board owner": "QA Senior Officer",
+  "QA Batch Release": "QA Officer", "QA Validation": "QA Section Head", "QA Documentation": "QA Documentation Officer",
+};
+
+/** A new board: the imported El Kendi data (default) or the September 2026 demo. */
+/** Whether this copy of the app carries site data (see real-data.js). */
+export const HAS_REAL = !!(REAL_T1 && REAL_T2);
+
+function fresh(tier, source = "real") {
+  const real = source === "real" && HAS_REAL;
+  const s = clone(tier === "t1" ? (real ? REAL_T1 : DEMO_T1) : (real ? REAL_T2 : DEMO_T2));
   s.audit = [];
+  s.dataset = real ? "elkendi-2026-10-30" : "demo-2026-09";
+  if (tier === "t2") {
+    s.activities ??= clone(DEFAULT_ACTIVITIES).map((a) => (real ? { ...a, role: REAL_ROLES[a.role] ?? a.role } : a));
+    if (!real) s.tasks ??= clone(DEMO_TASKS);
+  }
   return seedLists(tier, s);
 }
 
@@ -141,15 +162,16 @@ export const store = {
     const old = obj[key];
     if (old === value || ((old == null || old === "") && (value == null || value === ""))) return;
     if (value === "" || value == null) delete obj[key]; else obj[key] = value;
+    if (tier === "t1" && key === "selDate") { this.save(tier); return; } // a personal view setting, not a change to the board
     this.log(tier, { reg: path[0], ref: label, action: "edit", changes: [{ field: key, from: old ?? "", to: value ?? "" }] });
     this.save(tier);
   },
 
-  reset(tier) { this[tier] = fresh(tier); this.save(tier); },
+  reset(tier, source = "real") { this[tier] = ensureKeys(tier, fresh(tier, source)); this.save(tier); },
   /** Empty registers, keeping setup, lists, KPI targets and roster. */
   blank(tier) {
-    const s = fresh(tier);
-    const regs = tier === "t1" ? ["dl", "br", "fn", "ac", "hd", "tr"] : ["dev", "capa", "cc", "insp", "rel", "doc", "apqr", "trn", "esc", "tasks"];
+    const s = fresh(tier, "real");
+    const regs = tier === "t1" ? ["dl", "br", "fn", "ac", "hd", "tr"] : ["dev", "capa", "cc", "insp", "rel", "doc", "apqr", "trn", "esc", "tasks", "act"];
     for (const r of regs) s[r] = [];
     if (tier === "t2") { s.daily = {}; s.trend.rows = s.trend.rows.map(() => Array(12).fill(null)); }
     this[tier] = s; this.save(tier);

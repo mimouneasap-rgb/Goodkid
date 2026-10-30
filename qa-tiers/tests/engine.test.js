@@ -82,3 +82,52 @@ test("helpers: RAG rule, next id, working days", () => {
   assert.equal(E.nextId([{ id: "DEV-26-061" }, { id: "DEV-26-063" }]), "DEV-26-064");
   assert.equal(E.workingDays("2026-10-01", { weekend1: "Friday", weekend2: "Saturday" }), 21);
 });
+
+// Site data is not in the repository (see js/real-data.js): these tests run
+// against the generated file of a published board and are skipped here.
+const SITE = await import("../js/real-data.js");
+const site = SITE.REAL_T1 ? test : test.skip;
+
+site("imported site data: people, shop floor, release, APQR", async () => {
+  const { REAL_T1, REAL_T2, REAL_PEOPLE } = SITE;
+  assert.equal(REAL_PEOPLE.length, 11);
+  assert.equal(REAL_T1.roster.length, 3);
+  // every officer named in the shop-floor data is on the roster (spellings and initials resolved)
+  const roster = new Set(REAL_T1.roster.map((o) => o.name));
+  assert.ok(REAL_T1.dl.every((r) => roster.has(r.officer)) && REAL_T1.br.every((r) => roster.has(r.officer)));
+  assert.ok(REAL_T1.dl.every((r) => r.date <= "2026-10-30"), "no future-dated activity");
+  assert.equal(REAL_T2.load.length, 11);
+  assert.ok(REAL_T2.dev.every((d) => d.id.startsWith("QE-KO-")));
+  assert.equal(REAL_T2.dev.length, 29);
+  assert.equal(REAL_T2.cc.length, 191);
+  assert.ok(REAL_T2.capa.length >= 122);
+  // no employee code or hiring date anywhere in the data
+  assert.ok(!/"(code|hired)"/.test(JSON.stringify([REAL_T1, REAL_T2, REAL_PEOPLE])));
+  // every action points at a record that exists
+  const refs = new Set([...REAL_T2.dev, ...REAL_T2.capa, ...REAL_T2.cc].map((r) => r.id));
+  assert.ok(REAL_T2.act.length > 1000 && REAL_T2.act.filter((a) => a.parent && !refs.has(a.parent)).length === 0);
+  assert.equal(REAL_T2.rel.filter((r) => r.status === "Released").length, 25);
+  assert.equal(REAL_T2.apqr.length, 163);
+  // planner tasks: the Scigeniq tasks of the oncology QA staff, none flagged
+  E.linkTier1(() => REAL_T1);
+  const comp = E.t2Computed({ ...REAL_T2, activities: E.DEFAULT_ACTIVITIES });
+  assert.equal(comp.tasks.filter((c) => c.check !== "OK").length, 0);
+  E.linkTier1(() => null);
+});
+
+site("KPIs without source data read as no data, not as on target", async () => {
+  const { REAL_T1, REAL_T2 } = SITE;
+  const k2 = E.t2Kpis({ ...REAL_T2, activities: E.DEFAULT_ACTIVITIES }).kpis;
+  assert.equal(typeof k2[2].actual, "number"); // change control: 191 records from Scigeniq
+  assert.equal(k2[5].rag, "N");      // documentation register empty
+  const k1 = E.t1Kpis(E.t1Context(REAL_T1, REAL_T1.setup.selDate)).kpis;
+  for (const i of [0, 1, 2, 3, 5, 6, 7, 9, 15]) assert.equal(k1[i].rag, "N", k1[i].name);
+  assert.equal(k1[4].rag, "G");      // line clearance right first time is tracked
+});
+
+test("a batch record marked Completed without a date is closed, and flagged", () => {
+  const r = E.t1Review({ id: "B1", recv: "2026-10-01", officer: "X", status: "Completed", errors: 0 }, { brTarget: 2 }, "2026-10-20");
+  assert.equal(r.live, "Completed");
+  assert.equal(r.open, false);
+  assert.equal(r.check, "Completion date missing");
+});

@@ -1,7 +1,7 @@
 // App shell: navigation rail, hash router and the home page (the Tier 1 →
 // Tier 2 → Tier 3 cascade).
 
-import { store } from "./store.js";
+import { store, HAS_REAL } from "./store.js";
 import * as E from "./engine.js";
 import { T1_REGISTERS, T2_REGISTERS, T1_ORDER, T2_ORDER } from "./schema.js";
 import { ring } from "./charts.js";
@@ -249,8 +249,9 @@ function firstRun(sync) {
   setupDialog = modal(`<div class="eyebrow">Share with your team</div><h2>Set up the shared board</h2>
     <p style="margin:0">From now on everyone who opens this page works on the same Tier 1 and Tier 2 boards, and sees each other's changes live. Choose what the team starts from:</p>
     <div class="lcards">
+      ${HAS_REAL ? `<button class="lcard" data-start="real" style="text-align:left;cursor:pointer"><b>The El Kendi data</b><span>Imported 30/10/2026: shop-floor batch records, sampling, line clearance and IPC, oncology deviations, the APQR programme and the QA personnel list.</span></button>` : ""}
       <button class="lcard" data-start="mine" style="text-align:left;cursor:pointer"><b>The boards in this browser</b><span>Everything you have entered or changed here so far.</span></button>
-      <button class="lcard" data-start="demo" style="text-align:left;cursor:pointer"><b>The September 2026 demo</b><span>The El Kendi demo data, as delivered.</span></button>
+      <button class="lcard" data-start="demo" style="text-align:left;cursor:pointer"><b>The September 2026 demo</b><span>Made-up training data for the masterclass.</span></button>
       <button class="lcard" data-start="blank" style="text-align:left;cursor:pointer"><b>Empty registers</b><span>Keeps setup, targets, roster and lists; registers start empty.</span></button>
     </div><p class="muted" style="margin:0;font-size:12.5px">The first upload sends several hundred records; keep the page open until the status in the menu says “Shared with your team · live”.</p>`,
   { onClose: () => { setupDialog = null; } });
@@ -260,7 +261,8 @@ function firstRun(sync) {
     setupDialog.el.querySelectorAll("button").forEach((x) => { x.disabled = true; });
     // someone else may have set it up meanwhile: join theirs instead
     if (await sync.probe().catch(() => false)) { setupDialog.close(); join(sync); toast("A teammate has already set up the shared board — you joined it"); return; }
-    if (b.dataset.start === "demo") { store.reset("t1"); store.reset("t2"); }
+    if (b.dataset.start === "demo") { store.reset("t1", "demo"); store.reset("t2", "demo"); }
+    if (b.dataset.start === "real") { store.reset("t1", "real"); store.reset("t2", "real"); }
     if (b.dataset.start === "blank") { store.blank("t1"); store.blank("t2"); }
     store.attachSync(sync, { upload: true });
     team.mode = "live"; paintTeam();
@@ -277,6 +279,25 @@ function join(sync) {
   store.applyRemote("t1"); store.applyRemote("t2");
   team.mode = sync.readOnly ? "readonly" : "live"; paintTeam();
   route({ soft: true });
+  offerRealData();
+}
+
+/** Once, to the owner: the shared board still holds the demo — load the El Kendi data? */
+async function offerRealData() {
+  if (!HAS_REAL || store.t2.dataset === "elkendi-2026-10-30" || store.prefs.realOffered) return;
+  const owner = store.user ? await store.user.isOwner().catch(() => false) : false;
+  if (!owner) return;
+  const { el, close } = modal(`<div class="eyebrow">El Kendi data available</div><h2>Replace the demo on the shared board?</h2>
+    <p style="margin:0">The shared board still holds the September 2026 demo. The real El Kendi data imported on 30/10/2026 is ready: 11 QA staff from QA0007E/Onc/TE01, 359 officer-days of shop-floor activity, 51 batches, 75 batch-record reviews, 19 oncology deviations (QE-KO), 163 APQRs and 136 Scigeniq tasks.</p>
+    <p style="margin:0">Loading it replaces the demo <b>for everyone on the team</b>. The settings your team changed (month, status date) are replaced too.</p>
+    <div class="actions"><button class="btn" data-later>Not now</button><button class="btn primary" data-load>Load the El Kendi data for the team</button></div>`);
+  el.querySelector("[data-later]").onclick = () => { store.prefs.realOffered = true; store.save(); close(); };
+  el.querySelector("[data-load]").onclick = () => {
+    store.reset("t1", "real"); store.reset("t2", "real");
+    store.prefs.realOffered = true; store.save();
+    close(); route({ soft: true });
+    toast("El Kendi data loaded for the whole team — keep the page open until the status says live");
+  };
 }
 
 async function connectTeam() {

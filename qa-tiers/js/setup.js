@@ -1,7 +1,7 @@
 // Setup pages of both boards: identity, rules, roster, KPI targets, the
 // drop-down lists, the month-end roll-over and data backup.
 
-import { store } from "./store.js";
+import { store, HAS_REAL } from "./store.js";
 import * as E from "./engine.js";
 import { LOCKED_LISTS, LIST_LABELS, T1_REGISTERS, T2_REGISTERS } from "./schema.js";
 import { freezeMonth } from "./views-t2.js";
@@ -132,7 +132,7 @@ function dataCard(tier) {
     <p class="muted" style="margin:0 0 12px;font-size:13px">${store.sync ? "This board is shared: every change is saved for the whole team and appears live on their screens." : "Data is saved in this browser."} Export a backup regularly, or to move the boards to another device. The eQMS stays the GMP record of truth — this board mirrors it.</p>
     <div class="row"><button class="btn" data-export>⬇ Export backup (both tiers)</button>
     <label class="btn">⬆ Import backup<input type="file" accept=".json,application/json" data-import hidden></label>
-    <button class="btn" data-reset>Reload the September demo</button><button class="btn danger" data-blank>Start a blank ${label}</button></div></div>`;
+    ${HAS_REAL ? `<button class="btn" data-real>Load the El Kendi data (imported 30/10/2026)</button>` : ""}<button class="btn" data-reset>Load the September 2026 demo</button><button class="btn danger" data-blank>Start a blank ${label}</button></div></div>`;
 }
 
 function bindData(root, tier, rerender) {
@@ -147,8 +147,11 @@ function bindData(root, tier, rerender) {
     } catch (err) { toast(err.message || "Import failed"); }
     e.target.value = "";
   };
+  $("[data-real]", root)?.addEventListener("click", async () => {
+    if (await confirmDialog({ title: "Load the El Kendi data?", body: `<p>The ${tier === "t1" ? "Tier 1" : "Tier 2"} board is replaced by the data imported on 30/10/2026 from the shop-floor workbooks, the APQR tracker and the QA personnel list${store.sync ? " — <b>for everyone on the team</b>" : ""}.</p>`, ok: "Load the El Kendi data", danger: true })) { store.reset(tier, "real"); toast("El Kendi data loaded"); rerender(); }
+  });
   $("[data-reset]", root).onclick = async () => {
-    if (await confirmDialog({ title: "Reload the demo?", body: `<p>All entries of this board are replaced by the El Kendi September 2026 demo data${store.sync ? " — <b>for everyone on the team</b>" : ""}.</p>`, ok: "Reload demo", danger: true })) { store.reset(tier); toast("Demo reloaded"); rerender(); }
+    if (await confirmDialog({ title: "Reload the demo?", body: `<p>All entries of this board are replaced by the El Kendi September 2026 demo data${store.sync ? " — <b>for everyone on the team</b>" : ""}.</p>`, ok: "Reload demo", danger: true })) { store.reset(tier, "demo"); toast("Demo loaded"); rerender(); }
   };
   $("[data-blank]", root).onclick = async () => {
     if (await confirmDialog({ title: "Start a blank board?", body: `<p>Every register is emptied${store.sync ? " <b>for everyone on the team</b>" : ""}. Setup, targets, roster and drop-down lists are kept. Export a backup first if you need the current data.</p>`, ok: "Empty the registers", danger: true })) { store.blank(tier); toast("Registers emptied"); rerender(); }
