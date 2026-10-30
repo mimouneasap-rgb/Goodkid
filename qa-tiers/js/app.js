@@ -279,7 +279,25 @@ function join(sync) {
   store.applyRemote("t1"); store.applyRemote("t2");
   team.mode = sync.readOnly ? "readonly" : "live"; paintTeam();
   route({ soft: true });
-  offerRealData();
+  if (HAS_REAL) offerRealData(); else offerDemo();
+}
+
+/** Once, to the owner: the shared board holds site data this version does not
+ * include — return it to the September 2026 demo for everyone? */
+async function offerDemo() {
+  if (HAS_REAL || !store.t2.dataset || store.t2.dataset === "demo-2026-09" || store.prefs.demoOffered === store.t2.dataset) return;
+  const owner = store.user ? await store.user.isOwner().catch(() => false) : false;
+  if (!owner) return;
+  const { el, close } = modal(`<div class="eyebrow">Demo version</div><h2>Return the shared board to the demo?</h2>
+    <p style="margin:0">This version of the boards ships the September 2026 demo only, but the shared board still holds the site data loaded earlier. Returning it to the demo deletes the site records from the shared board <b>for everyone on the team</b> and loads the demo in their place.</p>
+    <div class="actions"><button class="btn" data-later>Keep the site data</button><button class="btn primary" data-demo>Return to the demo for the team</button></div>`);
+  el.querySelector("[data-later]").onclick = () => { store.prefs.demoOffered = store.t2.dataset; store.save(); close(); };
+  el.querySelector("[data-demo]").onclick = () => {
+    store.reset("t1", "demo"); store.reset("t2", "demo");
+    store.save();
+    close(); route({ soft: true });
+    toast("Shared board returned to the demo — keep the page open until the status says live");
+  };
 }
 
 /** Once, to the owner: the shared board still holds the demo — load the El Kendi data? */

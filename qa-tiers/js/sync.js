@@ -73,7 +73,12 @@ export function createSync({ db, user, onRemote, onStatus }) {
   const remote = { t1: new Map(), t2: new Map() };   // the shared copy, as last seen (+ our writes in flight)
   const base = { t1: new Map(), t2: new Map() };     // this page's board as of its last sync: changes are measured from here
   const chains = new Map();                          // one write at a time per document
-  const pending = new Map();                         // queued bodies not yet confirmed (null = delete)
+  const pending = new Map();                         // collection → Map(path → queued body not yet confirmed; null = delete)
+  const ids = new Map();                             // collection → Set of document ids as last delivered
+  const bodies = new WeakMap();                      // delivered snapshot data → its JSON (unchanged documents keep their object)
+  const bodyOf = (o) => { let b = bodies.get(o); if (b === undefined) { b = json(o); bodies.set(o, b); } return b; };
+  const colOf = (path) => path.slice(0, path.indexOf("/"));
+  const setPending = (path, body) => { const c = colOf(path); if (!pending.has(c)) pending.set(c, new Map()); pending.get(c).set(path, body); };
   const delivered = { t1: new Set(), t2: new Set() };
   const queue = [];
   let running = 0, failed = false, readOnly = false;
@@ -88,7 +93,8 @@ export function createSync({ db, user, onRemote, onStatus }) {
       running++;
       const prev = chains.get(job.path) || Promise.resolve();
       const p = prev.then(() => attempt(job)).finally(() => {
-        if (pending.get(job.path) === job.body) pending.delete(job.path);
+        const p_ = pending.get(colOf(job.path));
+        if (p_ && p_.get(job.path) === job.body) p_.delete(job.path);
         running--; status(); pump();
       });
       chains.set(job.path, p.catch(() => {}));
@@ -120,8 +126,8 @@ export function createSync({ db, user, onRemote, onStatus }) {
     const next = docsOf(tier, ensureKeys(tier, state));
     const prev = base[tier], shared = remote[tier];
     let n = 0;
-    for (const [path, body] of next) if (prev.get(path) !== body) { queue.push({ path, body }); pending.set(path, body); shared.set(path, body); n++; }
-    for (const path of prev.keys()) if (!next.has(path)) { queue.push({ path, body: null }); pending.set(path, null); shared.delete(path); n++; }
+    for (const [path, body] of next) if (prev.get(path) !== body) { queue.push({ path, body }); setPending(path, body); shared.set(path, body); n++; }
+    for (const path of prev.keys()) if (!next.has(path)) { queue.push({ path, body: null }); setPending(path, null); shared.delete(path); n++; }
     base[tier] = next;
     if (n) pump();
     return n;
@@ -147,11 +153,23 @@ export function createSync({ db, user, onRemote, onStatus }) {
     const watch = (tier, col) => {
       const un = db.collection(col).onSnapshot((snap) => {
         const map = remote[tier];
-        for (const key of [...map.keys()]) if (key.startsWith(`${col}/`)) map.delete(key);
-        for (const d of snap.docs) map.set(`${col}/${d.id}`, json(d.data()));
+        const known = ids.get(col);
+        const changes = known && typeof snap.docChanges === "function" ? snap.docChanges() : null;
+        if (changes) {
+          // apply only what changed: a large switch delivers many small snapshots
+          for (const ch of changes) {
+            const key = `${col}/${ch.doc.id}`;
+            if (ch.type === "removed") { map.delete(key); known.delete(ch.doc.id); }
+            else { map.set(key, bodyOf(ch.doc.data())); known.add(ch.doc.id); }
+          }
+        } else {
+          for (const id of known || []) map.delete(`${col}/${id}`);
+          const now = new Set();
+          for (const d of snap.docs) { map.set(`${col}/${d.id}`, bodyOf(d.data())); now.add(d.id); }
+          ids.set(col, now);
+        }
         // our own writes still on their way win over the older server copy
-        for (const [path, body] of pending) {
-          if (!path.startsWith(`${col}/`)) continue;
+        for (const [path, body] of pending.get(col) || []) {
           if (body === null) map.delete(path); else map.set(path, body);
         }
         delivered[tier].add(col);
