@@ -175,3 +175,48 @@ export function slotCells(p) {
   }).join("")}</div>`;
 }
 export const slotHead = () => `<div class="slot-head">${SLOTS.map((s) => `<span title="${esc(s.label)}">${esc(s.short)}</span>`).join("")}</div>`;
+
+/**
+ * Stacked columns: one column per group (e.g. planned month), segments in
+ * series order from the baseline up, total on the cap, 2px surface gaps.
+ * groups: [{ label, sub?, counts: {seriesKey: n}, href? }]
+ * series: [{ key, label, color }]
+ */
+export function stackedColumns(groups, series, { height = 280, width = 760, capLabel = (g, total) => fmtN(total) } = {}) {
+  const W = width, H = height, padL = 40, padR = 8, padT = 24, padB = 44;
+  const iw = W - padL - padR, ih = H - padT - padB;
+  const totals = groups.map((g) => series.reduce((n, s) => n + (g.counts[s.key] || 0), 0));
+  const ticks = niceTicks(Math.max(1, ...totals));
+  const yMax = ticks[ticks.length - 1];
+  const band = iw / Math.max(1, groups.length);
+  const bw = Math.min(46, band * 0.62);
+  const y = (v) => padT + ih - (v / yMax) * ih;
+  let s = `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Stacked column chart">`;
+  for (const t of ticks) s += `<line x1="${padL}" x2="${W - padR}" y1="${y(t)}" y2="${y(t)}" class="grid"/><text x="${padL - 6}" y="${y(t) + 4}" text-anchor="end" class="axis-t">${fmtN(t)}</text>`;
+  s += `<line x1="${padL}" x2="${W - padR}" y1="${y(0)}" y2="${y(0)}" class="baseline"/>`;
+  groups.forEach((g, gi) => {
+    const x = padL + band * gi + (band - bw) / 2;
+    let acc = 0;
+    if (g.href) s += `<a href="${esc(g.href)}">`;
+    const visible = series.filter((se) => (g.counts[se.key] || 0) > 0);
+    visible.forEach((se, si) => {
+      const v = g.counts[se.key];
+      const y0 = y(acc), y1 = y(acc + v);
+      const gap = si < visible.length - 1 ? 2 : 0;
+      const top = y1 + (si === 0 ? 0 : 0);
+      const h = Math.max(0, y0 - top - (si > 0 ? 2 : 0));
+      const isTop = si === visible.length - 1;
+      const r = isTop ? Math.min(4, h, bw / 2) : 0;
+      const yb = y0 - (si > 0 ? 2 : 0);
+      s += `<path d="M${x},${yb} V${top + r} ${r ? `Q${x},${top} ${x + r},${top} H${x + bw - r} Q${x + bw},${top} ${x + bw},${top + r}` : `H${x + bw}`} V${yb} Z" style="fill:${se.color}" class="col" data-tip="${tip(g.label, [[se.label, fmtN(v)], ["Share", fmtPct(v / Math.max(1, totals[gi]))], ["Total", fmtN(totals[gi])]], se.color)}"/>`;
+      void gap;
+      acc += v;
+    });
+    if (g.href) s += `</a>`;
+    if (totals[gi]) s += `<text x="${x + bw / 2}" y="${y(totals[gi]) - 6}" text-anchor="middle" class="cap-t">${capLabel(g, totals[gi])}</text>`;
+    s += `<text x="${x + bw / 2}" y="${H - padB + 16}" text-anchor="middle" class="axis-l">${esc(g.label)}</text>`;
+    if (g.sub) s += `<text x="${x + bw / 2}" y="${H - padB + 30}" text-anchor="middle" class="axis-t">${esc(g.sub)}</text>`;
+  });
+  s += `</svg>`;
+  return `<div class="legend">${series.map((se) => `<span><i style="background:${se.color}"></i>${esc(se.label)}</span>`).join("")}</div>${s}`;
+}

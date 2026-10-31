@@ -1,7 +1,7 @@
 // Overview views: command centre, annexes progress, Final QA, workflow,
 // workload and insights.
 import { raw, esc, icon, fmtN, fmtPct, fmtDate, fmtMonth, fmtMonthShort, fmtDays, plural, ragPill, fqPill, trackingPill, tip, RAG_META, FQ_META, slotChip } from "./ui.js";
-import { ring, segBar, hbars, columns, lineChart, deptColor, stageColor, progressBar, slotCells, slotHead } from "./charts.js";
+import { ring, segBar, hbars, columns, lineChart, deptColor, stageColor, progressBar, slotCells, slotHead, stackedColumns } from "./charts.js";
 import { DEPARTMENTS, SLOTS, MOVEMENT_METRICS, UP_IS_BAD, FINAL_QA_SIGNALS, monthLabel, eomonth } from "./engine.js";
 import * as store from "./store.js";
 
@@ -50,6 +50,18 @@ export function pipelineHtml(m) {
     { k: "Workflow closed out", v: k.closedOut, of: k.planned, href: "#/workflow", c: `${fmtPct(k.planned ? k.closedOut / k.planned : 0)} of plan` },
   ];
   return `<div class="pipeline">${steps.map((s) => `<a class="pipe ${s.alert ? "alert" : ""}" href="${s.href}" style="text-decoration:none"><span class="pk">${esc(s.k)}</span><span class="pv">${fmtN(s.v)}<small>/ ${fmtN(s.of)}</small></span><span class="pbarv"><span style="width:${((s.v / Math.max(1, s.of)) * 100).toFixed(1)}%"></span></span><span class="pc">${s.c}</span></a>`).join("")}</div>`;
+}
+
+export const WF_COLOR = { "Not triggered": "var(--slot-nt)", "Collecting annexes": "var(--s1)", "Data complete": "var(--d7)", "Final QA done, not closed": "var(--warn)", Closed: "var(--good)" };
+/** Parent APQR workflow progress by planned month (stacked columns). */
+export function workflowMonthChart(m, height = 290, width = 760) {
+  return stackedColumns(m.workflowByMonth.map((x) => ({ label: fmtMonthShort(x.month), sub: `${x.total} PQRs`, counts: x.counts, href: `#/annexes?month=${x.month}` })),
+    m.WF_BUCKETS.map((b) => ({ key: b, label: b, color: WF_COLOR[b] })), { height, width, capLabel: (g, total) => `${Math.round(((g.counts.Closed || 0) / total) * 100)}% closed` });
+}
+/** Final QA compilation progress by planned month (stacked columns). */
+export function finalQaMonthChart(m, height = 290, width = 760) {
+  return stackedColumns(m.fqByMonth.map((x) => ({ label: fmtMonthShort(x.month), sub: `${x.total} PQRs`, counts: x.counts, href: `#/annexes?month=${x.month}` })),
+    FINAL_QA_SIGNALS.map((sg) => ({ key: sg, label: FQ_META[sg].label, color: FQ_COLOR[sg] })), { height, width, capLabel: (g, total) => `${Math.round(((g.counts.Complete || 0) / total) * 100)}% done` });
 }
 
 /* ================================================================ dashboard */
@@ -107,7 +119,7 @@ export const dashboard = {
       ${tile("Open annexes", fmtN(k.annexOpen), { ic: "tasks", href: "#/tasks?closure=open", d: `${fmtPct(k.raisedCompletion)} of raised closed` })}
       ${tile("Not yet raised", fmtN(k.annexNotRaised), { ic: "plan", href: "#/tasks?source=generated", d: `${fmtN(k.notTriggered)} untriggered PQRs` })}
       ${tile("Overdue annexes", fmtN(k.overdueAnnexes), { ic: "clock", href: "#/tasks?overdue=1", tone: k.overdueAnnexes ? "crit" : "", d: "vs PQR due date" })}
-      ${tile("Unassigned open", fmtN(k.unassignedOpen), { ic: "workload", href: "#/tasks?assignee=Unassigned&closure=open", tone: k.unassignedOpen ? "warn" : "", d: `${fmtPct(k.annexOpen ? k.unassignedOpen / k.annexOpen : 0)} of open annexes` })}
+      ${tile("No named person", fmtN(k.unassignedOpen), { ic: "workload", href: "#/collection?missing=owner", tone: k.unassignedOpen ? "warn" : "", d: "open annexes on a group or role" })}
       ${tile("Final QA gaps", fmtN(k.gaps), { ic: "insights", href: "#/finalqa", tone: k.gaps ? "warn" : "", d: "closed with an annexe missing" })}
       ${tile("Open actions", fmtN(k.openActions), { ic: "check", href: "#/actions", tone: k.overdueActions ? "crit" : "", d: k.overdueActions ? `${fmtN(k.overdueActions)} past target date` : "QA follow-ups" })}
     </div>
@@ -116,6 +128,17 @@ export const dashboard = {
       <div class="card-h"><div><h3>Review pipeline</h3><p>Every planned review moves left to right: triggered in Scigeniq, ten annexes closed, Final QA raised and closed, workflow closed out.</p></div></div>
       ${pipelineHtml(m)}
     </section>
+
+    <div class="grid g-12" style="margin-top:18px">
+      <section class="card span-6 reveal">
+        <div class="card-h"><div><h3>APQR workflow progress by month</h3><p>Parent APQR of each planned PQR, by planned month</p></div><div class="tools"><a class="btn btn-sm btn-ghost" href="#/workflow">Open</a></div></div>
+        ${workflowMonthChart(m, 270)}
+      </section>
+      <section class="card span-6 reveal">
+        <div class="card-h"><div><h3>Final QA progress by month</h3><p>Final QA compilation of each planned PQR, by planned month</p></div><div class="tools"><a class="btn btn-sm btn-ghost" href="#/finalqa">Open</a></div></div>
+        ${finalQaMonthChart(m, 270)}
+      </section>
+    </div>
 
     <div class="section-title"><h2>Runway</h2><p>Progress by planned PQR month: share of the required annexes closed, including PQRs not triggered yet.</p></div>
     <div class="runway reveal">
@@ -280,12 +303,8 @@ export const finalqa = {
         ${near.length ? `<div class="table-wrap" style="max-height:420px"><table class="data"><thead><tr><th>Ref</th><th>Product</th><th>Planned</th><th>PQR due</th><th>Still open</th><th></th></tr></thead><tbody>${near.map((p) => row(p, `<td>${SLOTS.filter((s) => p.slots[s.key].status !== "OK").map((s) => `<span class="tag ${p.slots[s.key].status === "MISSING" ? "crit" : "info"}">${esc(s.label)}</span>`).join(" ")}</td>`)).join("")}</tbody></table></div>` : `<p class="muted" style="padding:0 20px 20px">None.</p>`}
       </section>
       <section class="card span-12 reveal">
-        <div class="card-h"><div><h3>Final QA by planned month</h3><p>Complete, raised and data-ready reviews per planned PQR month</p></div></div>
-        ${hbars(m.months.map((mo) => {
-          const c = (sig) => mo.products.filter((p) => p.fqSignal === sig).length;
-          return { label: fmtMonth(mo.month), attrs: `data-href="#/annexes?month=${mo.month}"`, segments: FINAL_QA_SIGNALS.map((sig) => ({ key: FQ_META[sig].label, value: c(sig), color: FQ_COLOR[sig] })) };
-        }), { labelWidth: 90, valueLabel: (r) => `${r.segments[0].value}<small> / ${r.segments.reduce((n, x) => n + x.value, 0)}</small>` })}
-        <div class="legend" style="margin-top:12px">${FINAL_QA_SIGNALS.map((sig) => `<span><i style="background:${FQ_COLOR[sig]}"></i>${esc(FQ_META[sig].label)}</span>`).join("")}</div>
+        <div class="card-h"><div><h3>Final QA progress by planned month</h3><p>Complete, raised, data-ready, waiting and not-triggered reviews per planned PQR month. Click a month for its annexes.</p></div></div>
+        ${finalQaMonthChart(m, 300, 1100)}
       </section>
     </div>`;
   },
@@ -313,6 +332,10 @@ export const workflow = {
         <div class="card-h"><div><h3>Review pipeline</h3></div></div>
         ${pipelineHtml(m)}
       </section>
+      <section class="card span-12 reveal">
+        <div class="card-h"><div><h3>APQR workflow progress by planned month</h3><p>Where each parent APQR stands: not triggered, collecting the ten annexes, data complete, Final QA done but the workflow not closed, or closed out. Click a month for its annexes.</p></div></div>
+        ${workflowMonthChart(m, 300, 1100)}
+      </section>
       <section class="card span-5 reveal">
         <div class="card-h"><div><h3>Workflow stage across the plan</h3><p>${fmtN(m.plan.length)} planned products</p></div></div>
         ${segBar(stages.filter((x) => x.n).map((x) => ({ label: x.stage, value: x.n, color: x.stage === "Closed" ? "var(--good)" : x.stage === "Not triggered" ? "var(--slot-nt)" : "var(--d1)" })), { height: 16, title: "Workflow stage" })}
@@ -321,7 +344,6 @@ export const workflow = {
       <section class="card span-7 reveal">
         <div class="card-h"><div><h3>Workflow stage by planned PQR month</h3></div></div>
         ${tableHtml(["Planned month", "Planned", "Triggered", "Not triggered", "In progress", "Closed", "% closed"], m.months.map((mo) => [fmtMonth(mo.month), fmtN(mo.planned), fmtN(mo.triggered), fmtN(mo.planned - mo.triggered), fmtN(mo.inDataCollection), fmtN(mo.closedOut), fmtPct(mo.planned ? mo.closedOut / mo.planned : 0)]))}
-        <div style="margin-top:16px">${hbars(m.months.map((mo) => ({ label: fmtMonth(mo.month), attrs: `data-href="#/annexes?month=${mo.month}"`, segments: [{ key: "Closed", value: mo.closedOut, color: "var(--good)" }, { key: "In progress", value: mo.inDataCollection, color: "var(--d1)" }, { key: "Not triggered", value: mo.planned - mo.triggered, color: "var(--slot-nt)" }] })), { labelWidth: 90, valueLabel: (r) => `${r.segments[0].value}<small> / ${r.segments.reduce((n, x) => n + x.value, 0)}</small>` })}</div>
       </section>
       <section class="card span-12 table-card reveal">
         <div style="padding:20px 20px 0"><div class="card-h"><div><h3>Open workflows past their PQR due date · ${fmtN(stalled.length)}</h3><p>Triggered, not closed, and the PQR overdue date has passed</p></div></div></div>
@@ -349,7 +371,7 @@ export const workload = {
     <div class="kpis" style="margin-top:0">
       <div class="kpi"><div class="k">${icon("workload")}People with annexes</div><div class="v">${fmtN(people.filter((o) => o.annexes).length)}</div><div class="d">&nbsp;</div></div>
       <div class="kpi ${withOverdue ? "tone-crit" : ""}"><div class="k">${icon("alert")}With overdue items</div><div class="v">${fmtN(withOverdue)}</div><div class="d">&nbsp;</div></div>
-      <a class="kpi ${un?.open ? "tone-warn" : ""}" href="#/tasks?assignee=Unassigned&closure=open" style="text-decoration:none;color:inherit"><div class="k">${icon("info")}Unassigned open</div><div class="v">${fmtN(un?.open || 0)}</div><div class="d">+ ${fmtN(un?.notRaised || 0)} not raised yet</div></a>
+      <a class="kpi ${m.kpi.unassignedOpen ? "tone-warn" : ""}" href="#/collection?missing=owner" style="text-decoration:none;color:inherit"><div class="k">${icon("info")}Open, group or role only</div><div class="v">${fmtN(m.kpi.unassignedOpen)}</div><div class="d">no named person yet</div></a>
       <div class="kpi"><div class="k">${icon("check")}Final QA owned</div><div class="v">${fmtN(m.workload.reduce((n, o) => n + (o.user === "Unassigned" ? 0 : o.finalQa), 0))}</div><div class="d">compilations with a named owner</div></div>
       <div class="kpi"><div class="k">${icon("edit")}Approvals signed</div><div class="v">${fmtN(m.kpi.approvalsSigned)}</div><div class="d">${fmtN(m.kpi.rejected)} rejected</div></div>
     </div>
@@ -361,7 +383,7 @@ export const workload = {
       </section>
       <section class="card span-7 table-card reveal">
         <div class="table-wrap" style="max-height:680px"><table class="data"><thead><tr>${th("user", "User")}${th("mainDept", "Main dept")}${th("annexes", "Annexes", "r")}${th("closed", "Closed", "r")}${th("open", "Open", "r")}${th("notRaised", "Not raised", "r")}${th("overdue", "Late", "r")}${th("pct", "% closed")}${th("finalQa", "Final QA", "r")}${th("approvals", "Approvals", "r")}${th("earliestDue", "Earliest due")}</tr></thead>
-        <tbody>${rows.map((o) => `<tr data-href="#/tasks?assignee=${encodeURIComponent(o.user)}" style="cursor:pointer"><td style="white-space:nowrap"><b>${esc(o.user)}</b></td><td style="white-space:nowrap">${o.mainDept ? `<span style="display:inline-flex;align-items:center;gap:6px"><i style="width:8px;height:8px;border-radius:50%;background:${deptColor(o.mainDept)}"></i>${esc(o.mainDept)}</span>` : "–"}</td><td class="r num">${fmtN(o.annexes)}</td><td class="r num">${fmtN(o.closed)}</td><td class="r num">${fmtN(o.open)}</td><td class="r num muted">${fmtN(o.notRaised)}</td><td class="r num" style="${o.overdue ? "color:var(--crit-ink);font-weight:800" : ""}">${fmtN(o.overdue)}</td><td><div class="pct-cell" style="min-width:120px"><b>${o.annexes ? fmtPct(o.pct) : "–"}</b>${progressBar(o.pct, { tone: o.pct === 1 ? "complete" : "" })}</div></td><td class="r num">${o.finalQa ? `${fmtN(o.finalQaDone)}/${fmtN(o.finalQa)}` : "–"}</td><td class="r num">${fmtN(o.approvals)}</td><td style="white-space:nowrap">${fmtDate(o.earliestDue)}</td></tr>`).join("")}</tbody></table></div>
+        <tbody>${rows.map((o) => `<tr data-href="#/tasks?assignee=${encodeURIComponent(o.user)}" style="cursor:pointer"><td style="white-space:nowrap"><b>${esc(o.user)}</b>${o.type && o.type !== "user" ? ` <span class="tag warn">${esc(o.type.toUpperCase())}</span>` : ""}</td><td style="white-space:nowrap">${o.mainDept ? `<span style="display:inline-flex;align-items:center;gap:6px"><i style="width:8px;height:8px;border-radius:50%;background:${deptColor(o.mainDept)}"></i>${esc(o.mainDept)}</span>` : "–"}</td><td class="r num">${fmtN(o.annexes)}</td><td class="r num">${fmtN(o.closed)}</td><td class="r num">${fmtN(o.open)}</td><td class="r num muted">${fmtN(o.notRaised)}</td><td class="r num" style="${o.overdue ? "color:var(--crit-ink);font-weight:800" : ""}">${fmtN(o.overdue)}</td><td><div class="pct-cell" style="min-width:120px"><b>${o.annexes ? fmtPct(o.pct) : "–"}</b>${progressBar(o.pct, { tone: o.pct === 1 ? "complete" : "" })}</div></td><td class="r num">${o.finalQa ? `${fmtN(o.finalQaDone)}/${fmtN(o.finalQa)}` : "–"}</td><td class="r num">${fmtN(o.approvals)}</td><td style="white-space:nowrap">${fmtDate(o.earliestDue)}</td></tr>`).join("")}</tbody></table></div>
       </section>
     </div>`;
   },

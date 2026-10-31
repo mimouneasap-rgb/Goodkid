@@ -32,7 +32,15 @@ Drop a file anywhere on the page, or use **Import**. The app works out what kind
 
 ### Screens
 
-**Command centre** (completion of the required workload, the review pipeline from plan to closed-out workflow, RAG split, KPI tiles, month runway, slot completeness, departments, burn-up, Final QA, workflow stage, workloads, movement, quality signals) · **APQR tracker** (one row per planned product with the ten slot cells and the Final QA signal; a product file per row with the ten annexe cards, Final QA, timeline, follow-up actions, notes and history) · **Plan** · **Annexes progress** (the "Actual APQR Annexes Progress for (MM/YYYY)" chart and counts per month by the eight owning departments, plus a heatmap) · **Final QA** (data-ready-never-raised list, raised, gaps, close-to-ready) · **Workflow** (parent workflow stage across the plan and by month, open workflows past due) · **Task register** (role, slot and record-source filters; inline stage and assignee editing) · **Workload** · **Actions** (QA follow-ups with owner and target date) · **Insights** · **Data & settings**.
+**Command centre** (completion of the required workload, the review pipeline from plan to closed-out workflow, RAG split, KPI tiles, month runway, slot completeness, departments, burn-up, Final QA, workflow stage, workloads, movement, quality signals) · **APQR tracker** (one row per planned product with the ten slot cells and the Final QA signal; a product file per row with the ten annexe cards, Final QA, timeline, follow-up actions, notes and history) · **Plan** · **Annexes progress** (the "Actual APQR Annexes Progress for (MM/YYYY)" chart and counts per month by the eight owning departments, plus a heatmap) · **Final QA** (data-ready-never-raised list, raised, gaps, close-to-ready) · **Workflow** (parent workflow stage across the plan and by month, open workflows past due) · **Data collection** (annexe progress by planned month, workload by data collection owner and by data reviewer, bulk assignment of missing people) · **Task register** (role, slot and record-source filters; inline stage and assignee editing; "in app" marker) · **Workload** · **Actions** (QA follow-ups with owner and target date) · **Insights** · **Data & settings**.
+
+### Assignment: users, roles and groups
+
+Scigeniq can assign a task to a person, a role or a group, but its export only names people, so role and group assignments arrive as "Unassigned". The app resolves those to the owning department's group (annexes, e.g. "RA group") or to the acting role ("APQR Owner (QA)" for workflows and Final QA, "Approver" for approvals), marked as inferred. Group members are the people seen doing that department's annexes. Each annexe also has a **data collection owner** (defaults to the named assignee) and a **data reviewer** (set in the app), editable one by one or in bulk on the Data collection page.
+
+### Changes made in the app
+
+Stage changes, closures, assignees, owners, reviewers and tasks added in the app are marked "in app". A Scigeniq refresh keeps them, unless Scigeniq has since closed the task itself. A master-tracker import offers to keep them too.
 
 ### Team version (published claude.ai copy)
 

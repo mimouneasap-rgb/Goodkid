@@ -6,10 +6,11 @@ import * as act from "./actions.js";
 import { $, $$, esc, icon, fmtN, fmtPct, fmtDate, toast, initTooltip, ragPill } from "./ui.js";
 import { dashboard, annexes, finalqa, workflow, workload, insights, bindChartToggles } from "./views-overview.js";
 import { tracker, plan, tasks, actions, data } from "./views-registers.js";
+import { collection } from "./views-collection.js";
 import { initDrawer, openProduct, refreshDrawer, closeDrawer, isOpen } from "./drawer.js";
 import { productKey, todayIso } from "./engine.js";
 
-const VIEWS = { dashboard, tracker, plan, annexes, finalqa, workflow, tasks, workload, actions, insights, data };
+const VIEWS = { dashboard, tracker, plan, annexes, finalqa, workflow, collection, tasks, workload, actions, insights, data };
 const NAV = [
   { sec: "Overview" },
   { id: "dashboard", label: "Command centre", icon: "dashboard" },
@@ -19,6 +20,7 @@ const NAV = [
   { id: "finalqa", label: "Final QA", icon: "check", count: (m) => m.kpi.fqReady || "", alert: true },
   { id: "workflow", label: "Workflow", icon: "history" },
   { sec: "Execution" },
+  { id: "collection", label: "Data collection", icon: "people", count: (m) => m.kpi.noReviewer || "", alert: false },
   { id: "tasks", label: "Task register", icon: "tasks", count: (m) => m.kpi.annexOpen },
   { id: "workload", label: "Workload", icon: "workload" },
   { id: "actions", label: "Actions", icon: "edit", count: (m) => m.kpi.openActions || "", alert: false },
@@ -131,7 +133,23 @@ function teamBanner() {
 
 /* ------------------------------------------------------------ routing */
 
-function go(view, params = {}) {
+const navStack = [];
+let booted = false;
+function updateBack() {
+  const b = $("#back-btn");
+  if (!b) return;
+  const can = navStack.length > 0 || isOpen();
+  b.hidden = !can;
+  if (can) b.innerHTML = `${icon("back")}<span>${isOpen() ? "Close product" : `Back to ${esc(VIEWS[navStack[navStack.length - 1]]?.title || "previous page")}`}</span>`;
+}
+function goBack() {
+  if (isOpen()) { closeDrawer(); updateBack(); return; }
+  const prev = navStack.pop();
+  if (prev) go(prev, {}, true);
+}
+function go(view, params = {}, fromBack = false) {
+  if (booted && !fromBack && view !== current) { navStack.push(current); if (navStack.length > 60) navStack.shift(); }
+  booted = true;
   const changed = view !== current;
   current = view;
   VIEWS[view].params?.(params);
@@ -143,6 +161,7 @@ function go(view, params = {}) {
   render();
   if (changed) { window.scrollTo(0, 0); $("#side").classList.remove("open"); }
   if (params.product && view !== "tasks") openProduct(params.product);
+  updateBack();
 }
 export function navigate(href) {
   const { view, params } = parseHref(href);
@@ -248,6 +267,8 @@ function initGlobal() {
   $("#report-chip").addEventListener("click", act.editReportDate);
   $("#theme-btn").addEventListener("click", toggleTheme);
   $("#menu-btn").innerHTML = String(icon("menu"));
+  $("#back-btn").addEventListener("click", goBack);
+  new MutationObserver(updateBack).observe($("#drawer"), { attributes: true, attributeFilter: ["class"] });
   $("#menu-btn").addEventListener("click", () => $("#side").classList.toggle("open"));
   $("#search-ic").innerHTML = String(icon("search"));
   $("#dropveil-ic").innerHTML = String(icon("upload"));
@@ -263,6 +284,7 @@ function initGlobal() {
 
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape" && $("#side").classList.contains("open")) $("#side").classList.remove("open");
+    if (e.altKey && e.key === "ArrowLeft" && !e.target.closest("input,textarea")) { e.preventDefault(); goBack(); }
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z" && !e.target.closest("input,textarea") && store.canUndo()) { e.preventDefault(); store.undo(); toast("Undone"); }
   });
   matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyThemeIcon);

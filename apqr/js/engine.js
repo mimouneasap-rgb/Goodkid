@@ -156,6 +156,32 @@ export function slotTitle(slot, form) {
   }
 }
 
+/* ------------------------------------------------------------ assignment */
+
+export const ASSIGNEE_TYPES = ["user", "role", "group"];
+const UNASSIGNED = (v) => !v || /^unassigned$/i.test(String(v).trim()) || /^-+$/.test(String(v).trim());
+/** Name of the department group an annexe is assigned to when Scigeniq shows no user. */
+export const groupName = (dept) => `${dept} group`;
+export const ROLE_APQR_OWNER = "APQR Owner (QA)";
+export const ROLE_APPROVER = "Approver";
+const looksLikeGroup = (v) => /\b(group|team|department|dept|role|owner|approver|reviewer)\b|\(.*\)/i.test(String(v || ""));
+
+/**
+ * Who a task is assigned to. Scigeniq can assign a task to a user, a role or a
+ * group; its export only names users, so role/group assignments arrive as
+ * "Unassigned". Those resolve to the owning department's group (annexes) or
+ * the role that acts on them (workflow / Final QA / approval), marked inferred.
+ */
+export function resolveAssignee(t, role, dept) {
+  if (!UNASSIGNED(t.assignee)) {
+    const type = t.assigneeType && ASSIGNEE_TYPES.includes(t.assigneeType) ? t.assigneeType : looksLikeGroup(t.assignee) ? "group" : "user";
+    return { name: String(t.assignee).trim(), type, inferred: false };
+  }
+  if (role === ROLES.ANNEX) return { name: groupName(dept), type: "group", inferred: true };
+  if (role === ROLES.APPROVAL) return { name: ROLE_APPROVER, type: "role", inferred: true };
+  return { name: ROLE_APQR_OWNER, type: "role", inferred: true };
+}
+
 function mode(values) {
   const c = new Map();
   let best = null, n = 0;
@@ -200,8 +226,18 @@ export function compute(state) {
     const closed = isClosed(t);
     const due = pl ? pl.overdueDate : "";
     const D = dayInt(due);
+    const asg = resolveAssignee(t, role, dept);
+    const collectorStored = !UNASSIGNED(t.collector);
+    const collector = collectorStored ? String(t.collector).trim() : asg.name;
+    const collectorType = collectorStored ? (t.collectorType || (looksLikeGroup(t.collector) ? "group" : "user")) : asg.type;
+    const reviewer = UNASSIGNED(t.reviewer) ? "" : String(t.reviewer).trim();
+    const reviewerType = reviewer ? (t.reviewerType || (looksLikeGroup(reviewer) ? "group" : "user")) : "";
     return {
       ...t, key, role, slot, dept, generated,
+      assigneeName: asg.name, assigneeType: asg.type, assigneeInferred: asg.inferred,
+      collector, collectorType, collectorPerson: collectorType === "user",
+      reviewer, reviewerType, reviewerPerson: reviewerType === "user",
+      appChanged: !!t.app || t.source === "app",
       shared: cls.shared,
       closed,
       due,
@@ -354,8 +390,11 @@ export function compute(state) {
     annexOpen: annexReal.filter((t) => !t.closed).length,
     annexNotRaised: annexAll.filter((t) => t.generated).length,
     overdueAnnexes: annexAll.filter((t) => t.overdue === "YES").length,
-    unassignedAnnexes: annexAll.filter((t) => !t.assignee || t.assignee === "Unassigned").length,
-    unassignedOpen: annexReal.filter((t) => !t.closed && (!t.assignee || t.assignee === "Unassigned")).length,
+    unassignedAnnexes: annexAll.filter((t) => UNASSIGNED(t.assignee)).length,
+    unassignedOpen: annexReal.filter((t) => !t.closed && t.assigneeType !== "user").length,
+    noCollector: annexReal.filter((t) => !t.closed && !t.collectorPerson).length,
+    noReviewer: annexReal.filter((t) => !t.closed && !t.reviewerPerson).length,
+    appChanged: real.filter((t) => t.appChanged).length,
     productsOverdue: products.filter((p) => p.rag === "OVERDUE").length,
     productsComplete: products.filter((p) => p.rag === "COMPLETE").length,
     notStartedOverdue: products.filter((p) => p.rag === "NOT STARTED - overdue").length,
@@ -421,10 +460,10 @@ export function compute(state) {
 
   /* --- owner workload --- */
   const owners = new Map();
-  const ow = (u) => { if (!owners.has(u)) owners.set(u, { user: u, annexes: 0, closed: 0, open: 0, notRaised: 0, overdue: 0, finalQa: 0, finalQaDone: 0, approvals: 0, earliestDue: "", depts: {}, products: new Set() }); return owners.get(u); };
+  const ow = (u, type = "user") => { if (!owners.has(u)) owners.set(u, { user: u, type, annexes: 0, closed: 0, open: 0, notRaised: 0, overdue: 0, finalQa: 0, finalQaDone: 0, approvals: 0, earliestDue: "", depts: {}, products: new Set() }); return owners.get(u); };
   for (const t of tasks) {
     if (t.isWorkflow) continue;
-    const o = ow(t.assignee || "Unassigned");
+    const o = ow(t.assigneeName, t.assigneeType);
     if (t.isApproval) { o.approvals++; continue; }
     if (t.isFinal) { o.finalQa++; if (t.closed) o.finalQaDone++; continue; }
     o.annexes++;
@@ -497,17 +536,68 @@ export function compute(state) {
   if (soon.length) push("warning", `Not triggered, due within ${settings.triggerWindowDays} days`, "Workflows that should be started soon to meet the PQR commitment.", soon.map((p) => ({ key: p.key, label: p.product, note: `due ${p.overdueDate}` })), "soon");
   const dups = products.filter((p) => p.flags.includes("DUPLICATE"));
   if (dups.length) push("warning", "Duplicate workflows", "Products carrying more than one APQR workflow reference.", dups.map((p) => ({ key: p.key, label: p.product, note: p.workflowRefs.join(" / ") })), "dups");
-  if (kpi.unassignedOpen) push("warning", "Open annexes with no assigned user", `${kpi.unassignedOpen} raised annexes are open and unassigned.`, [], "unassigned");
+  if (kpi.unassignedOpen) push("info", "Open annexes assigned to a group or role", `${kpi.unassignedOpen} open annexes show no named user in Scigeniq, so they are assigned to the owning department's group or role. Name a person on the Data collection page.`, [], "unassigned");
   if (offPlan.length) push("info", "Products with tasks but not in the plan", "Check the product name matches the plan exactly.", offPlan.map((p) => ({ key: p.key, label: p.product, note: `${p.annexTotal} annexes` })), "offplan");
   const sysOverdue = annexReal.filter((t) => !t.closed && /overdue/i.test(t.status)).length;
   const calcOverdue = annexReal.filter((t) => t.overdue === "YES").length;
   if (sysOverdue !== calcOverdue) push("info", "Overdue: system flag vs PQR due date", `Scigeniq flags ${sysOverdue} open annexes as Overdue against their own end date; ${calcOverdue} are overdue against the parent PQR due date used here.`, [], "reconcile");
   if (kpi.overdueActions) push("warning", "QA follow-up actions past their target date", `${kpi.overdueActions} follow-up actions are overdue.`, actions.filter((x) => x.overdue).map((x) => ({ key: x.key, label: x.text, note: `${x.product} · due ${x.due}` })), "actions");
 
+  /* --- groups / roles and their members (named users seen on that work) --- */
+  const groups = new Map();
+  const addGroup = (name, type, dept) => { if (!groups.has(name)) groups.set(name, { name, type, dept, members: new Map(), open: 0, total: 0 }); return groups.get(name); };
+  for (const d of DEPARTMENTS) addGroup(groupName(d), "group", d);
+  addGroup(ROLE_APQR_OWNER, "role", "QA");
+  addGroup(ROLE_APPROVER, "role", "");
+  for (const t of real) {
+    if (t.isAnnex && t.assigneeType === "user") { const g = groups.get(groupName(t.dept)); g.members.set(t.assigneeName, (g.members.get(t.assigneeName) || 0) + 1); }
+    if ((t.isWorkflow || t.isFinal) && t.assigneeType === "user") { const g = groups.get(ROLE_APQR_OWNER); g.members.set(t.assigneeName, (g.members.get(t.assigneeName) || 0) + 1); }
+    if (t.isApproval && t.assigneeType === "user") { const g = groups.get(ROLE_APPROVER); g.members.set(t.assigneeName, (g.members.get(t.assigneeName) || 0) + 1); }
+    const g = groups.get(t.assigneeName);
+    if (g) { g.total++; if (!t.closed) g.open++; }
+  }
+  const groupList = [...groups.values()].map((g) => ({ ...g, members: [...g.members.entries()].sort((a, b) => b[1] - a[1]).map(([name, n]) => ({ name, n })) }));
+  const people = [...new Set([...real.filter((t) => t.assigneeType === "user").map((t) => t.assigneeName), ...real.map((t) => t.collectorPerson ? t.collector : "").filter(Boolean), ...real.map((t) => t.reviewerPerson ? t.reviewer : "").filter(Boolean)])].sort();
+
+  /* --- data collection (annexes): progress by month, owners and reviewers --- */
+  const COLL_STAGES = ["Not triggered", "Collecting Data", "Data Review", "Completed"];
+  const collStage = (t) => t.generated ? "Not triggered" : t.closed ? "Completed" : /review/i.test(t.stage) ? "Data Review" : "Collecting Data";
+  const collection = {
+    stages: COLL_STAGES,
+    stageOf: collStage,
+    byMonth: months.map((mo) => {
+      const keySet = new Set(mo.products.map((p) => p.key));
+      const ts = annexAll.filter((t) => keySet.has(t.key));
+      return { month: mo.month, counts: Object.fromEntries(COLL_STAGES.map((st) => [st, ts.filter((t) => collStage(t) === st).length])), total: ts.length, tasks: ts };
+    }),
+    byCollector: [],
+    byReviewer: [],
+  };
+  const tally = (keyFn, kindFn) => {
+    const mp = new Map();
+    for (const t of annexReal) {
+      const k = keyFn(t) || "Reviewer not set";
+      if (!mp.has(k)) mp.set(k, { name: k, kind: kindFn(t), counts: Object.fromEntries(COLL_STAGES.map((st) => [st, 0])), total: 0, open: 0, overdue: 0 });
+      const r = mp.get(k);
+      r.counts[collStage(t)]++; r.total++;
+      if (!t.closed) { r.open++; if (t.overdue === "YES") r.overdue++; }
+    }
+    return [...mp.values()].sort((a, b) => b.open - a.open || b.total - a.total || a.name.localeCompare(b.name));
+  };
+  collection.byCollector = tally((t) => t.collector, (t) => t.collectorType);
+  collection.byReviewer = tally((t) => t.reviewer, (t) => (t.reviewer ? t.reviewerType : "missing"));
+
+  /* --- workflow stage and Final QA signal by planned month (for the charts) --- */
+  const wfBucket = (p) => !p.triggered ? "Not triggered" : p.wfStage === "Closed" ? "Closed" : p.fqSignal === "Complete" ? "Final QA done, not closed" : p.slotsOk === 10 ? "Data complete" : "Collecting annexes";
+  const WF_BUCKETS = ["Not triggered", "Collecting annexes", "Data complete", "Final QA done, not closed", "Closed"];
+  const workflowByMonth = months.map((mo) => ({ month: mo.month, counts: Object.fromEntries(WF_BUCKETS.map((b) => [b, mo.products.filter((p) => wfBucket(p) === b).length])), total: mo.planned }));
+  const fqByMonth = months.map((mo) => ({ month: mo.month, counts: Object.fromEntries(FINAL_QA_SIGNALS.map((sg) => [sg, mo.products.filter((p) => p.fqSignal === sg).length])), total: mo.planned }));
+
   return {
+    groups: groupList, people, collection, workflowByMonth, fqByMonth, WF_BUCKETS,
     report, settings, plan, tasks, realTasks: real, generatedTasks: generated, products, productByKey, planByKey, kpi, movementCurrent,
     statusSplit, ragCounts, fqCounts, byDept, bySlot, annexStages, workflowStages, forms, workload, months, offPlan, offPlanMatrix, quality, actions,
-    owners: [...new Set(real.map((t) => t.assignee).filter(Boolean))].sort(),
+    owners: [...new Set(real.map((t) => t.assigneeType === "user" ? t.assigneeName : "").filter(Boolean))].sort(),
   };
 }
 

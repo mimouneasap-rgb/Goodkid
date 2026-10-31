@@ -73,7 +73,8 @@ function render() {
   const audit = s.audit.filter((a) => a.key === p.key).slice(0, 40);
   const lastClosed = p.tasks.filter((t) => t.isAnnex && t.closedOn).map((t) => t.closedOn).sort().pop();
 
-  const taskLine = (t) => `<div class="row"><span title="${esc(t.title)}">${esc(t.title)} · ${esc(t.assignee)}${t.overdue === "YES" ? ' · <b style="color:var(--crit-ink)">late</b>' : ""}</span>${act.stageSelect(t)}</div>`;
+  const who = (t) => `${esc(t.collector)}${t.collectorType !== "user" ? ` <span class="tag warn">${esc(t.collectorType)}</span>` : ""}`;
+  const taskLine = (t) => `<div class="row"><span title="${esc(t.title)} · owner ${esc(t.collector)}${t.reviewer ? ` · reviewer ${esc(t.reviewer)}` : ""}">${who(t)}${t.reviewer ? ` → ${esc(t.reviewer)}` : ""}${t.appChanged ? ' <span class="tag new">IN APP</span>' : ""}${t.overdue === "YES" ? ' · <b style="color:var(--crit-ink)">late</b>' : ""}</span>${act.stageSelect(t)}</div>`;
   const slotCard = (sl) => {
     const st = p.slots[sl.key];
     return `<div class="slot-card ${slotCls(st.status)}">
@@ -82,7 +83,7 @@ function render() {
     </div>`;
   };
   const task = (t) => `<div class="task ${t.closed ? "closed" : ""}"><span class="stripe" style="background:${t.isFinal ? "var(--accent)" : "var(--line-2)"}"></span>
-    <div style="min-width:0"><b>${esc(t.title)}</b><small><span class="mono">${esc(t.ref)}</span> · ${esc(t.assignee)} · ${t.closed ? `closed ${fmtDate(t.closedOn)}` : t.generated ? "not triggered" : `open ${t.ageing ?? "?"} d`}</small></div>
+    <div style="min-width:0"><b>${esc(t.title)}${t.appChanged ? ' <span class="tag new">IN APP</span>' : ""}</b><small><span class="mono">${esc(t.ref)}</span> · ${esc(t.assigneeName)}${t.assigneeType !== "user" ? ` (${esc(t.assigneeType)})` : ""} · ${t.closed ? `closed ${fmtDate(t.closedOn)}` : t.generated ? "not triggered" : `open ${t.ageing ?? "?"} d`}</small></div>
     <div class="tright">${t.generated ? "" : `${act.stageSelect(t)}<button class="icon-btn sm" data-task-edit="${esc(t.id)}" aria-label="Edit task">${icon("edit")}</button>`}</div></div>`;
   const fqHint = {
     "NOT TRIGGERED - data ready": `<div class="callout warn">${icon("alert")}<div><b>All ten annexes are closed${lastClosed ? ` (last on ${fmtDate(lastClosed)})` : ""}.</b> The Final QA Data Collection can be raised in Scigeniq today.</div></div>`,
@@ -93,6 +94,7 @@ function render() {
   $("#drawer").innerHTML = `
   <div class="dr-head">
     <button class="icon-btn close" data-drawer-close aria-label="Close">${icon("close")}</button>
+    <button class="dr-back" data-drawer-close title="Back (Esc)">${icon("back")}Back</button>
     <div class="eyebrow"><span class="mono">${esc(p.triggered ? p.ref : "Not triggered")}</span><span>·</span><span>${esc(p.dosageForm)}</span><span>·</span><span>${esc(p.site)}</span>${p.plannedMonth ? `<span>·</span><span>Planned ${fmtMonth(p.plannedMonth)}</span>` : ""}</div>
     <h2>${esc(p.product)}</h2>
     <div class="hstats">

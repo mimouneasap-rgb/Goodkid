@@ -196,7 +196,7 @@ function taskRows(m) {
     if (tk.closure === "open" && (t.closed || t.generated)) return false;
     if (tk.closure === "closed" && !t.closed) return false;
     if (tk.overdue && t.overdue !== "YES") return false;
-    if (tk.assignee && t.assignee !== tk.assignee) return false;
+    if (tk.assignee && t.assigneeName !== tk.assignee && t.assignee !== tk.assignee) return false;
     if (tk.month && t.plannedMonth !== tk.month) return false;
     if (tk.product && t.key !== tk.product) return false;
     if (q && !`${t.ref} ${t.product} ${t.title} ${t.assignee} ${t.stage} ${t.slot}`.toLowerCase().includes(q)) return false;
@@ -236,7 +236,7 @@ export const tasks = {
       <label class="field"><select data-tk="slot" aria-label="Annexe slot">${opt("", "All annexes", tk.slot)}${SLOTS.map((s) => opt(s.key, s.label, tk.slot)).join("")}</select></label>
       <label class="field"><select data-tk="dept" aria-label="Department">${opt("", "All departments", tk.dept)}${DEPARTMENTS.map((d) => opt(d, d, tk.dept)).join("")}</select></label>
       <label class="field"><select data-tk="stage" aria-label="Stage">${opt("", "All stages", tk.stage)}${stages.map((s) => opt(s, s, tk.stage)).join("")}</select></label>
-      <label class="field"><select data-tk="assignee" aria-label="Assigned user">${opt("", "Everyone", tk.assignee)}${["Unassigned", ...m.owners.filter((u) => u !== "Unassigned")].map((u) => opt(u, u, tk.assignee)).join("")}</select></label>
+      <label class="field"><select data-tk="assignee" aria-label="Assigned to">${opt("", "Everyone", tk.assignee)}<optgroup label="Groups and roles">${m.groups.filter((g) => g.total).map((g) => opt(g.name, `${g.name} (${g.type})`, tk.assignee)).join("")}</optgroup><optgroup label="People">${m.owners.map((u) => opt(u, u, tk.assignee)).join("")}</optgroup></select></label>
       <label class="field"><select data-tk="month" aria-label="Planned month">${opt("", "All planned months", tk.month)}${months.map((x) => opt(x, fmtMonth(x), tk.month)).join("")}</select></label>
       ${prodName ? `<button type="button" class="chipf on" data-tk-clear-product title="Clear product filter">${esc(prodName.slice(0, 40))} ✕</button>` : ""}
     </div>
@@ -251,12 +251,12 @@ export const tasks = {
     const th = (key, label, cls = "") => `<th data-sort="${key}" class="${cls} ${tk.sort === key ? "sorted" + (tk.dir > 0 ? " asc" : "") : ""}">${label}</th>`;
     return `<div class="table-wrap"><table class="data"><thead><tr>${th("ref", "Ref")}${th("product", "Product")}${th("slot", "Annexe")}${th("title", "Title")}${th("stage", "Stage")}${th("assignee", "Assigned")}${th("created", "Created")}${th("closedOn", "Closed")}${th("due", "Due (PQR)")}${th("ageing", "Age", "r")}<th></th></tr></thead><tbody>
     ${view.map((t) => `<tr data-task-row="${esc(t.id)}" ${t.generated ? `data-key="${esc(t.key)}"` : ""}>
-      <td class="mono" style="white-space:nowrap">${t.generated ? '<span class="tag">NOT TRIGGERED</span>' : esc(t.ref)}</td>
+      <td class="mono" style="white-space:nowrap">${t.generated ? '<span class="tag">NOT TRIGGERED</span>' : esc(t.ref)}${t.appChanged ? ' <span class="tag new" title="Changed or added in the app; kept on Scigeniq refresh">IN APP</span>' : ""}</td>
       <td class="prod"><b title="${esc(t.product)}" style="max-width:240px">${esc(t.product)}</b></td>
       <td style="white-space:nowrap">${t.isAnnex ? `<span style="display:inline-flex;align-items:center;gap:6px"><i style="width:8px;height:8px;border-radius:50%;background:${deptColor(t.dept)}"></i>${esc(t.slot)}</span>` : `<span class="muted">${esc(t.role)}</span>`}${t.shared && t.isData ? ' <span class="tag" title="Arrives through the shared QA Data Collection stream">QA</span>' : ""}</td>
       <td style="max-width:220px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${esc(t.title)}">${esc(t.title)}</td>
       <td>${t.generated ? '<span class="muted">Not triggered</span>' : act.stageSelect(t, "inline")}</td>
-      <td>${t.generated ? '<span class="muted">Unassigned</span>' : `<input class="inline" data-task-assignee="${esc(t.id)}" list="dl-owners" value="${esc(t.assignee)}" aria-label="Assigned user" style="${t.assignee === "Unassigned" ? "color:var(--muted)" : ""}">`}</td>
+      <td>${t.generated ? `<span class="muted">${esc(t.assigneeName)}</span>` : `<input class="inline" data-task-assignee="${esc(t.id)}" list="dl-owners" value="${t.assigneeType === "user" ? esc(t.assignee) : ""}" placeholder="${esc(t.assigneeName)} (${esc(t.assigneeType)})" aria-label="Assigned to">`}</td>
       <td style="white-space:nowrap">${fmtDate(t.created)}</td>
       <td style="white-space:nowrap">${t.closed ? fmtDate(t.closedOn) : '<span class="muted">open</span>'}</td>
       <td style="white-space:nowrap">${t.due ? fmtDate(t.due) : "–"}${t.overdue === "YES" ? ' <span class="tag crit">LATE</span>' : ""}</td>

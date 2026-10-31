@@ -27,12 +27,23 @@ export function applyStage(t, stage, report) {
   }
 }
 
+/** Record that a task was changed in the app, so Scigeniq refreshes keep the change. */
+export function markApp(t, fields) {
+  const s = store.getState();
+  const app = { ...(t.app || {}) };
+  for (const f of fields) app[f] = t[f];
+  app.at = new Date().toISOString();
+  app.by = s.meta.user || "local user";
+  t.app = app;
+}
+const STAGE_FIELDS = ["stage", "closure", "status", "closedOn"];
+
 export function setTaskStage(id, stage) {
   const s = store.getState();
   const t = s.tasks.find((x) => x.id === id);
   if (!t || t.stage === stage) return;
   const from = t.stage;
-  store.update((st) => applyStage(st.tasks.find((x) => x.id === id), stage, store.getModel().report), {
+  store.update((st) => { const x = st.tasks.find((y) => y.id === id); applyStage(x, stage, store.getModel().report); markApp(x, STAGE_FIELDS); }, {
     audit: [{ entity: "task", key: productKey(t.product), label: `${t.ref} · ${t.title}`, field: "stage", from, to: stage }],
   });
 }
@@ -40,9 +51,57 @@ export function setTaskAssignee(id, user) {
   const t = store.getState().tasks.find((x) => x.id === id);
   if (!t || t.assignee === user) return;
   const from = t.assignee;
-  store.update((st) => { st.tasks.find((x) => x.id === id).assignee = user || "Unassigned"; }, {
+  store.update((st) => { const x = st.tasks.find((y) => y.id === id); x.assignee = user || "Unassigned"; markApp(x, ["assignee"]); }, {
     audit: [{ entity: "task", key: productKey(t.product), label: `${t.ref} · ${t.title}`, field: "assignee", from, to: user || "Unassigned" }],
   });
+}
+
+/** Set the data collection owner or data reviewer on one or many tasks. */
+export function setTaskPerson(ids, field, name, type = "user") {
+  const s = store.getState();
+  const set = new Set(ids);
+  const targets = s.tasks.filter((t) => set.has(t.id));
+  if (!targets.length) return;
+  const value = String(name || "").trim();
+  const typeField = field === "collector" ? "collectorType" : "reviewerType";
+  const audit = targets.filter((t) => (t[field] || "") !== value || (t[typeField] || "") !== (value ? type : "")).map((t) => ({ entity: "task", key: productKey(t.product), label: `${t.ref} · ${t.title}`, field: field === "collector" ? "data collection owner" : "data reviewer", from: t[field] || "", to: value ? `${value}${type !== "user" ? ` (${type})` : ""}` : "cleared" }));
+  if (!audit.length) return;
+  store.update((st) => {
+    for (const t of st.tasks) if (set.has(t.id)) { if (value) { t[field] = value; t[typeField] = type; } else { delete t[field]; delete t[typeField]; } markApp(t, [field, typeField]); }
+  }, { audit });
+  if (targets.length > 1) toast(`${field === "collector" ? "Data collection owner" : "Reviewer"} set on ${fmtN(targets.length)} annexes`, { kind: "success" });
+}
+
+/**
+ * Re-apply changes made in the app to freshly imported tasks: stage/closure,
+ * assignee, owner and reviewer edits survive a Scigeniq refresh unless
+ * Scigeniq has since closed the task itself; tasks added in the app are kept.
+ */
+export function preserveAppChanges(existing, incoming) {
+  const norm = (x) => String(x || "").toLowerCase().replace(/\s+/g, " ").trim();
+  const k = (t) => `${norm(t.ref)}|${norm(t.title)}|${productKey(t.product)}`;
+  const byKey = new Map();
+  for (const t of incoming) { const kk = k(t); if (!byKey.has(kk)) byKey.set(kk, []); byKey.get(kk).push(t); }
+  let kept = 0, caughtUp = 0, added = 0;
+  const out = [...incoming];
+  for (const old of existing) {
+    const has = old.app || old.source === "app" || old.collector || old.reviewer;
+    if (!has) continue;
+    const match = (byKey.get(k(old)) || []).shift();
+    if (!match) {
+      if (old.source === "app") { out.push(old); added++; }
+      continue;
+    }
+    for (const f of ["collector", "collectorType", "reviewer", "reviewerType"]) if (old[f]) match[f] = old[f];
+    if (old.app) {
+      const app = { ...old.app };
+      const scigeniqClosed = match.closure === "Closed";
+      if ("stage" in app && scigeniqClosed && app.closure === "Closed") { for (const f of STAGE_FIELDS) delete app[f]; caughtUp++; }
+      for (const f of Object.keys(app)) if (!["at", "by"].includes(f)) match[f] = app[f];
+      if (Object.keys(app).some((f) => !["at", "by"].includes(f))) { match.app = app; kept++; }
+    }
+  }
+  return { tasks: out, kept, caughtUp, added };
 }
 
 function stageOptions(current) {
@@ -63,12 +122,15 @@ export function editTask(task, defaults = {}) {
     <h2 class="modal-title">${isNew ? "Add task" : "Edit task"}</h2>
     <div class="form-grid">
       <label class="f">Reference ID<input name="ref" value="${t.ref}" placeholder="APQR-KE-123" required></label>
-      <label class="f">Assigned user<input name="assignee" list="dl-users" value="${t.assignee}"></label>
+      <label class="f">Assigned to<input name="assignee" list="dl-users" value="${t.assignee}"></label>
       <label class="f full">Product<input name="product" list="dl-products" value="${t.product}" required></label>
       <label class="f full">Title<input name="title" value="${t.title}" placeholder="QC Data Collection - Tablet"></label>
       <label class="f">Role<select name="taskRole">${Object.values(ROLES).map((x) => raw(`<option${x === (t.taskRole || classifyTask(t).role) ? " selected" : ""}>${x}</option>`))}</select></label>
       <label class="f">Annexe slot<select name="annexSlot"><option value="">—</option>${SLOTS.map((x) => raw(`<option value="${esc(x.key)}"${x.key === (t.annexSlot || classifyTask(t).slot) ? " selected" : ""}>${esc(x.label)} (${esc(x.dept)})</option>`))}</select><small>Which of the ten required annexes this task fills.</small></label>
       <label class="f">Stage<select name="stage">${raw(stageOptions(t.stage))}</select></label>
+      <label class="f">Assigned to is a<select name="assigneeType">${["user", "role", "group"].map((x) => raw(`<option${x === (t.assigneeType || "user") ? " selected" : ""}>${x}</option>`))}</select><small>Scigeniq tasks can go to a person, a role or a group.</small></label>
+      <label class="f">Data collection owner<input name="collector" list="dl-users" value="${t.collector || ""}" placeholder="Person who collects the data"></label>
+      <label class="f">Data reviewer<input name="reviewer" list="dl-users" value="${t.reviewer || ""}" placeholder="Person who reviews the data"></label>
       <label class="f">Status<input name="status" value="${t.status}" list="dl-status"></label>
       <label class="f">Created<input type="date" name="created" value="${(t.created || "").slice(0, 10)}"></label>
       <label class="f">Closed on<input type="date" name="closedOn" value="${(t.closedOn || "").slice(0, 10)}"></label>
@@ -88,7 +150,9 @@ export function editTask(task, defaults = {}) {
       if (v !== "ok") return;
       const f = new FormData(d.querySelector("form"));
       const next = { ...t };
-      for (const k of ["ref", "product", "title", "assignee", "status", "taskClass", "criticality", "taskRole", "annexSlot"]) next[k] = String(f.get(k) || "").trim();
+      for (const k of ["ref", "product", "title", "assignee", "status", "taskClass", "criticality", "taskRole", "annexSlot", "assigneeType", "collector", "reviewer"]) next[k] = String(f.get(k) || "").trim();
+      if (!next.collector) delete next.collector; else next.collectorType = next.collectorType || "user";
+      if (!next.reviewer) delete next.reviewer; else next.reviewerType = next.reviewerType || "user";
       if (next.taskRole === ROLES.APPROVAL) next.taskClass = "Approval";
       else if (next.taskRole === ROLES.WORKFLOW) next.taskClass = "Workflow";
       else next.taskClass = "Data Collection";
@@ -110,8 +174,8 @@ export function editTask(task, defaults = {}) {
         : Object.keys(next).filter((k) => k !== "id" && String(next[k] ?? "") !== String(task[k] ?? "")).map((k) => ({ entity: "task", key: productKey(next.product), label: `${next.ref} · ${next.title}`, field: k, from: task[k], to: next[k] }));
       if (!changes.length) return;
       store.update((st) => {
-        if (isNew) st.tasks.push(next);
-        else Object.assign(st.tasks.find((x) => x.id === t.id), next);
+        if (isNew) { next.source = "app"; st.tasks.push(next); }
+        else { markApp(next, changes.map((c) => c.field).filter((f) => !["app", "id"].includes(f))); Object.assign(st.tasks.find((x) => x.id === t.id), next); }
       }, { audit: changes });
       toast(isNew ? "Task added" : "Task updated", { kind: "success" });
     },
@@ -333,6 +397,7 @@ function previewTracker(wb, fileName) {
     ${imp.baseline ? raw(`<div class="callout">${icon("history")}<div>The workbook carries a comparison baseline (<b>${esc(imp.baseline.label)}</b>) with previous % complete for ${fmtN(Object.keys(imp.baseline.prevPct).length)} products. It will be used for the movement figures.</div></div>`) : ""}
     ${imp.warnings.length ? raw(`<div class="callout warn">${icon("alert")}<div>${imp.warnings.map(esc).join("<br>")}</div></div>`) : ""}
     <label class="f check"><input type="checkbox" name="useFileDate" ${imp.settings.reportDate ? "checked" : ""}> Use the workbook’s report date (${imp.settings.reportDate ? fmtDate(imp.settings.reportDate) : "none"}) instead of today</label>
+    ${current.tasks.some((t) => t.app || t.source === "app") ? raw(`<label class="f check"><input type="checkbox" name="keepApp" checked> Keep the ${current.tasks.filter((t) => t.app || t.source === "app").length} task change(s) made in the app (closures, owners, reviewers, added tasks)</label>`) : ""}
     ${localComments ? raw(`<label class="f check"><input type="checkbox" name="keepComments" checked> Keep the ${localComments} comment(s) already entered in the app where the workbook has none</label>`) : ""}
     ${store.hasData() ? raw(`<div class="callout warn">${icon("alert")}<div>This replaces the plan and task register currently in the app. You can undo straight after.</div></div>`) : ""}
     <div class="modal-actions"><button type="button" class="btn btn-ghost" data-close>Cancel</button><button class="btn btn-primary" value="ok">${icon("upload")}Import</button></div>
@@ -348,7 +413,7 @@ function previewTracker(wb, fileName) {
       store.replace({
         ...current,
         meta: { ...current.meta, programme: current.meta.programme && current.meta.programme !== "APQR Master Tracker" ? current.meta.programme : prog ? `${prog.charAt(0)}${prog.slice(1).toLowerCase()} APQR programme` : "APQR Master Tracker", organisation: current.meta.organisation || imp.organisation || "", planRef: current.meta.planRef || imp.planRef || "", source: fileName, sourceDate: imp.settings.reportDate || "", importedAt: new Date().toISOString() },
-        settings, plan: imp.plan, tasks: imp.tasks, products, excluded: imp.excluded, baseline: imp.baseline,
+        settings, plan: imp.plan, tasks: f.get("keepApp") ? preserveAppChanges(current.tasks, imp.tasks).tasks : imp.tasks, products, excluded: imp.excluded, baseline: imp.baseline,
         audit: [{ at: new Date().toISOString(), user: current.meta.user || "local user", entity: "data", label: fileName, field: "import", from: "", to: `master tracker: ${imp.plan.length} plan rows, ${imp.tasks.length} tasks` }, ...current.audit],
       }, { label: "Import tracker" });
       toast(`Imported ${fmtN(imp.tasks.length)} tasks and ${fmtN(imp.plan.length)} planned products`, { kind: "success", action: "Undo", onAction: () => store.undo() });
@@ -436,6 +501,7 @@ function scigeniqWizard(wb, kind, fileName) {
         <div class="stat"><div class="k">Products</div><div class="v">${fmtN(result.stats.products)}</div></div>
         <div class="stat"><div class="k">Matched to plan</div><div class="v">${state.plan.length ? `${fmtN(matched)}<small class="muted" style="font-size:12px"> / ${fmtN(prodKeys.length)}</small>` : "–"}</div></div>
       </div>
+      ${state.tasks.some((t) => t.app || t.source === "app") ? `<div class="callout">${icon("check")}<div>${fmtN(state.tasks.filter((t) => t.app || t.source === "app").length)} task(s) were changed or added in the app. Those changes are kept unless Scigeniq has since closed the task itself.</div></div>` : ""}
       ${result.stats.resolvedDup ? `<div class="callout">${icon("info")}<div>${fmtN(result.stats.resolvedDup)} task(s) with a “Task - Duplicated” parent were matched back to their product through their APQR reference or creation batch.</div></div>` : ""}
       ${!state.plan.length ? `<div class="callout warn">${icon("alert")}<div>No APQR plan is loaded yet, so planned months and PQR due dates can’t be calculated. Import the master tracker or a plan sheet as well, or add products on the Plan page.</div></div>` : prodKeys.length - matched > 0 ? `<div class="callout warn">${icon("alert")}<div>${fmtN(prodKeys.length - matched)} product name(s) don’t match the plan. They’ll show under “Not in plan” on the Insights page.</div></div>` : ""}`) : ""}
       <div class="modal-actions"><button type="button" class="btn btn-ghost" data-close>Cancel</button><button class="btn btn-primary" value="ok" ${result ? "" : "disabled"}>${icon("upload")}Import ${result ? fmtN(result.stats.tasks) : ""} tasks</button></div>`);
@@ -459,15 +525,16 @@ function scigeniqWizard(wb, kind, fileName) {
     if (d.returnValue !== "ok" || !form._result) return;
     const res = form._result;
     const before = store.getModel();
+    let preserved = null;
     store.update((st) => {
       if (snapshot && hadTasks) { st.baseline = snapshotBaseline(before, label || fmtDate(before.report)); for (const k of Object.keys(st.products)) delete st.products[k].isNew; }
-      if (mode === "replace") { st.tasks = res.tasks; st.excluded = res.excluded; }
-      else { const m = mergeTasks(st.tasks, res.tasks); st.tasks = m.tasks; st.excluded = [...st.excluded, ...res.excluded]; }
+      if (mode === "replace") { const pr = preserveAppChanges(st.tasks, res.tasks); st.tasks = pr.tasks; st.excluded = res.excluded; preserved = pr; }
+      else { const snap = JSON.parse(JSON.stringify(st.tasks)); const m = mergeTasks(st.tasks, res.tasks); const pr = preserveAppChanges(snap, m.tasks); st.tasks = pr.tasks; st.excluded = [...st.excluded, ...res.excluded]; preserved = pr; }
       st.meta.source = fileName;
       st.meta.sourceDate = new Date().toISOString().slice(0, 10);
       st.meta.importedAt = new Date().toISOString();
     }, { undoable: true, label: "Scigeniq import", audit: [{ entity: "data", label: fileName, field: "import", from: "", to: `Scigeniq (${mode}): ${res.stats.tasks} tasks, ${res.stats.excluded} excluded` }] });
-    toast(`Imported ${fmtN(res.stats.tasks)} Scigeniq tasks${snapshot && hadTasks ? " · baseline saved" : ""}`, { kind: "success", action: "Undo", onAction: () => store.undo() });
+    toast(`Imported ${fmtN(res.stats.tasks)} Scigeniq tasks${preserved && (preserved.kept + preserved.added) ? ` · ${fmtN(preserved.kept + preserved.added)} app changes kept` : ""}${snapshot && hadTasks ? " · baseline saved" : ""}`, { kind: "success", action: "Undo", onAction: () => store.undo() });
   });
 }
 

@@ -156,6 +156,7 @@ export function importTrackerWorkbook(workbook) {
       crit: pick(idx, "Criticality"), created: pick(idx, "Created"), start: pick(idx, "Start"), closedOn: pick(idx, "Closed On"),
       closure: pick(idx, "Closure"), by: pick(idx, "Created By"), end: pick(idx, "Task End Date (Scigeniq)", "Task End Date", "End Date"),
       role: pick(idx, "Task Role"), slot: pick(idx, "Annexe Slot"), source: pick(idx, "Record Source"),
+      atype: pick(idx, "Assignee Type"), coll: pick(idx, "Data Collection Owner"), ctype: pick(idx, "Owner Type"), rev: pick(idx, "Data Reviewer"), rtype: pick(idx, "Reviewer Type"), app: pick(idx, "Changed in App"),
     };
     let skipped = 0;
     for (let r = th.row + 1; r < taskRows.length; r++) {
@@ -167,10 +168,19 @@ export function importTrackerWorkbook(workbook) {
       if (/generated/i.test(str(cell(row, c.source))) || ref === "(not triggered)") { skipped++; continue; }
       const role = str(cell(row, c.role));
       const slot = str(cell(row, c.slot));
+      const extra = {};
+      const atype = str(cell(row, c.atype));
+      if (["role", "group"].includes(atype) && str(cell(row, c.user)) && !/^unassigned$/i.test(str(cell(row, c.user)))) extra.assigneeType = atype;
+      const appJson = str(cell(row, c.app));
+      if (appJson) { try { extra.app = JSON.parse(appJson); } catch { /* ignore */ } }
+      if (/added in app/i.test(str(cell(row, c.source)))) extra.source = "app";
+      if (extra.app && "collector" in extra.app && str(cell(row, c.coll))) { extra.collector = str(cell(row, c.coll)); extra.collectorType = str(cell(row, c.ctype)) || "user"; }
+      if (str(cell(row, c.rev))) { extra.reviewer = str(cell(row, c.rev)); extra.reviewerType = str(cell(row, c.rtype)) || "user"; }
       tasks.push({
         id: uid(), ref, product,
         ...(Object.values(ROLES).includes(role) ? { taskRole: role } : {}),
         ...(SLOT_BY_KEY[slot] ? { annexSlot: slot } : {}),
+        ...extra,
         dosageForm: str(cell(row, c.form)), site: str(cell(row, c.site)),
         department: str(cell(row, c.dept)), stream: str(cell(row, c.stream)), taskClass: str(cell(row, c.cls)) || "Data Collection",
         taskType: str(cell(row, c.type)), title: str(cell(row, c.title)), stage: str(cell(row, c.stage)), status: str(cell(row, c.status)),

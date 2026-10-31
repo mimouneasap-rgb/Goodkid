@@ -195,3 +195,48 @@ test("merge updates matching tasks and adds new ones", () => {
   assert.equal(out.tasks[0].stage, "Completed");
   assert.equal(out.tasks[0].id, a.id);
 });
+
+test("Unassigned resolves to the department group or the acting role; named users stay users", async () => {
+  const { resolveAssignee, ROLES: R } = await import("../apqr/js/engine.js");
+  assert.deepEqual(resolveAssignee({ assignee: "Unassigned" }, R.ANNEX, "RA"), { name: "RA group", type: "group", inferred: true });
+  assert.equal(resolveAssignee({ assignee: "" }, R.WORKFLOW, "QA").type, "role");
+  assert.equal(resolveAssignee({ assignee: "Unassigned" }, R.APPROVAL, "Approval").name, "Approver");
+  assert.deepEqual(resolveAssignee({ assignee: "Ryma Benali" }, R.ANNEX, "QA"), { name: "Ryma Benali", type: "user", inferred: false });
+  assert.equal(resolveAssignee({ assignee: "QC Team" }, R.ANNEX, "QC").type, "group");
+  assert.equal(resolveAssignee({ assignee: "QA Lead", assigneeType: "role" }, R.ANNEX, "QA").type, "role");
+  const m = compute(baseState([task({ title: "RA Data Collection" }), task({ title: "RA Data Collection", assignee: "Amine Tebbi", ref: "APQR-T-2", product: "OTHER-SITE" })], "2026-06-15"));
+  const raGroup = m.groups.find((g) => g.name === "RA group");
+  assert.equal(raGroup.open, 1);
+  assert.deepEqual(raGroup.members.map((x) => x.name), ["Amine Tebbi"]);
+  assert.equal(m.kpi.unassignedOpen, 1);
+});
+
+test("data collection owner defaults to the assignee; reviewer starts empty", () => {
+  const m = compute(baseState([task({ title: "QA Data Collection", assignee: "Ayman Salem" }), task({ title: "RA Data Collection", reviewer: "Ayman Salem" })], "2026-06-15"));
+  const [qa, ra] = [m.realTasks.find((t) => t.slot === "QA"), m.realTasks.find((t) => t.slot === "RA")];
+  assert.equal(qa.collector, "Ayman Salem");
+  assert.equal(qa.collectorPerson, true);
+  assert.equal(qa.reviewerPerson, false);
+  assert.equal(ra.collector, "RA group");
+  assert.equal(ra.collectorPerson, false);
+  assert.equal(ra.reviewer, "Ayman Salem");
+  assert.equal(m.kpi.noReviewer, 1);
+});
+
+test("app changes survive a Scigeniq refresh unless Scigeniq has closed the task", async () => {
+  const { preserveAppChanges } = await import("../apqr/js/actions.js");
+  const a = task({ id: "a", ref: "APQR-T-1", title: "RA Data Collection", stage: "Completed", closure: "Closed", status: "Completed", closedOn: "2026-10-31", app: { stage: "Completed", closure: "Closed", status: "Completed", closedOn: "2026-10-31", at: "x", by: "me" }, reviewer: "Ayman Salem", reviewerType: "user" });
+  const b = task({ id: "b", ref: "APQR-T-1", title: "CM Data Collection", stage: "Completed", closure: "Closed", app: { stage: "Completed", closure: "Closed", status: "Completed", closedOn: "2026-10-31", at: "x", by: "me" } });
+  const added = task({ id: "c", ref: "QCTAB-T-9", title: "QC RM/PM Data Collection - Tablet", source: "app" });
+  const incoming = [task({ id: "n1", ref: "APQR-T-1", title: "RA Data Collection" }), task({ id: "n2", ref: "APQR-T-1", title: "CM Data Collection", stage: "Completed", closure: "Closed", closedOn: "2026-11-02" })];
+  const out = preserveAppChanges([a, b, added], incoming);
+  const ra = out.tasks.find((t) => t.title === "RA Data Collection");
+  const cm = out.tasks.find((t) => t.title === "CM Data Collection");
+  assert.equal(ra.closure, "Closed");
+  assert.equal(ra.reviewer, "Ayman Salem");
+  assert.ok(ra.app);
+  assert.equal(cm.closedOn, "2026-11-02");
+  assert.equal(cm.app, undefined);
+  assert.ok(out.tasks.some((t) => t.id === "c"));
+  assert.deepEqual([out.kept, out.caughtUp, out.added], [1, 1, 1]);
+});
