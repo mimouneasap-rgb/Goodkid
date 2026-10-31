@@ -22,18 +22,23 @@ Drop a file anywhere on the page, or use **Import**. The app works out what kind
 | Plan sheet `.xlsx` | Product, Process, Review Start and Review End |
 | App backup `.json` | A full restore |
 
-### Calculations (same as the workbook)
+### Calculations (APQR Master Tracker v3 model)
 
-- **Planned PQR month** = the month after the review period ends. **PQR overdue date** = the 1st of that month + 3 months (configurable). Every annexe of a product shares that due date.
-- **% complete** = closed data-collection tasks ÷ all data-collection tasks. Approval signatures and the workflow itself are excluded.
-- **RAG**: COMPLETE (workflow closed or all annexes closed) → OVERDUE (an overdue annexe, or the PQR overdue date has passed) → DUE SOON (workflow due date or PQR overdue date within 14 days) → ON TRACK.
-- **Bottleneck**: the department holding the most open annexes ("several" on a tie).
+- **Ten required annexes per product**: Compliance, IPC, Process, QA, QC, QC OOS/OOT, RA, Supplier Qualification, Validation Metrology and Validation Process. A slot is **OK** when one of its tasks is closed, **open** when raised but not closed, **MISSING** when never raised. Scigeniq files several annexes under the shared "QA Data Collection" type; the task **title** names the owning department (CM = Compliance, Supplier = Supplier Qualification, VL = Validation Process…), and every figure uses it.
+- **Final QA compilation**: raised by the APQR Owner once all ten annexes are closed. A review is **COMPLETE** when its Final QA is closed. "Data ready, never raised" and "Final QA closed with an annexe gap" are tracked explicitly.
+- **Untriggered workload**: a planned PQR with no workflow still owes its workflow, ten annexes and Final QA. The app generates them at "Not triggered" from the plan, so totals cover the full required workload. When the Scigeniq refresh triggers the product, the generated rows give way to the real ones.
+- **Planned PQR month** = the month after the review period ends. **PQR overdue date** = the 1st of that month + 3 months (configurable). Every task of a product shares that due date.
+- **RAG**: untriggered → NOT STARTED - overdue / Not yet due; triggered → COMPLETE (Final QA closed) → OVERDUE (past the PQR overdue date) → DUE SOON (within 14 days) → ON TRACK.
 
 ### Screens
 
-**Command centre** (hero KPIs, RAG split, KPI tiles, a month-by-month runway, annexe burn-up, departments, stages, dosage-form coverage, top workloads, movement vs baseline, quality signals) · **APQR tracker** (filterable, sortable product register, with a product file per row: timeline, annexes with inline stage editing, owner, priority, QA comments and history) · **Plan** (grouped by planned month, add/edit/remove products) · **Annexes progress** (the "Actual APQR Annexes Progress for (MM/YYYY)" chart and counts table per month, plus a department × month completion heatmap) · **Task register** (inline stage and assignee editing, add/edit/delete tasks, CSV export) · **Workload** · **Insights** (data-quality checks and excluded rows) · **Data & settings** (import, Excel/JSON export, baseline, rules, audit trail).
+**Command centre** (completion of the required workload, the review pipeline from plan to closed-out workflow, RAG split, KPI tiles, month runway, slot completeness, departments, burn-up, Final QA, workflow stage, workloads, movement, quality signals) · **APQR tracker** (one row per planned product with the ten slot cells and the Final QA signal; a product file per row with the ten annexe cards, Final QA, timeline, follow-up actions, notes and history) · **Plan** · **Annexes progress** (the "Actual APQR Annexes Progress for (MM/YYYY)" chart and counts per month by the eight owning departments, plus a heatmap) · **Final QA** (data-ready-never-raised list, raised, gaps, close-to-ready) · **Workflow** (parent workflow stage across the plan and by month, open workflows past due) · **Task register** (role, slot and record-source filters; inline stage and assignee editing) · **Workload** · **Actions** (QA follow-ups with owner and target date) · **Insights** · **Data & settings**.
 
-Every edit is written to an audit trail. The **Excel export** has the same layout as the master tracker (Dashboard, APQR Tracker, APQR Plan, Task Register, Owner Workload, Annexes Progress, Excluded Tasks, Audit Trail), so it opens in Excel and can be imported back.
+### Team version (published claude.ai copy)
+
+The page published on claude.ai carries its data inside it. Each viewer works on a local copy; an editor can **Publish for everyone**, which republishes the page with the current data so everyone who opens the link sees the same tracker. A viewer with unpublished changes is told when a newer team version exists and can load it or keep their own.
+
+Every edit is written to an audit trail. The **Excel export** follows the master tracker v3 layout (Dashboard, APQR Tracker, Final QA Progress, Workflow Progress, Annexes Progress, APQR Plan, Task Register with Task Role / Annexe Slot / Record Source, Owner Workload, Actions, Excluded Tasks, Audit Trail), so it opens in Excel and imports back without loss.
 
 Data is stored only in the browser it was entered in (`localStorage`). Files are read locally and never uploaded. Scigeniq remains the system of record. This tracker has no authentication or e-signatures (21 CFR Part 11 / EU Annex 11).
 
@@ -43,7 +48,8 @@ Data is stored only in the browser it was entered in (`localStorage`). Files are
 | `apqr/js/engine.js` | Pure calculation engine (plan, tasks, products, KPIs, months, quality signals) |
 | `apqr/js/importers.js` | Master tracker, Scigeniq and plan importers |
 | `apqr/js/exporter.js` | Excel workbook and JSON backup export |
-| `apqr/js/store.js`, `actions.js` | State, persistence, undo, audit trail and edit/import flows |
+| `apqr/js/store.js`, `actions.js` | State, persistence, undo, audit trail, edit/import flows and follow-up actions |
+| `apqr/js/team.js` | Rebuilds the single-file page with new data for "Publish for everyone" |
 | `apqr/js/app.js`, `views-*.js`, `drawer.js`, `charts.js`, `ui.js` | Interface |
 | `apqr/js/demo.js` | Fictional demo programme |
 | `tests/apqr.test.js` | Unit tests (`npm test`) |

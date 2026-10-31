@@ -1,23 +1,27 @@
 // App shell: routing, navigation, top bar, global search, drag-and-drop
 // import, theme and the welcome screen.
+import { inViewer, canRebuild } from "./team.js"; // first: captures the pristine page shell
 import * as store from "./store.js";
 import * as act from "./actions.js";
 import { $, $$, esc, icon, fmtN, fmtPct, fmtDate, toast, initTooltip, ragPill } from "./ui.js";
-import { dashboard, annexes, workload, insights, bindChartToggles } from "./views-overview.js";
-import { tracker, plan, tasks, data } from "./views-registers.js";
+import { dashboard, annexes, finalqa, workflow, workload, insights, bindChartToggles } from "./views-overview.js";
+import { tracker, plan, tasks, actions, data } from "./views-registers.js";
 import { initDrawer, openProduct, refreshDrawer, closeDrawer, isOpen } from "./drawer.js";
 import { productKey, todayIso } from "./engine.js";
 
-const VIEWS = { dashboard, tracker, plan, annexes, tasks, workload, insights, data };
+const VIEWS = { dashboard, tracker, plan, annexes, finalqa, workflow, tasks, workload, actions, insights, data };
 const NAV = [
   { sec: "Overview" },
   { id: "dashboard", label: "Command centre", icon: "dashboard" },
   { id: "tracker", label: "APQR tracker", icon: "tracker", count: (m) => m.products.length },
   { id: "plan", label: "Plan", icon: "plan", count: (m) => m.plan.length },
   { id: "annexes", label: "Annexes progress", icon: "annexes" },
+  { id: "finalqa", label: "Final QA", icon: "check", count: (m) => m.kpi.fqReady || "", alert: true },
+  { id: "workflow", label: "Workflow", icon: "history" },
   { sec: "Execution" },
-  { id: "tasks", label: "Task register", icon: "tasks", count: (m) => m.kpi.open },
+  { id: "tasks", label: "Task register", icon: "tasks", count: (m) => m.kpi.annexOpen },
   { id: "workload", label: "Workload", icon: "workload" },
+  { id: "actions", label: "Actions", icon: "edit", count: (m) => m.kpi.openActions || "", alert: false },
   { sec: "Control" },
   { id: "insights", label: "Insights", icon: "insights", count: (m) => m.quality.filter((q) => q.level === "critical" || q.level === "serious").length || "", alert: true },
   { id: "data", label: "Data & settings", icon: "data" },
@@ -106,8 +110,23 @@ function render() {
     inner.innerHTML = `<div class="card"><div class="callout warn">${icon("alert")}<div>This view could not be drawn: ${esc(e.message)}</div></div></div>`;
   }
   host.replaceChildren(inner);
+  if (store.hasData()) {
+    const banner = teamBanner();
+    if (banner) inner.insertAdjacentHTML("afterbegin", banner);
+  }
   if ((store.hasData() || current === "data") && v.bind) v.bind(inner, render);
   bindChartToggles(inner, render);
+}
+
+function teamBanner() {
+  if (store.hasNewerTeamVersion()) {
+    const si = store.seedInfo();
+    return `<div class="team-banner">${icon("info")}<span class="grow"><b>A newer team version is available</b>${si?.publishedAt ? ` (published ${fmtDate(si.publishedAt.slice(0, 10))}${si.publishedBy ? ` by ${esc(si.publishedBy)}` : ""})` : ""}. You have unpublished changes in this browser.</span><button class="btn btn-sm btn-primary" data-action="adopt-seed">Load team version</button><button class="btn btn-sm btn-ghost" data-action="dismiss-seed">Keep mine</button></div>`;
+  }
+  if (inViewer() && canRebuild() && store.isDirty() && current !== "data") {
+    return `<div class="team-banner"><span class="team-dot"></span><span class="grow"><b>You have changes only you can see.</b> Publish them so everyone opening this tracker sees the same version.</span><button class="btn btn-sm btn-primary" data-action="publish-team">${icon("upload")}Publish for everyone</button><a class="btn btn-sm btn-ghost" href="#/data">Details</a></div>`;
+  }
+  return "";
 }
 
 /* ------------------------------------------------------------ routing */
@@ -146,11 +165,11 @@ function initSearch() {
     if (!q) { close(); return; }
     const m = store.getModel();
     const prods = m.products.filter((p) => `${p.product} ${p.ref} ${p.workflowRefs.join(" ")} ${p.qcRefs.join(" ")}`.toLowerCase().includes(q)).slice(0, 7);
-    const planOnly = m.plan.filter((p) => !p.triggered && p.product.toLowerCase().includes(q)).slice(0, 4);
+    const planOnly = [];
     const people = m.workload.filter((o) => o.user.toLowerCase().includes(q)).slice(0, 4);
     const taskRef = m.tasks.filter((t) => t.ref.toLowerCase() === q).slice(0, 3);
     items = [
-      ...prods.map((p) => ({ h: "Products", run: () => openProduct(p.key), html: `<span class="sp-main"><b>${esc(p.product)}</b><small class="mono">${esc(p.ref)}</small> <small>· ${fmtPct(p.pct)} complete</small></span>${ragPill(p.rag)}` })),
+      ...prods.map((p) => ({ h: "Products", run: () => openProduct(p.key), html: `<span class="sp-main"><b>${esc(p.product)}</b><small class="mono">${esc(p.triggered ? p.ref : "not triggered")}</small> <small>· ${p.slotsOk}/10 annexes</small></span>${ragPill(p.rag)}` })),
       ...taskRef.filter((t) => !prods.find((p) => p.key === t.key)).map((t) => ({ h: "Tasks", run: () => openProduct(t.key), html: `<span class="sp-main"><b>${esc(t.ref)} · ${esc(t.title)}</b><small>${esc(t.product)}</small></span>` })),
       ...planOnly.map((p) => ({ h: "Planned, not triggered", run: () => { location.hash = `#/plan?q=${encodeURIComponent(p.product)}`; }, html: `<span class="sp-main"><b>${esc(p.product)}</b><small>Review ends ${esc(p.reviewEnd)} · ${esc(p.tracking)}</small></span>` })),
       ...people.map((o) => ({ h: "People", run: () => { location.hash = `#/tasks?assignee=${encodeURIComponent(o.user)}`; }, html: `<span class="sp-main"><b>${esc(o.user)}</b><small>${o.open} open · ${o.overdue} overdue</small></span>` })),
@@ -202,10 +221,12 @@ function initGlobal() {
   document.addEventListener("click", (e) => {
     const a = e.target.closest("[data-action]");
     if (a) {
-      const fn = { import: act.pickFile, "export-xlsx": act.exportExcel, "export-json": act.exportJson, demo: act.loadDemo, clear: act.clearAll, "reset-seed": act.resetToSeed, print: () => window.print(), "report-date": act.editReportDate }[a.dataset.action];
+      const fn = { import: act.pickFile, "export-xlsx": act.exportExcel, "export-json": act.exportJson, demo: act.loadDemo, clear: act.clearAll, "reset-seed": act.resetToSeed, "publish-team": act.publishTeam, "adopt-seed": () => { store.adoptSeed(); toast("Team version loaded", { kind: "success", action: "Undo", onAction: () => store.undo() }); }, "dismiss-seed": store.dismissNewer, print: () => window.print(), "report-date": act.editReportDate }[a.dataset.action];
       if (fn) { e.preventDefault(); fn(); }
       return;
     }
+    const aa = e.target.closest("#view [data-add-action]");
+    if (aa && aa.dataset.addAction) { e.stopPropagation(); act.editAction(aa.dataset.addAction, null); return; }
     const op = e.target.closest("[data-open-product]");
     if (op) { openProduct(op.dataset.openProduct); return; }
     const link = e.target.closest('a[href^="#"]');

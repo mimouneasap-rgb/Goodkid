@@ -1,7 +1,8 @@
 // User actions shared by several views: editing tasks and plan rows, the
 // import wizard, exports, demo data and baseline management.
 import * as store from "./store.js";
-import { compute, snapshotBaseline, productKey, dayInt, isoFromDay, DEPARTMENTS, CLASSES, STAGE_ORDER, monthYearToEnd } from "./engine.js";
+import { compute, snapshotBaseline, productKey, dayInt, isoFromDay, CLASSES, STAGE_ORDER, monthYearToEnd, SLOTS, SLOT_BY_KEY, ROLES, classifyTask } from "./engine.js";
+import { teamStatus, publishForTeam } from "./team.js";
 import { readXlsx, parseCsv } from "./xlsx.js";
 import { detect, importTrackerWorkbook, guessMapping, transformScigeniq, importPlanSheet, mergeTasks, SCIGENIQ_FIELDS, findHeaderRow, uid } from "./importers.js";
 import { buildWorkbook, backupJson } from "./exporter.js";
@@ -62,12 +63,12 @@ export function editTask(task, defaults = {}) {
     <h2 class="modal-title">${isNew ? "Add task" : "Edit task"}</h2>
     <div class="form-grid">
       <label class="f">Reference ID<input name="ref" value="${t.ref}" placeholder="APQR-KE-123" required></label>
-      <label class="f">Task class<select name="taskClass">${CLASSES.map((c) => raw(`<option${c === t.taskClass ? " selected" : ""}>${c}</option>`))}</select></label>
+      <label class="f">Assigned user<input name="assignee" list="dl-users" value="${t.assignee}"></label>
       <label class="f full">Product<input name="product" list="dl-products" value="${t.product}" required></label>
       <label class="f full">Title<input name="title" value="${t.title}" placeholder="QC Data Collection - Tablet"></label>
-      <label class="f">Department<select name="department">${[...DEPARTMENTS, "Approval"].map((x) => raw(`<option${x === t.department ? " selected" : ""}>${x}</option>`))}</select></label>
+      <label class="f">Role<select name="taskRole">${Object.values(ROLES).map((x) => raw(`<option${x === (t.taskRole || classifyTask(t).role) ? " selected" : ""}>${x}</option>`))}</select></label>
+      <label class="f">Annexe slot<select name="annexSlot"><option value="">—</option>${SLOTS.map((x) => raw(`<option value="${esc(x.key)}"${x.key === (t.annexSlot || classifyTask(t).slot) ? " selected" : ""}>${esc(x.label)} (${esc(x.dept)})</option>`))}</select><small>Which of the ten required annexes this task fills.</small></label>
       <label class="f">Stage<select name="stage">${raw(stageOptions(t.stage))}</select></label>
-      <label class="f">Assigned user<input name="assignee" list="dl-users" value="${t.assignee}"></label>
       <label class="f">Status<input name="status" value="${t.status}" list="dl-status"></label>
       <label class="f">Created<input type="date" name="created" value="${(t.created || "").slice(0, 10)}"></label>
       <label class="f">Closed on<input type="date" name="closedOn" value="${(t.closedOn || "").slice(0, 10)}"></label>
@@ -87,15 +88,20 @@ export function editTask(task, defaults = {}) {
       if (v !== "ok") return;
       const f = new FormData(d.querySelector("form"));
       const next = { ...t };
-      for (const k of ["ref", "product", "title", "department", "assignee", "status", "taskClass", "criticality"]) next[k] = String(f.get(k) || "").trim();
+      for (const k of ["ref", "product", "title", "assignee", "status", "taskClass", "criticality", "taskRole", "annexSlot"]) next[k] = String(f.get(k) || "").trim();
+      if (next.taskRole === ROLES.APPROVAL) next.taskClass = "Approval";
+      else if (next.taskRole === ROLES.WORKFLOW) next.taskClass = "Workflow";
+      else next.taskClass = "Data Collection";
+      if (next.taskRole !== ROLES.ANNEX) next.annexSlot = "";
+      else if (!next.annexSlot) next.annexSlot = classifyTask(next).slot || "QA";
+      next.department = next.taskRole === ROLES.ANNEX ? SLOT_BY_KEY[next.annexSlot].dept : next.taskRole === ROLES.APPROVAL ? "Approval" : "QA";
       next.assignee = next.assignee || "Unassigned";
       for (const k of ["created", "closedOn", "taskEnd"]) {
         const v2 = String(f.get(k) || "");
         next[k] = v2 && (t[k] || "").slice(0, 10) === v2 ? t[k] : v2;
       }
       next.start = t.start || next.created;
-      next.stream = next.taskClass === "Approval" ? "Approval" : next.taskClass === "Workflow" ? "APQR Workflow" : next.department === t.department ? t.stream || next.department : next.department;
-      if (next.taskClass === "Approval") next.department = "Approval";
+      next.stream = next.taskClass === "Approval" ? "Approval" : next.taskClass === "Workflow" ? "APQR Workflow" : next.annexSlot ? classifyTask({ title: next.title, taskClass: next.taskClass }).stream || next.department : "QA";
       applyStage(next, String(f.get("stage")), model.report);
       if (f.get("closedOn")) next.closedOn = next.closure === "Closed" ? (next.closedOn || String(f.get("closedOn"))) : "";
       const pl = model.planByKey.get(productKey(next.product));
@@ -266,7 +272,7 @@ export async function loadDemo() {
 }
 export async function resetToSeed() {
   if (!(await confirmDialog({ title: "Go back to the published data?", body: "Your changes in this browser (stages, comments, imports, baseline) will be replaced by the data this page was published with.", confirm: "Reset", danger: true }))) return;
-  store.replace(store.seedState(), { label: "Reset to published data" });
+  store.replace(store.seedState(), { label: "Reset to published data", clean: true });
   toast("Published data restored", { kind: "success", action: "Undo", onAction: () => store.undo() });
 }
 export async function clearAll() {
@@ -463,4 +469,98 @@ function scigeniqWizard(wb, kind, fileName) {
     }, { undoable: true, label: "Scigeniq import", audit: [{ entity: "data", label: fileName, field: "import", from: "", to: `Scigeniq (${mode}): ${res.stats.tasks} tasks, ${res.stats.excluded} excluded` }] });
     toast(`Imported ${fmtN(res.stats.tasks)} Scigeniq tasks${snapshot && hadTasks ? " · baseline saved" : ""}`, { kind: "success", action: "Undo", onAction: () => store.undo() });
   });
+}
+
+/* ---------------------------------------------------- follow-up actions */
+
+export function editAction(productKeyArg, action) {
+  const model = store.getModel();
+  const isNew = !action;
+  const a = action ? { ...action } : { id: uid(), text: "", owner: "", due: "", done: false, created: model.report };
+  const products = model.products.map((p) => ({ key: p.key, label: p.product }));
+  let key = productKeyArg || "";
+  const d = openDialog(html`<form method="dialog" class="modal-body">
+    <h2 class="modal-title">${isNew ? "Add follow-up action" : "Edit follow-up action"}</h2>
+    <div class="form-grid">
+      ${key ? raw(`<div class="f full">Product<b style="font-size:13.5px;color:var(--ink)">${esc(model.productByKey.get(key)?.product || "")}</b></div>`) : raw(`<label class="f full">Product<select name="product" required><option value="">Choose a product…</option>${products.map((p) => `<option value="${esc(p.key)}">${esc(p.label)}</option>`).join("")}</select></label>`)}
+      <label class="f full">Action<textarea name="text" required placeholder="e.g. Raise the Final QA Data Collection in Scigeniq">${a.text}</textarea></label>
+      <label class="f">Owner<input name="owner" list="dl-act-owners" value="${a.owner}" placeholder="Who will do it"></label>
+      <label class="f">Target date<input type="date" name="due" value="${a.due}"></label>
+      <label class="f check full"><input type="checkbox" name="done" ${a.done ? "checked" : ""}> Done</label>
+    </div>
+    <datalist id="dl-act-owners">${model.owners.map((u) => raw(`<option value="${esc(u)}">`))}</datalist>
+    <div class="modal-actions">
+      ${isNew ? "" : raw(`<button type="button" class="btn btn-ghost" data-act="delete" style="margin-right:auto;color:var(--crit-ink)">${icon("trash")}Delete</button>`)}
+      <button type="button" class="btn btn-ghost" data-close>Cancel</button>
+      <button class="btn btn-primary" value="ok">${isNew ? "Add action" : "Save"}</button>
+    </div></form>`, {
+    onClose: (v) => {
+      if (v !== "ok") return;
+      const f = new FormData(d.querySelector("form"));
+      key = key || String(f.get("product") || "");
+      if (!key) return;
+      const next = { ...a, text: String(f.get("text") || "").trim(), owner: String(f.get("owner") || "").trim(), due: String(f.get("due") || ""), done: !!f.get("done") };
+      if (!next.text) return;
+      if (next.done && !a.done) next.doneAt = model.report;
+      const label = model.productByKey.get(key)?.product || key;
+      store.update((st) => {
+        st.products[key] = st.products[key] || {};
+        const list = st.products[key].actions = st.products[key].actions || [];
+        const i = list.findIndex((x) => x.id === next.id);
+        if (i >= 0) list[i] = next; else list.push(next);
+      }, { audit: [{ entity: "action", key, label, field: isNew ? "added" : "updated", from: isNew ? "" : a.text, to: `${next.text}${next.due ? ` (due ${next.due})` : ""}${next.done ? " [done]" : ""}` }] });
+      toast(isNew ? "Action added" : "Action updated", { kind: "success" });
+    },
+  });
+  d.querySelector('[data-act="delete"]')?.addEventListener("click", () => {
+    d.close("cancel");
+    const label = model.productByKey.get(key)?.product || key;
+    store.update((st) => { st.products[key].actions = (st.products[key].actions || []).filter((x) => x.id !== a.id); }, { undoable: true, audit: [{ entity: "action", key, label, field: "deleted", from: a.text, to: "" }] });
+    toast("Action deleted", { action: "Undo", onAction: () => store.undo() });
+  });
+}
+
+export function toggleAction(key, id, done) {
+  const st0 = store.getState();
+  const a = st0.products[key]?.actions?.find((x) => x.id === id);
+  if (!a) return;
+  store.update((st) => { const x = st.products[key].actions.find((y) => y.id === id); x.done = done; x.doneAt = done ? store.getModel().report : ""; },
+    { audit: [{ entity: "action", key, label: store.getModel().productByKey.get(key)?.product || key, field: done ? "done" : "reopened", from: a.text, to: done ? "done" : "open" }] });
+}
+
+/* ----------------------------------------------------- team publishing */
+
+export async function publishTeam() {
+  const status = await teamStatus();
+  if (!status.available) { toast("Publishing for the team works in the claude.ai copy of this page.", { kind: "error" }); return; }
+  if (status.canEdit === false) { toast("You can view this tracker but not publish it. Ask the owner for edit access.", { kind: "error" }); return; }
+  const s = store.getState();
+  const m = store.getModel();
+  const ok = await confirmDialog({
+    title: "Publish for everyone?",
+    body: `Everyone who opens this tracker will see the data as it is now: ${fmtN(m.kpi.planned)} planned products, ${fmtN(s.tasks.length)} Scigeniq tasks, your comments and actions. Open copies reload to the new version.`,
+    confirm: "Publish",
+  });
+  if (!ok) return;
+  const prev = { publishedAt: s.meta.publishedAt, publishedBy: s.meta.publishedBy, basedOn: s.meta.basedOn, dirty: s.meta.dirty };
+  const at = new Date().toISOString();
+  const by = s.meta.user || "";
+  s.audit.unshift({ at, user: by || "local user", entity: "data", label: "Team version", field: "published", from: prev.publishedAt || "", to: at });
+  store.markPublished({ at, by });
+  const published = { ...store.getState(), meta: { ...store.getState().meta, user: "", dirty: false } };
+  toast("Publishing…");
+  try {
+    await publishForTeam(published);
+    toast("Published. Everyone now sees this version.", { kind: "success" });
+  } catch (e) {
+    Object.assign(store.getState().meta, prev);
+    store.getState().audit.shift();
+    store.flush();
+    const code = e?.code;
+    if (code === "conflict") toast("Someone published a newer version first. The page is reloading to it.", { kind: "error", timeout: 8000 });
+    else if (code === "not_writer" || code === "not_granted") toast("This view is read-only, so it can’t publish. Ask the owner for edit access.", { kind: "error", timeout: 8000 });
+    else if (code === "rate_limited") toast("Too many publishes in a short time. Wait a minute and try again.", { kind: "error" });
+    else toast(`Publishing failed${code ? ` (${code})` : ""}. Your changes are still saved in this browser.`, { kind: "error", timeout: 8000 });
+    store.refresh();
+  }
 }

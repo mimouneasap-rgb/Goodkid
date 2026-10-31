@@ -7,7 +7,7 @@
 //     Status, Title, Parent action, Assigned User, dates...). Columns are matched
 //     by header name, and the caller can override the mapping.
 //  3. A plan-only sheet (Product, Process, Review Start, Review End...).
-import { productKey, houseDept, monthYearToEnd, refNum } from "./engine.js";
+import { productKey, houseDept, monthYearToEnd, refNum, classifyTask, ROLES, SLOT_BY_KEY } from "./engine.js";
 
 /* ------------------------------------------------------------------ helpers */
 
@@ -155,14 +155,22 @@ export function importTrackerWorkbook(workbook) {
       title: pick(idx, "Task Title"), stage: pick(idx, "Workflow Stage"), status: pick(idx, "Status"), user: pick(idx, "Assigned User"),
       crit: pick(idx, "Criticality"), created: pick(idx, "Created"), start: pick(idx, "Start"), closedOn: pick(idx, "Closed On"),
       closure: pick(idx, "Closure"), by: pick(idx, "Created By"), end: pick(idx, "Task End Date (Scigeniq)", "Task End Date", "End Date"),
+      role: pick(idx, "Task Role"), slot: pick(idx, "Annexe Slot"), source: pick(idx, "Record Source"),
     };
+    let skipped = 0;
     for (let r = th.row + 1; r < taskRows.length; r++) {
       const row = taskRows[r];
       const ref = str(cell(row, c.ref));
       const product = str(cell(row, c.product));
       if (!ref && !product) continue;
+      // v3 workbooks carry generated rows for untriggered PQRs; the app generates those itself.
+      if (/generated/i.test(str(cell(row, c.source))) || ref === "(not triggered)") { skipped++; continue; }
+      const role = str(cell(row, c.role));
+      const slot = str(cell(row, c.slot));
       tasks.push({
         id: uid(), ref, product,
+        ...(Object.values(ROLES).includes(role) ? { taskRole: role } : {}),
+        ...(SLOT_BY_KEY[slot] ? { annexSlot: slot } : {}),
         dosageForm: str(cell(row, c.form)), site: str(cell(row, c.site)),
         department: str(cell(row, c.dept)), stream: str(cell(row, c.stream)), taskClass: str(cell(row, c.cls)) || "Data Collection",
         taskType: str(cell(row, c.type)), title: str(cell(row, c.title)), stage: str(cell(row, c.stage)), status: str(cell(row, c.status)),
@@ -172,6 +180,7 @@ export function importTrackerWorkbook(workbook) {
         createdBy: str(cell(row, c.by)), taskEnd: parseDate(cell(row, c.end)),
       });
     }
+    if (skipped) warnings.push(`${skipped} generated "Not triggered" rows were skipped; the app regenerates the untriggered workload from the plan.`);
   } else warnings.push("No Task Register header row was found.");
 
   // Tracker annotations: comments, previous %, owner, references
@@ -258,6 +267,22 @@ export function importTrackerWorkbook(workbook) {
     }
   }
 
+  // QA follow-up actions (exported by the app)
+  const acRows = sheet(/^actions/i);
+  const ah = findHeaderRow(acRows, ["Product", "Action", "Owner", "Target date", "Done"]);
+  if (ah.row >= 0 && ah.score >= 3) {
+    const idx = headerIndex(acRows[ah.row]);
+    const c = { product: pick(idx, "Product"), text: pick(idx, "Action"), owner: pick(idx, "Owner"), due: pick(idx, "Target date"), done: pick(idx, "Done"), created: pick(idx, "Raised") };
+    for (let r = ah.row + 1; r < acRows.length; r++) {
+      const row = acRows[r];
+      const product = str(cell(row, c.product)), text = str(cell(row, c.text));
+      if (!product || !text) continue;
+      const key = productKey(product);
+      products[key] = products[key] || {};
+      (products[key].actions = products[key].actions || []).push({ id: uid(), text, owner: str(cell(row, c.owner)), due: parseDate(cell(row, c.due)), done: /^(yes|true|done|1)$/i.test(str(cell(row, c.done))), created: parseDate(cell(row, c.created)) });
+    }
+  }
+
   const hasBaseline = Object.keys(prevPct).length || Object.keys(baselineMetrics).length;
   return {
     plan, tasks, products, excluded, settings, warnings,
@@ -333,27 +358,10 @@ export function productFromParent(s) {
 }
 const isDuplicated = (s) => /^task\s*-\s*duplicated$|^duplicated$/i.test(str(s));
 
-/** Department + data stream of a data-collection task from its title / type. */
+/** Owning department and data stream of a data-collection task (see engine.classifyTask). */
 export function classifyDept(title, type, rawDept) {
-  const tryText = (t) => {
-    const s = str(t);
-    if (!s || isDuplicated(s)) return null;
-    if (/^\s*CM\b|compliance/i.test(s)) return ["Compliance", "Compliance"];
-    if (/\bVL\b|validation|metrolog/i.test(s)) return ["Validation", "Validation"];
-    if (/\bQC\b|\bOO[ST]+\b|OOS|OOT|stabilit|RM\s*\/\s*PM|analytical|retens/i.test(s)) return ["QC", "QC"];
-    if (/\bIPC\b|in.process control/i.test(s)) return ["Production", "IPC"];
-    if (/process|hard capsule data|semi solid data|liquid\/syrup data|production/i.test(s)) return ["Production", "Process"];
-    if (/supplier/i.test(s)) return ["QA", "Supplier"];
-    if (/\bRA\b|regulator/i.test(s)) return ["RA", "RA"];
-    if (/\bQA\b|quality assurance/i.test(s)) return ["QA", "QA"];
-    return null;
-  };
-  const byTitle = tryText(title);
-  if (byTitle) return byTitle;
-  const d = houseDept(rawDept);
-  if (d && d !== "Approval" && d !== rawDept?.trim?.()) return [d, d === "QA" && /supplier/i.test(rawDept) ? "Supplier" : d];
-  if (["QA", "QC", "Production", "RA", "Validation", "Compliance"].includes(d)) return [d, d];
-  return tryText(type) || ["QA", "QA"];
+  const c = classifyTask({ title, type, department: rawDept });
+  return [c.dept, c.stream];
 }
 
 function formFromText(s) {
@@ -438,13 +446,11 @@ export function transformScigeniq(rows, { mapping, headerRow, dateOrder = "DMY",
     // Snap to the plan's spelling when the names match loosely.
     const pk = productKey(product);
     if (planByKey.has(pk)) product = planByKey.get(pk).product;
-    let department, stream;
-    if (x.taskClass === "Approval") { department = "Approval"; stream = "Approval"; }
-    else if (x.taskClass === "Workflow") { department = "QA"; stream = "APQR Workflow"; }
-    else [department, stream] = classifyDept(x.title, x.type, x.department);
+    const cls = classifyTask({ title: x.title, type: x.type, department: x.department, ref: x.ref, taskClass: x.taskClass });
     tasks.push({
       id: uid(), ref: x.ref, product, dosageForm: x.dosageForm, site: x.project,
-      department, stream, taskClass: x.taskClass, taskType: x.type, title: x.title,
+      taskRole: cls.role, ...(cls.slot ? { annexSlot: cls.slot } : {}),
+      department: cls.dept, stream: cls.stream, taskClass: x.taskClass, taskType: x.type, title: x.title,
       stage: x.stage, status: x.status, assignee: x.assignee && !/^-+$/.test(x.assignee) ? x.assignee : "Unassigned",
       criticality: x.criticality, created: x.created, start: x.start || x.created, closedOn: x.closedOn,
       closure: normClosure(x.closure, x.stage, x.status, x.closedOn), createdBy: x.createdBy, taskEnd: x.end,

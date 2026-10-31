@@ -90,14 +90,33 @@ export const RAG_META = {
   "DUE SOON": { cls: "duesoon", label: "Due soon", icon: "clock" },
   OVERDUE: { cls: "overdue", label: "Overdue", icon: "alert" },
   "No tasks": { cls: "none", label: "No tasks", icon: "dot" },
+  "NOT STARTED - overdue": { cls: "notstarted", label: "Not started, overdue", icon: "alert" },
+  "Not yet due": { cls: "notyet", label: "Not yet triggered", icon: "clock" },
 };
+export const FQ_META = {
+  Complete: { cls: "complete", label: "Final QA done", icon: "check" },
+  "Raised, not complete": { cls: "ontrack", label: "Final QA raised", icon: "dot" },
+  "NOT TRIGGERED - data ready": { cls: "overdue", label: "Raise Final QA", icon: "alert" },
+  "Waiting on data collection": { cls: "none", label: "Waiting on annexes", icon: "clock" },
+  "Not triggered": { cls: "notyet", label: "Not triggered", icon: "dot" },
+};
+export function fqPill(sig) {
+  const m = FQ_META[sig] || FQ_META["Not triggered"];
+  return html`<span class="pill pill-${m.cls}">${icon(m.icon)}${m.label}</span>`;
+}
+const SLOT_CLS = { OK: "ok", open: "open", MISSING: "missing", "Not triggered": "nt" };
+export const slotCls = (st) => SLOT_CLS[st] || "nt";
+export function slotChip(st) {
+  const label = { OK: "OK", open: "Open", MISSING: "Missing", "Not triggered": "Not triggered" }[st] || st;
+  return `<span class="stat-chip ${slotCls(st)}">${esc(label)}</span>`;
+}
 export function ragPill(rag) {
   const m = RAG_META[rag] || RAG_META["No tasks"];
   return html`<span class="pill pill-${m.cls}">${icon(m.icon)}${m.label}</span>`;
 }
 export function trackingPill(s) {
-  const cls = /past due|OVERDUE|NOT STARTED - overdue/i.test(s) ? "overdue" : /due soon|Partly/i.test(s) ? "duesoon" : /complete/i.test(s) ? "complete" : /Not yet|Not started/i.test(s) ? "none" : "ontrack";
-  const ic = { overdue: "alert", duesoon: "clock", complete: "check", none: "dot", ontrack: "dot" }[cls];
+  const cls = /NOT STARTED - overdue/.test(s) ? "notstarted" : /past due|OVERDUE/i.test(s) ? "overdue" : /due soon|Partly/i.test(s) ? "duesoon" : /complete/i.test(s) ? "complete" : /Not yet|Not started/i.test(s) ? "none" : "ontrack";
+  const ic = { overdue: "alert", notstarted: "alert", duesoon: "clock", complete: "check", none: "dot", ontrack: "dot" }[cls];
   return html`<span class="pill pill-${cls}">${icon(ic)}${s}</span>`;
 }
 export function movementBadge(mv) {

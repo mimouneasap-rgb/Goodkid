@@ -1,22 +1,47 @@
-// APQR calculation engine. Pure functions only: no DOM and no storage.
+// APQR calculation engine (workbook v3 model). Pure functions only.
 //
-// Reproduces the logic of the APQR Master Tracker workbook:
-//  - a product's planned PQR month is the month after its review period ends
-//  - its PQR overdue date is the 1st of that month plus N months (default 3)
-//  - every annexe (data-collection task) of a product shares that due date
-//  - % complete counts data-collection tasks only (approvals are counted separately)
-//  - RAG: COMPLETE > OVERDUE > DUE SOON > ON TRACK
+// The v3 model, as defined in the APQR Master Tracker v3:
+//  - every planned product owes TEN departmental annexes (the "slots"), then the
+//    Final QA compilation raised by the APQR Owner once all ten are closed
+//  - Scigeniq files several annexes under the shared "QA Data Collection" type;
+//    the task TITLE names the owning department, and every figure uses it
+//  - a planned PQR with no workflow still owes the same work: the engine
+//    generates its workflow, ten annexes and Final QA at "Not triggered"
+//  - planned PQR month = month after the review period ends; PQR overdue date
+//    = 1st of that month + N months (default 3); every task of a product shares it
+//  - RAG: untriggered -> NOT STARTED - overdue / Not yet due;
+//    triggered -> COMPLETE (Final QA closed) > OVERDUE > DUE SOON > ON TRACK
 
-export const DEPARTMENTS = ["QA", "QC", "Production", "RA", "Validation", "Compliance"];
-export const DEPT_SHORT = { QC: "QC", Production: "Prod", QA: "QA", RA: "RA", Validation: "Val", Compliance: "Comp" };
+export const DEPARTMENTS = ["Compliance", "Production", "QA", "QC", "RA", "Supplier Qualification", "Validation Metrology", "Validation Process"];
+export const DEPT_SHORT = { Compliance: "CM", Production: "Prod", QA: "QA", QC: "QC", RA: "RA", "Supplier Qualification": "Supp", "Validation Metrology": "V-Met", "Validation Process": "V-Proc" };
+
+/** The ten required departmental annexes, in workbook order. */
+export const SLOTS = [
+  { key: "Compliance", short: "CM", label: "Compliance", dept: "Compliance" },
+  { key: "IPC", short: "IPC", label: "IPC", dept: "Production" },
+  { key: "Process", short: "Proc", label: "Process", dept: "Production" },
+  { key: "QA", short: "QA", label: "QA", dept: "QA" },
+  { key: "QC main", short: "QC", label: "QC", dept: "QC" },
+  { key: "QC OOS/OOT", short: "OOS", label: "QC OOS/OOT", dept: "QC" },
+  { key: "RA", short: "RA", label: "RA", dept: "RA" },
+  { key: "Supplier Qualification", short: "Supp", label: "Supplier Qualification", dept: "Supplier Qualification" },
+  { key: "Validation Metrology", short: "V-Met", label: "Validation Metrology", dept: "Validation Metrology" },
+  { key: "Validation Process", short: "V-Proc", label: "Validation Process", dept: "Validation Process" },
+];
+export const SLOT_KEYS = SLOTS.map((s) => s.key);
+export const SLOT_BY_KEY = Object.fromEntries(SLOTS.map((s) => [s.key, s]));
+
+export const ROLES = { WORKFLOW: "Parent workflow", ANNEX: "Departmental annexe", FINAL: "Final QA compilation", APPROVAL: "Approval" };
 export const RAG = ["COMPLETE", "ON TRACK", "DUE SOON", "OVERDUE"];
-export const STAGE_ORDER = ["Batches Selection", "Data Collection", "Collecting Data", "Data Review", "Completed", "Approved", "Closed", "Rejected"];
+export const RAG_ALL = ["OVERDUE", "DUE SOON", "ON TRACK", "COMPLETE", "NOT STARTED - overdue", "Not yet due"];
+export const WORKFLOW_STAGES = ["Not triggered", "Batches Selection", "Data Collection", "Collecting Data", "Data Review", "CAPA Planning", "Final Review", "Closed"];
+export const STAGE_ORDER = ["Not triggered", "Batches Selection", "Data Collection", "Collecting Data", "Data Review", "CAPA Planning", "Final Review", "Completed", "Approved", "Closed", "Rejected"];
+export const FINAL_QA_SIGNALS = ["Complete", "Raised, not complete", "NOT TRIGGERED - data ready", "Waiting on data collection", "Not triggered"];
 export const CLASSES = ["Data Collection", "Approval", "Workflow"];
 
 /* ------------------------------------------------------------------ dates */
 
 const pad = (n) => String(n).padStart(2, "0");
-/** ISO date or datetime -> UTC day number (integer part = calendar day). */
 export function dayNum(iso) {
   if (!iso) return null;
   const m = /^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2}))?/.exec(iso);
@@ -28,14 +53,11 @@ export function isoFromDay(d) {
   const x = new Date(Math.round(d * 86400000));
   return `${x.getUTCFullYear()}-${pad(x.getUTCMonth() + 1)}-${pad(x.getUTCDate())}`;
 }
-/** Excel EOMONTH: last day of the month `n` months from iso. */
 export function eomonth(iso, n = 0) {
   const m = /^(\d{4})-(\d{2})/.exec(iso || "");
   if (!m) return "";
-  const d = new Date(Date.UTC(+m[1], +m[2] - 1 + n + 1, 0));
-  return isoFromDay(d.getTime() / 86400000);
+  return isoFromDay(Date.UTC(+m[1], +m[2] - 1 + n + 1, 0) / 86400000);
 }
-/** Excel EDATE: same day `n` months later (clamped to month end). */
 export function edate(iso, n) {
   const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso || "");
   if (!m) return "";
@@ -44,7 +66,6 @@ export function edate(iso, n) {
   return isoFromDay(Date.UTC(y, mo, Math.min(day, last)) / 86400000);
 }
 export const firstOfMonth = (iso) => (iso ? iso.slice(0, 7) + "-01" : "");
-/** "MM/YYYY" -> last day of that month as ISO. */
 export function monthYearToEnd(s) {
   const m = /^(\d{1,2})\s*[/.-]\s*(\d{4})$/.exec(String(s || "").trim());
   return m ? eomonth(`${m[2]}-${pad(+m[1])}-01`, 0) : "";
@@ -54,9 +75,12 @@ export const todayIso = () => { const d = new Date(); return `${d.getFullYear()}
 
 /* -------------------------------------------------------------- normalise */
 
-/** Key used to join plan rows, tasks and annotations on product name. */
 export const productKey = (s) => String(s || "").toLowerCase().replace(/[^a-z0-9%.]+/g, " ").trim();
+export const refNum = (ref) => { const m = /(\d+)\s*$/.exec(ref || ""); return m ? +m[1] : 0; };
+const byRef = (a, b) => { const pa = a.replace(/\d+\s*$/, ""), pb = b.replace(/\d+\s*$/, ""); return pa < pb ? -1 : pa > pb ? 1 : refNum(a) - refNum(b); };
+export const isClosed = (t) => t.closure === "Closed";
 
+/** Normalise a department name to one of the eight owning departments. */
 export function houseDept(dept) {
   const d = String(dept || "").trim();
   if (!d) return "";
@@ -64,17 +88,73 @@ export function houseDept(dept) {
   const l = d.toLowerCase();
   if (l === "approval") return "Approval";
   if (/^cm\b|compliance/.test(l)) return "Compliance";
-  if (/valid|metrolog|^vl\b/.test(l)) return "Validation";
-  if (/supplier|^qa\b|quality assurance/.test(l)) return "QA";
+  if (/metrolog/.test(l)) return "Validation Metrology";
+  if (/valid|^vl\b/.test(l)) return "Validation Process";
+  if (/supplier/.test(l)) return "Supplier Qualification";
+  if (/^qa\b|quality assurance/.test(l)) return "QA";
   if (/^qc\b|quality control|laborator/.test(l)) return "QC";
-  if (/prod|manufactur|ipc/.test(l)) return "Production";
+  if (/prod|manufactur|ipc|process/.test(l)) return "Production";
   if (/^ra\b|regulat/.test(l)) return "RA";
   return d;
 }
 
-export const isClosed = (t) => t.closure === "Closed";
-export const refNum = (ref) => { const m = /(\d+)\s*$/.exec(ref || ""); return m ? +m[1] : 0; };
-const byRef = (a, b) => (a.replace(/\d+\s*$/, "") < b.replace(/\d+\s*$/, "") ? -1 : a.replace(/\d+\s*$/, "") > b.replace(/\d+\s*$/, "") ? 1 : refNum(a) - refNum(b));
+const isDup = (s) => /^task\s*-\s*duplicated$|^duplicated$/i.test(String(s || "").trim());
+function slotFromText(s) {
+  const t = String(s || "");
+  if (!t || isDup(t)) return null;
+  if (/^\s*CM\b|compliance/i.test(t)) return "Compliance";
+  if (/\bVL\b|validation process/i.test(t)) return "Validation Process";
+  if (/validation|metrolog/i.test(t)) return "Validation Metrology";
+  if (/\bQC\b|\bOO[ST]+\b|OOS|OOT|stabilit|RM\s*\/\s*PM|analytical|retens/i.test(t)) return /^\s*QC Data Collection\s*-\s*\S/i.test(t) ? "QC main" : "QC OOS/OOT";
+  if (/\bIPC\b|in.process control/i.test(t)) return "IPC";
+  if (/process|hard capsule data|semi solid data|liquid\/syrup data/i.test(t)) return "Process";
+  if (/supplier/i.test(t)) return "Supplier Qualification";
+  if (/\bRA\b|regulator/i.test(t)) return "RA";
+  if (/\bQA\b|quality assurance/i.test(t)) return "QA";
+  return null;
+}
+
+/**
+ * Classify a Scigeniq task: role (workflow / annexe / Final QA / approval),
+ * annexe slot, owning department, data stream and whether it arrives through
+ * the shared "QA Data Collection" stream.
+ */
+export function classifyTask({ title = "", type = "", department = "", ref = "", taskClass = "" } = {}) {
+  const shared = /^qa data collection$/i.test(String(type).trim());
+  if (taskClass === "Approval" || /approv/i.test(type) || /^APV-/i.test(ref)) return { role: ROLES.APPROVAL, slot: "", dept: "Approval", stream: "Approval", shared: false };
+  if (taskClass === "Workflow" || /^apqr$/i.test(String(type).trim()) || (/^APQR\s*[,/]/i.test(title) && !/data\s*collection/i.test(title))) return { role: ROLES.WORKFLOW, slot: "", dept: "QA", stream: "APQR Workflow", shared: false };
+  if (/final\s*qa|qa\s*final/i.test(title)) return { role: ROLES.FINAL, slot: "", dept: "QA", stream: "QA", shared };
+  let slot = slotFromText(title);
+  if (!slot) {
+    slot = slotFromText(type);
+    if (slot === "QC main" && isDup(title)) slot = "QC OOS/OOT";
+  }
+  if (!slot) {
+    const d = houseDept(department);
+    slot = { Compliance: "Compliance", QA: "QA", QC: "QC OOS/OOT", RA: "RA", "Supplier Qualification": "Supplier Qualification", "Validation Metrology": "Validation Metrology", "Validation Process": "Validation Process", Production: "Process" }[d] || "QA";
+  }
+  const stream = { Compliance: "Compliance", IPC: "IPC", Process: "Process", QA: "QA", "QC main": "QC", "QC OOS/OOT": "QC", RA: "RA", "Supplier Qualification": "Supplier", "Validation Metrology": "Validation", "Validation Process": "Validation" }[slot];
+  return { role: ROLES.ANNEX, slot, dept: SLOT_BY_KEY[slot].dept, stream, shared };
+}
+
+/** Title Scigeniq uses for each slot, by dosage form (used for generated rows). */
+export function slotTitle(slot, form) {
+  const f = String(form || "");
+  const sfx = /capsule/i.test(f) ? "Capsule" : /liquid|syrup/i.test(f) ? "Liquid" : /semi/i.test(f) ? "Semi Solid" : "Tablet";
+  switch (slot) {
+    case "Compliance": return "CM Data Collection";
+    case "IPC": return `IPC Data Collection - ${sfx}`;
+    case "Process": return sfx === "Capsule" ? "Hard Capsule Data Collection" : sfx === "Liquid" ? "Process Data Collection -Liquid/Syrup" : sfx === "Semi Solid" ? "Semi Solid Data Collection" : "Process Data Collection - Tablet";
+    case "QA": return "QA Data Collection";
+    case "QC main": return `QC Data Collection - ${sfx}`;
+    case "QC OOS/OOT": return "QC OOS/OOT Data Collection";
+    case "RA": return "RA Data Collection";
+    case "Supplier Qualification": return "Supplier Data Collection";
+    case "Validation Metrology": return "Validation Data Collection";
+    case "Validation Process": return "VL Process Data Collection";
+    default: return slot;
+  }
+}
 
 function mode(values) {
   const c = new Map();
@@ -82,6 +162,7 @@ function mode(values) {
   for (const v of values) { if (!v) continue; const k = (c.get(v) || 0) + 1; c.set(v, k); if (k > n) { n = k; best = v; } }
   return best;
 }
+const stageIdx = (s) => { const i = STAGE_ORDER.indexOf(s); return i < 0 ? 50 : i; };
 
 /* ---------------------------------------------------------------- compute */
 
@@ -89,10 +170,6 @@ export function effectiveReportDate(settings) {
   return settings.useToday ? todayIso() : settings.reportDate || todayIso();
 }
 
-/**
- * Compute every derived table from the stored state. Returns a model object
- * the UI renders from; nothing in it is persisted.
- */
 export function compute(state) {
   const settings = { overdueMonths: 3, dueSoonDays: 14, triggerWindowDays: 60, ...state.settings };
   const report = effectiveReportDate(settings);
@@ -100,15 +177,6 @@ export function compute(state) {
   const ann = state.products || {};
   const prevPct = state.baseline?.prevPct || {};
   const hasBaseline = !!state.baseline && Object.keys(prevPct).length > 0;
-
-  /* --- tasks grouped by product --- */
-  const tasksByProduct = new Map();
-  for (const t of state.tasks) {
-    const k = productKey(t.product);
-    if (!k) continue;
-    if (!tasksByProduct.has(k)) tasksByProduct.set(k, []);
-    tasksByProduct.get(k).push(t);
-  }
 
   /* --- plan --- */
   const planByKey = new Map();
@@ -121,208 +189,269 @@ export function compute(state) {
     return row;
   });
 
-  /* --- tasks (derived columns) --- */
-  const tasks = state.tasks.map((t) => {
+  /* --- real tasks with derived columns --- */
+  const derive = (t, generated = false) => {
     const key = productKey(t.product);
     const pl = planByKey.get(key);
-    const due = pl ? pl.overdueDate : "";
+    const cls = classifyTask(t);
+    const role = t.taskRole || cls.role;
+    const slot = role === ROLES.ANNEX ? (t.annexSlot && SLOT_BY_KEY[t.annexSlot] ? t.annexSlot : cls.slot) : "";
+    const dept = role === ROLES.ANNEX ? SLOT_BY_KEY[slot].dept : role === ROLES.APPROVAL ? "Approval" : "QA";
     const closed = isClosed(t);
-    const dept = houseDept(t.department);
+    const due = pl ? pl.overdueDate : "";
     const D = dayInt(due);
     return {
-      ...t,
-      key,
-      dept,
+      ...t, key, role, slot, dept, generated,
+      shared: cls.shared,
       closed,
       due,
       daysToDue: closed || D === null ? null : D - R,
       overdue: closed ? "No" : D === null ? "n/a" : D < R ? "YES" : "No",
-      ageing: (() => { const s = dayInt(t.start || t.created); if (s === null) return null; return closed ? (dayInt(t.closedOn) ?? R) - s : R - s; })(),
+      ageing: generated ? null : (() => { const s = dayInt(t.start || t.created); if (s === null) return null; return closed ? (dayInt(t.closedOn) ?? R) - s : R - s; })(),
       plannedMonth: pl ? pl.plannedMonth : "",
-      isData: t.taskClass === "Data Collection",
+      isAnnex: role === ROLES.ANNEX,
+      isFinal: role === ROLES.FINAL,
+      isWorkflow: role === ROLES.WORKFLOW,
+      isApproval: role === ROLES.APPROVAL,
+      isData: role === ROLES.ANNEX || role === ROLES.FINAL,
     };
-  });
-  const tasksByKey = new Map();
-  for (const t of tasks) { if (!tasksByKey.has(t.key)) tasksByKey.set(t.key, []); tasksByKey.get(t.key).push(t); }
+  };
+  const real = state.tasks.map((t) => derive(t));
+  const realByKey = new Map();
+  for (const t of real) { if (!t.key) continue; if (!realByKey.has(t.key)) realByKey.set(t.key, []); realByKey.get(t.key).push(t); }
 
-  /* --- products (tracker rows) --- */
-  const products = [];
-  for (const [key, list] of tasksByKey) {
-    const a = ann[key] || {};
+  /* --- generated workload for planned PQRs never triggered --- */
+  const generated = [];
+  for (const p of plan) {
+    if (realByKey.has(p.key)) continue;
+    const base = { product: p.product, dosageForm: p.process, site: p.site, criticality: "", created: "", start: "", closedOn: "", closure: "Not Closed", createdBy: "—", assignee: "Unassigned", stage: "Not triggered", status: "Not triggered", taskEnd: "", ref: "(not triggered)" };
+    generated.push(derive({ ...base, id: `gen:${p.id}:wf`, taskClass: "Workflow", taskRole: ROLES.WORKFLOW, taskType: "APQR", title: `APQR , ${p.product}`, department: "QA", stream: "APQR Workflow" }, true));
+    for (const s of SLOTS) generated.push(derive({ ...base, id: `gen:${p.id}:${s.key}`, taskClass: "Data Collection", taskRole: ROLES.ANNEX, annexSlot: s.key, taskType: "", title: slotTitle(s.key, p.process), department: s.dept, stream: s.dept }, true));
+    generated.push(derive({ ...base, id: `gen:${p.id}:final`, taskClass: "Data Collection", taskRole: ROLES.FINAL, taskType: "QA Data Collection", title: "Final QA Data Collection", department: "QA", stream: "QA" }, true));
+  }
+  const tasks = [...real, ...generated];
+  const tasksByKey = new Map();
+  for (const t of tasks) { if (!t.key) continue; if (!tasksByKey.has(t.key)) tasksByKey.set(t.key, []); tasksByKey.get(t.key).push(t); }
+
+  /* --- products: every planned product plus any off-plan product with tasks --- */
+  const keys = [...new Set([...plan.map((p) => p.key), ...realByKey.keys()])];
+  const products = keys.map((key) => {
     const pl = planByKey.get(key);
-    const wfs = list.filter((t) => t.taskClass === "Workflow").sort((x, y) => (dayNum(y.created) || 0) - (dayNum(x.created) || 0));
+    const list = tasksByKey.get(key) || [];
+    const realList = realByKey.get(key) || [];
+    const a = ann[key] || {};
+    const triggered = realList.length > 0;
+    const wfs = realList.filter((t) => t.isWorkflow).sort((x, y) => (dayNum(y.created) || 0) - (dayNum(x.created) || 0));
     const wf = wfs[0];
-    const data = list.filter((t) => t.isData);
-    const done = data.filter((t) => t.closed).length;
-    const open = data.length - done;
-    const overdue = data.filter((t) => !t.closed && t.due && dayInt(t.due) < R).length;
-    const openByDept = Object.fromEntries(DEPARTMENTS.map((d) => [d, data.filter((t) => !t.closed && t.dept === d).length]));
-    const max = Math.max(...Object.values(openByDept));
-    const bottleneck = max === 0 ? "-" : Object.values(openByDept).filter((v) => v === max).length > 1 ? "several" : DEPARTMENTS.find((d) => openByDept[d] === max);
-    const wfRefs = [...new Set([...list.filter((t) => /^APQR/i.test(t.ref)).map((t) => t.ref), ...(a.workflowRefs || [])])].sort(byRef);
-    const qcRefs = [...new Set([...list.filter((t) => /^QCTAB/i.test(t.ref)).map((t) => t.ref), ...(a.qcRefs || [])])].sort(byRef);
-    const pct = data.length ? done / data.length : 0;
-    const prev = prevPct[key];
-    const wfStage = wf?.stage || "";
-    const wfDue = wf?.taskEnd || "";
-    const S = wfDue ? dayInt(wfDue) - R : null;
+    const annexes = list.filter((t) => t.isAnnex);
+    const realAnnex = realList.filter((t) => t.isAnnex);
+    const finals = realList.filter((t) => t.isFinal);
+    const slots = {};
+    for (const s of SLOTS) {
+      const ts = realAnnex.filter((t) => t.slot === s.key);
+      const status = !triggered ? "Not triggered" : !ts.length ? "MISSING" : ts.some((t) => t.closed) ? "OK" : "open";
+      slots[s.key] = { status, tasks: ts };
+    }
+    const slotsOk = SLOTS.filter((s) => slots[s.key].status === "OK").length;
+    const slotsMissing = SLOTS.filter((s) => slots[s.key].status === "MISSING").length;
+    const annexClosed = annexes.filter((t) => t.closed).length;
+    const annexOpen = realAnnex.filter((t) => !t.closed).length;
+    const annexNotRaised = annexes.filter((t) => t.generated).length;
+    const overdue = annexes.filter((t) => !t.closed && t.overdue === "YES").length;
+    const finalQa = !finals.length ? "none" : finals.some((t) => t.closed) ? "done" : "open";
+    const fqSignal = !triggered ? "Not triggered" : finalQa === "done" ? "Complete" : finalQa === "open" ? "Raised, not complete" : slotsOk >= 10 ? "NOT TRIGGERED - data ready" : "Waiting on data collection";
+    const gap = finalQa === "done" && slotsOk < 10;
     const AE = pl ? pl.overdueDate : "";
     const AF = AE ? dayInt(AE) - R : null;
     let rag;
-    if (data.length === 0 && !AE) rag = "No tasks";
-    else if (wfStage === "Closed" || (data.length > 0 && pct === 1)) rag = "COMPLETE";
-    else if (overdue > 0 || (AE && dayInt(AE) < R)) rag = "OVERDUE";
-    else if ((S !== null && S <= settings.dueSoonDays) || (AF !== null && AF <= settings.dueSoonDays)) rag = "DUE SOON";
+    if (!triggered) rag = AE && dayInt(AE) < R ? "NOT STARTED - overdue" : "Not yet due";
+    else if (fqSignal === "Complete") rag = "COMPLETE";
+    else if (AE && dayInt(AE) < R) rag = "OVERDUE";
+    else if (AF !== null && AF <= settings.dueSoonDays) rag = "DUE SOON";
     else rag = "ON TRACK";
+    const openByDept = Object.fromEntries(DEPARTMENTS.map((d) => [d, realAnnex.filter((t) => !t.closed && t.dept === d).length]));
+    const max = Math.max(...Object.values(openByDept));
+    const bottleneck = max === 0 ? "-" : Object.values(openByDept).filter((v) => v === max).length > 1 ? "several" : DEPARTMENTS.find((d) => openByDept[d] === max);
+    const wfRefs = [...new Set([...realList.filter((t) => /^APQR/i.test(t.ref)).map((t) => t.ref), ...(a.workflowRefs || [])])].sort(byRef);
+    const qcRefs = [...new Set([...realList.filter((t) => /^QCTAB/i.test(t.ref)).map((t) => t.ref), ...(a.qcRefs || [])])].sort(byRef);
     const nWorkflows = Math.max(wfRefs.length, wfs.length, a.nWorkflows || 0);
+    const wfStage = triggered ? wf?.stage || "Data Collection" : "Not triggered";
     const flags = [];
     if (nWorkflows > 1) flags.push("DUPLICATE");
-    if (wfStage === "Closed" && open > 0) flags.push("CLOSED w/ OPEN");
-    const approvals = list.filter((t) => t.taskClass === "Approval" && t.stage === "Approved").length;
-    const rejected = list.filter((t) => t.stage === "Rejected").length;
-    const isNew = a.isNew !== undefined ? a.isNew : hasBaseline ? prev === undefined || prev === null : false;
-    products.push({
+    if (wfStage === "Closed" && annexOpen > 0) flags.push("CLOSED w/ OPEN");
+    if (gap) flags.push("FINAL QA GAP");
+    if (fqSignal === "NOT TRIGGERED - data ready") flags.push("DATA READY");
+    if (triggered && slotsMissing) flags.push("MISSING ANNEXE");
+    const pct = slotsOk / 10;
+    const prev = prevPct[key];
+    const actions = (a.actions || []).map((x) => ({ ...x, key, overdue: !x.done && x.due && dayInt(x.due) < R }));
+    return {
       key,
-      product: pl?.product || list[0].product,
-      ref: wf?.ref || wfRefs[wfRefs.length - 1] || list[0].ref,
-      dosageForm: pl?.process || mode(list.map((t) => t.dosageForm)) || "",
-      site: mode(list.map((t) => t.site)) || pl?.site || "",
+      product: pl?.product || realList[0]?.product || key,
+      ref: wf?.ref || wfRefs[wfRefs.length - 1] || (triggered ? realList[0].ref : "(not triggered)"),
+      dosageForm: pl?.process || mode(realList.map((t) => t.dosageForm)) || "",
+      site: pl?.site || mode(realList.map((t) => t.site)) || "",
+      triggered,
       owner: a.owner || wf?.assignee || "Unassigned",
-      wfStage,
-      wfStatus: wf?.status || "",
-      wfDue,
-      nWorkflows,
-      flags,
-      isNew,
-      dataTasks: data.length,
-      completed: done,
-      open,
-      overdue,
-      pct,
-      prevPct: prev ?? null,
-      movement: prev === undefined || prev === null ? "new" : pct > prev + 1e-9 ? "UP" : pct < prev - 1e-9 ? "DOWN" : "flat",
-      daysToDue: S,
+      scigeniqOwner: wf?.assignee || "",
+      wfStage, wfStatus: wf?.status || (triggered ? "" : "Not triggered"), wfDue: wf?.taskEnd || "",
+      nWorkflows, flags,
+      slots, slotsOk, slotsMissing, pct,
+      annexTotal: annexes.length, annexClosed, annexOpen, annexNotRaised, overdue,
+      finalQa, finalQaTasks: finals, fqSignal, gap,
       rag,
-      openByDept,
-      bottleneck,
-      approvals,
-      rejected,
+      openByDept, bottleneck,
+      approvals: realList.filter((t) => t.isApproval).length,
+      approvalsSigned: realList.filter((t) => t.isApproval && t.stage === "Approved").length,
+      rejected: realList.filter((t) => t.stage === "Rejected").length,
       plannedMonth: pl?.plannedMonth || "",
       overdueDate: AE,
       daysToOverdue: AF,
       reviewStart: pl ? pl.reviewStart : "",
       reviewEnd: pl ? pl.reviewEnd : "",
       inPlan: !!pl,
-      workflowRefs: wfRefs,
-      qcRefs,
+      planNo: pl?.no ?? "",
+      workflowRefs: wfRefs, qcRefs,
       comments: a.comments || "",
       priority: a.priority || "",
+      actions,
+      prevPct: prev ?? null,
+      isNew: a.isNew !== undefined ? a.isNew : hasBaseline ? prev === undefined || prev === null : false,
+      movement: prev === undefined || prev === null ? "new" : pct > prev + 1e-9 ? "UP" : pct < prev - 1e-9 ? "DOWN" : "flat",
       tasks: list,
-    });
-  }
+    };
+  });
   products.sort((x, y) => x.product.localeCompare(y.product));
   const productByKey = new Map(products.map((p) => [p.key, p]));
 
   /* --- plan execution columns --- */
   for (const p of plan) {
     const pr = productByKey.get(p.key);
-    p.triggered = !!pr;
-    p.dataTasks = pr ? pr.dataTasks : 0;
-    p.completed = pr ? pr.completed : 0;
-    p.pct = pr ? pr.pct : 0;
-    p.rag = pr ? pr.rag : "";
+    p.triggered = pr.triggered;
+    p.annexTotal = pr.annexTotal;
+    p.annexClosed = pr.annexClosed;
+    p.pct = pr.annexTotal ? pr.annexClosed / pr.annexTotal : 0;
+    p.slotsOk = pr.slotsOk;
+    p.rag = pr.rag;
+    p.fqSignal = pr.fqSignal;
     p.daysToOverdue = p.overdueDate ? dayInt(p.overdueDate) - R : null;
     const P = p.daysToOverdue;
     if (!p.triggered) p.tracking = P !== null && P < 0 ? "NOT TRIGGERED - past due" : P !== null && P <= settings.triggerWindowDays ? "NOT TRIGGERED - due soon" : "Not yet triggered";
-    else p.tracking = p.pct === 1 ? "Data collection complete" : P !== null && P < 0 ? "OVERDUE - in progress" : "In progress";
+    else p.tracking = pr.fqSignal === "Complete" ? "Complete" : pr.slotsOk === 10 ? "Data collection complete" : P !== null && P < 0 ? "OVERDUE - in progress" : "In progress";
   }
 
-  /* --- headline KPIs --- */
-  const dataTasks = tasks.filter((t) => t.isData);
-  const approvalsAll = tasks.filter((t) => t.taskClass === "Approval");
-  const sum = (arr, f) => arr.reduce((s, x) => s + f(x), 0);
+  /* --- KPIs --- */
+  const annexAll = tasks.filter((t) => t.isAnnex);
+  const annexReal = annexAll.filter((t) => !t.generated);
+  const triggeredProducts = products.filter((p) => p.triggered);
+  const sigCount = (s) => products.filter((p) => p.fqSignal === s).length;
   const kpi = {
     planned: plan.length,
     triggered: plan.filter((p) => p.triggered).length,
-    productsLive: products.length,
-    dataTasks: dataTasks.length,
-    completed: dataTasks.filter((t) => t.closed).length,
-    overdueTasks: sum(products, (p) => p.overdue),
-    unassigned: dataTasks.filter((t) => !t.assignee || t.assignee === "Unassigned").length,
-    unassignedOpen: dataTasks.filter((t) => !t.closed && (!t.assignee || t.assignee === "Unassigned")).length,
+    productsLive: triggeredProducts.length,
+    requiredAnnexes: annexAll.length,
+    annexClosed: annexAll.filter((t) => t.closed).length,
+    annexOpen: annexReal.filter((t) => !t.closed).length,
+    annexNotRaised: annexAll.filter((t) => t.generated).length,
+    overdueAnnexes: annexAll.filter((t) => t.overdue === "YES").length,
+    unassignedAnnexes: annexAll.filter((t) => !t.assignee || t.assignee === "Unassigned").length,
+    unassignedOpen: annexReal.filter((t) => !t.closed && (!t.assignee || t.assignee === "Unassigned")).length,
     productsOverdue: products.filter((p) => p.rag === "OVERDUE").length,
-    productsWithOverdueTasks: products.filter((p) => p.overdue > 0).length,
-    duplicates: products.filter((p) => p.flags.includes("DUPLICATE")).length,
+    productsComplete: products.filter((p) => p.rag === "COMPLETE").length,
+    notStartedOverdue: products.filter((p) => p.rag === "NOT STARTED - overdue").length,
+    fqComplete: sigCount("Complete"),
+    fqRaised: sigCount("Raised, not complete"),
+    fqReady: sigCount("NOT TRIGGERED - data ready"),
+    fqWaiting: sigCount("Waiting on data collection"),
+    fqNotTriggered: sigCount("Not triggered"),
     closedOut: products.filter((p) => p.wfStage === "Closed").length,
-    at100: products.filter((p) => p.dataTasks > 0 && p.pct === 1).length,
-    newSince: products.filter((p) => p.isNew).length,
-    oncology: products.filter((p) => /oncolog/i.test(p.site)).length,
-    elevatedCriticality: tasks.filter((t) => t.criticality && !/^low$/i.test(t.criticality)).length,
+    inDataCollection: products.filter((p) => p.triggered && p.wfStage !== "Closed").length,
+    notDataComplete: triggeredProducts.filter((p) => p.slotsOk < 10).length,
+    dataComplete: triggeredProducts.filter((p) => p.slotsOk === 10).length,
+    gaps: products.filter((p) => p.gap).length,
+    duplicates: products.filter((p) => p.flags.includes("DUPLICATE")).length,
     closedWithOpen: products.filter((p) => p.flags.includes("CLOSED w/ OPEN")).length,
-    approvals: approvalsAll.length,
-    approvalsSigned: approvalsAll.filter((t) => t.stage === "Approved").length,
-    rejected: tasks.filter((t) => t.stage === "Rejected").length,
+    missingSlots: triggeredProducts.reduce((n, p) => n + p.slotsMissing, 0),
+    approvals: real.filter((t) => t.isApproval).length,
+    approvalsSigned: real.filter((t) => t.isApproval && t.stage === "Approved").length,
+    rejected: real.filter((t) => t.stage === "Rejected").length,
+    newSince: products.filter((p) => p.isNew).length,
     notTriggeredPastDue: plan.filter((p) => p.tracking === "NOT TRIGGERED - past due").length,
     notTriggeredDueSoon: plan.filter((p) => p.tracking === "NOT TRIGGERED - due soon").length,
+    openActions: 0,
+    overdueActions: 0,
   };
   kpi.notTriggered = kpi.planned - kpi.triggered;
-  kpi.open = kpi.dataTasks - kpi.completed;
-  kpi.completion = kpi.dataTasks ? kpi.completed / kpi.dataTasks : 0;
+  kpi.completion = kpi.requiredAnnexes ? kpi.annexClosed / kpi.requiredAnnexes : 0;
+  kpi.raisedCompletion = annexReal.length ? kpi.annexClosed / annexReal.length : 0;
   kpi.planTriggered = kpi.planned ? kpi.triggered / kpi.planned : 0;
+  const actions = products.flatMap((p) => p.actions.map((x) => ({ ...x, product: p.product, ref: p.ref, rag: p.rag })));
+  kpi.openActions = actions.filter((x) => !x.done).length;
+  kpi.overdueActions = actions.filter((x) => x.overdue).length;
 
   const movementCurrent = {
-    productsLive: kpi.productsLive,
     triggered: kpi.triggered,
-    dataTasks: kpi.dataTasks,
-    completed: kpi.completed,
-    overdueTasks: kpi.overdueTasks,
-    unassigned: kpi.unassigned,
+    requiredAnnexes: kpi.requiredAnnexes,
+    annexClosed: kpi.annexClosed,
+    annexOpen: kpi.annexOpen,
+    overdueAnnexes: kpi.overdueAnnexes,
+    unassignedOpen: kpi.unassignedOpen,
+    fqComplete: kpi.fqComplete,
     closedOut: kpi.closedOut,
   };
 
-  const count = (arr, f) => { const m = new Map(); for (const x of arr) { const k = f(x); m.set(k, (m.get(k) || 0) + 1); } return m; };
-  const statusSplit = count(dataTasks, (t) => t.status || "—");
-  const ragCounts = Object.fromEntries([...RAG, "No tasks"].map((r) => [r, products.filter((p) => p.rag === r).length]));
+  const ragCounts = Object.fromEntries([...RAG_ALL, "No tasks"].map((r) => [r, products.filter((p) => p.rag === r).length]));
+  const fqCounts = Object.fromEntries(FINAL_QA_SIGNALS.map((s) => [s, sigCount(s)]));
+
+  /* --- departments, slots, stages --- */
   const byDept = DEPARTMENTS.map((d) => {
-    const ts = dataTasks.filter((t) => t.dept === d);
-    const c = ts.filter((t) => t.closed).length;
-    return { dept: d, completed: c, open: ts.length - c, total: ts.length, overdue: ts.filter((t) => t.overdue === "YES").length };
+    const ts = annexAll.filter((t) => t.dept === d);
+    return { dept: d, closed: ts.filter((t) => t.closed).length, open: ts.filter((t) => !t.closed && !t.generated).length, notRaised: ts.filter((t) => t.generated).length, overdue: ts.filter((t) => t.overdue === "YES").length, total: ts.length };
   });
-  const otherDept = dataTasks.filter((t) => !DEPARTMENTS.includes(t.dept));
-  const stages = [...count(dataTasks, (t) => t.stage || "—")].sort((a, b) => stageIdx(a[0]) - stageIdx(b[0])).map(([stage, n]) => ({ stage, n }));
-  const forms = [...new Set(plan.map((p) => p.process).filter(Boolean))].map((f) => ({ form: f, planned: plan.filter((p) => p.process === f).length, triggered: plan.filter((p) => p.process === f && p.triggered).length })).sort((a, b) => b.planned - a.planned);
+  const bySlot = SLOTS.map((s) => {
+    const st = triggeredProducts.map((p) => p.slots[s.key].status);
+    return { ...s, ok: st.filter((x) => x === "OK").length, open: st.filter((x) => x === "open").length, missing: st.filter((x) => x === "MISSING").length, notTriggered: kpi.notTriggered };
+  });
+  const count = (arr, f) => { const m = new Map(); for (const x of arr) { const k = f(x); m.set(k, (m.get(k) || 0) + 1); } return m; };
+  const annexStages = [...count(annexAll, (t) => t.stage || "—")].sort((a, b) => stageIdx(a[0]) - stageIdx(b[0])).map(([stage, n]) => ({ stage, n }));
+  const statusSplit = count(annexReal, (t) => t.status || "—");
+  const workflowStages = WORKFLOW_STAGES.map((s) => ({ stage: s, n: products.filter((p) => p.inPlan && p.wfStage === s).length }));
+  for (const p of products) if (p.inPlan && !WORKFLOW_STAGES.includes(p.wfStage)) { const row = workflowStages.find((x) => x.stage === p.wfStage); if (row) row.n++; else workflowStages.push({ stage: p.wfStage, n: 1 }); }
+  const forms = [...new Set(plan.map((p) => p.process).filter(Boolean))].map((f) => ({ form: f, planned: plan.filter((p) => p.process === f).length, triggered: plan.filter((p) => p.process === f && p.triggered).length, complete: plan.filter((p) => p.process === f && p.rag === "COMPLETE").length })).sort((a, b) => b.planned - a.planned);
 
   /* --- owner workload --- */
   const owners = new Map();
+  const ow = (u) => { if (!owners.has(u)) owners.set(u, { user: u, annexes: 0, closed: 0, open: 0, notRaised: 0, overdue: 0, finalQa: 0, finalQaDone: 0, approvals: 0, earliestDue: "", depts: {}, products: new Set() }); return owners.get(u); };
   for (const t of tasks) {
-    if (t.taskClass === "Workflow") continue;
-    const u = t.assignee || "Unassigned";
-    if (!owners.has(u)) owners.set(u, { user: u, dataTasks: 0, completed: 0, open: 0, overdue: 0, approvals: 0, earliestDue: "", depts: {} });
-    const o = owners.get(u);
-    if (t.taskClass === "Approval") { o.approvals++; continue; }
-    if (!t.isData) continue;
-    o.dataTasks++;
+    if (t.isWorkflow) continue;
+    const o = ow(t.assignee || "Unassigned");
+    if (t.isApproval) { o.approvals++; continue; }
+    if (t.isFinal) { o.finalQa++; if (t.closed) o.finalQaDone++; continue; }
+    o.annexes++;
+    o.products.add(t.key);
     o.depts[t.dept] = (o.depts[t.dept] || 0) + 1;
-    if (t.closed) o.completed++;
+    if (t.closed) o.closed++;
     else {
-      o.open++;
+      if (t.generated) o.notRaised++; else o.open++;
       if (t.overdue === "YES") o.overdue++;
-      if (t.due && (!o.earliestDue || t.due < o.earliestDue)) o.earliestDue = t.due;
+      if (!t.generated && t.due && (!o.earliestDue || t.due < o.earliestDue)) o.earliestDue = t.due;
     }
   }
   const workload = [...owners.values()].map((o) => ({
     ...o,
-    pct: o.dataTasks ? o.completed / o.dataTasks : 0,
-    status: o.overdue > 0 ? "ACTION - overdue items" : o.open === 0 ? "Clear" : "In progress",
+    products: o.products.size,
+    pct: o.annexes ? o.closed / o.annexes : 0,
+    status: o.overdue > 0 ? "ACTION - overdue items" : o.open + o.notRaised === 0 ? "Clear" : "In progress",
     mainDept: Object.entries(o.depts).sort((a, b) => b[1] - a[1])[0]?.[0] || "",
   })).sort((a, b) => b.open - a.open || b.overdue - a.overdue || a.user.localeCompare(b.user));
 
-  /* --- months (planned PQR month) --- */
+  /* --- months --- */
   const monthKeys = [...new Set(plan.map((p) => p.plannedMonth).filter(Boolean))].sort();
   const months = monthKeys.map((m) => {
     const rows = plan.filter((p) => p.plannedMonth === m);
-    const keys = new Set(rows.map((p) => p.key));
-    const annexes = dataTasks.filter((t) => keys.has(t.key));
+    const prods = rows.map((p) => productByKey.get(p.key));
+    const keySet = new Set(rows.map((p) => p.key));
+    const annexes = annexAll.filter((t) => keySet.has(t.key));
     const done = annexes.filter((t) => t.closed).length;
     const triggered = rows.filter((p) => p.triggered).length;
     const overdueFrom = edate(firstOfMonth(m), settings.overdueMonths);
@@ -333,73 +462,79 @@ export function compute(state) {
     else if (annexes.length && pct === 1) status = "Complete";
     else if (dayInt(overdueFrom) <= R) status = "OVERDUE - in progress";
     else status = "In progress";
-    return { month: m, planned: rows.length, triggered, annexes: annexes.length, completed: done, pct, overdueFrom, status, products: rows, matrix: annexMatrix(annexes) };
+    return {
+      month: m, planned: rows.length, triggered, annexes: annexes.length, completed: done, pct, overdueFrom, status, products: prods,
+      fqComplete: prods.filter((p) => p.fqSignal === "Complete").length,
+      fqReady: prods.filter((p) => p.fqSignal === "NOT TRIGGERED - data ready").length,
+      closedOut: prods.filter((p) => p.wfStage === "Closed").length,
+      inDataCollection: prods.filter((p) => p.triggered && p.wfStage !== "Closed").length,
+      matrix: annexMatrix(annexes),
+    };
   });
   const offPlan = products.filter((p) => !p.inPlan);
-  const offPlanMatrix = annexMatrix(dataTasks.filter((t) => !planByKey.has(t.key)));
+  const offPlanMatrix = annexMatrix(annexAll.filter((t) => !planByKey.has(t.key)));
 
   /* --- data quality signals --- */
   const quality = [];
-  const push = (level, title, detail, items = []) => quality.push({ level, title, detail, items });
+  const push = (level, title, detail, items = [], id = "") => quality.push({ level, title, detail, items, id });
+  const ready = products.filter((p) => p.fqSignal === "NOT TRIGGERED - data ready").sort((a, b) => (a.daysToOverdue ?? 0) - (b.daysToOverdue ?? 0));
+  if (ready.length) push("critical", "Data ready, Final QA never raised", "All ten departmental annexes are closed but the APQR Owner has not raised the Final QA compilation. These reviews can move today.", ready.map((p) => ({ key: p.key, label: `${p.ref} · ${p.product}`, note: p.daysToOverdue < 0 ? `${-p.daysToOverdue} d past PQR due` : `due ${p.overdueDate}` })), "ready");
+  const gaps = products.filter((p) => p.gap);
+  if (gaps.length) push("serious", "Final QA closed with an annexe gap", "The compilation was closed although one or more of the ten required annexes is not closed or was never raised.", gaps.map((p) => ({ key: p.key, label: `${p.ref} · ${p.product}`, note: `${p.slotsOk}/10 annexes OK` })), "gap");
+  const notClosedOut = products.filter((p) => p.fqSignal === "Complete" && p.wfStage !== "Closed");
+  if (notClosedOut.length) push("warning", "Final QA closed, workflow still open", "The compilation is closed but the parent APQR workflow has not been closed out in Scigeniq.", notClosedOut.map((p) => ({ key: p.key, label: `${p.ref} · ${p.product}`, note: `stage ${p.wfStage}` })), "notclosed");
   const closedOpen = products.filter((p) => p.flags.includes("CLOSED w/ OPEN"));
-  if (closedOpen.length) push("serious", "Workflows closed with open annexes", "The APQR is closed in Scigeniq while data-collection annexes beneath it are still open. Confirm before relying on these reviews.", closedOpen.map((p) => ({ key: p.key, label: `${p.ref} · ${p.product}`, note: `${p.open} of ${p.dataTasks} open` })));
-  const dups = products.filter((p) => p.flags.includes("DUPLICATE"));
-  if (dups.length) push("warning", "Duplicate workflows", "Products carrying more than one APQR workflow. Superseded workflows inflate overdue counts; consider cancelling them in Scigeniq.", dups.map((p) => ({ key: p.key, label: p.product, note: p.workflowRefs.join(" / ") })));
-  const rej = tasks.filter((t) => t.stage === "Rejected");
-  if (rej.length) push("serious", "Rejected approvals", "Approval signatures rejected at departmental or final review.", rej.map((t) => ({ key: t.key, label: `${t.ref} · ${t.product}`, note: t.closedOn ? `closed ${t.closedOn.slice(0, 10)}` : "" })));
+  if (closedOpen.length) push("serious", "Workflows closed with open annexes", "The APQR is closed in Scigeniq while annexes beneath it are still open.", closedOpen.map((p) => ({ key: p.key, label: `${p.ref} · ${p.product}`, note: `${p.annexOpen} open` })), "closedopen");
+  const missing = triggeredProducts.filter((p) => p.slotsMissing);
+  if (missing.length) push("warning", "Required annexes never raised", "Triggered workflows where one of the ten required annexes does not exist in Scigeniq.", missing.map((p) => ({ key: p.key, label: `${p.ref} · ${p.product}`, note: SLOTS.filter((s) => p.slots[s.key].status === "MISSING").map((s) => s.label).join(", ") })), "missing");
+  const rej = real.filter((t) => t.stage === "Rejected");
+  if (rej.length) push("serious", "Rejected approvals", "Approval signatures rejected at departmental or final review.", rej.map((t) => ({ key: t.key, label: `${t.ref} · ${t.product}`, note: t.closedOn ? `closed ${t.closedOn.slice(0, 10)}` : "" })), "rejected");
   const lateMonths = months.filter((m) => m.status === "NOT STARTED - overdue");
-  if (lateMonths.length) push("critical", "Planned months with no workflow triggered", "Review periods have closed and the PQR overdue date has passed, but no workflow has been started.", lateMonths.map((m) => ({ month: m.month, label: monthLabel(m.month), note: `${m.planned} products` })));
+  if (lateMonths.length) push("critical", "Planned months with no workflow triggered", "Review periods have closed and the PQR overdue date has passed, but no workflow has been started.", lateMonths.map((m) => ({ month: m.month, label: monthLabel(m.month), note: `${m.planned} products` })), "latemonths");
   const pastDue = plan.filter((p) => p.tracking === "NOT TRIGGERED - past due");
-  if (pastDue.length) push("critical", "Planned products past due and not triggered", "In the approved plan, past their PQR overdue date, with no workflow in Scigeniq.", pastDue.map((p) => ({ key: p.key, label: p.product, note: `overdue since ${p.overdueDate}` })));
+  if (pastDue.length) push("critical", "Planned products past due and not triggered", "Past their PQR overdue date with no workflow in Scigeniq.", pastDue.map((p) => ({ key: p.key, label: p.product, note: `overdue since ${p.overdueDate}` })), "pastdue");
   const soon = plan.filter((p) => p.tracking === "NOT TRIGGERED - due soon");
-  if (soon.length) push("warning", `Not triggered, due within ${settings.triggerWindowDays} days`, "Workflows that should be started soon to meet the PQR commitment.", soon.map((p) => ({ key: p.key, label: p.product, note: `due ${p.overdueDate}` })));
-  if (offPlan.length) push("info", "Products with tasks but not in the plan", "These carry Scigeniq tasks but have no row in the approved plan, so they have no planned month or due date. Check the product name matches the plan exactly.", offPlan.map((p) => ({ key: p.key, label: p.product, note: `${p.dataTasks} annexes` })));
-  if (kpi.unassignedOpen) push("warning", "Open annexes with no assigned user", `${kpi.unassignedOpen} open data-collection tasks are unassigned.`, []);
-  const sysOverdue = dataTasks.filter((t) => !t.closed && /overdue/i.test(t.status)).length;
-  const calcOverdue = dataTasks.filter((t) => t.overdue === "YES").length;
-  if (sysOverdue !== calcOverdue) push("info", "Overdue: system flag vs PQR due date", `Scigeniq flags ${sysOverdue} open annexes as Overdue against their own task end date; ${calcOverdue} are overdue against the parent PQR due date used here. Reconcile before quoting figures.`, []);
-  if (otherDept.length) push("info", "Tasks with an unrecognised department", `${otherDept.length} data tasks could not be mapped to QA, QC, Production, RA, Validation or Compliance.`, []);
+  if (soon.length) push("warning", `Not triggered, due within ${settings.triggerWindowDays} days`, "Workflows that should be started soon to meet the PQR commitment.", soon.map((p) => ({ key: p.key, label: p.product, note: `due ${p.overdueDate}` })), "soon");
+  const dups = products.filter((p) => p.flags.includes("DUPLICATE"));
+  if (dups.length) push("warning", "Duplicate workflows", "Products carrying more than one APQR workflow reference.", dups.map((p) => ({ key: p.key, label: p.product, note: p.workflowRefs.join(" / ") })), "dups");
+  if (kpi.unassignedOpen) push("warning", "Open annexes with no assigned user", `${kpi.unassignedOpen} raised annexes are open and unassigned.`, [], "unassigned");
+  if (offPlan.length) push("info", "Products with tasks but not in the plan", "Check the product name matches the plan exactly.", offPlan.map((p) => ({ key: p.key, label: p.product, note: `${p.annexTotal} annexes` })), "offplan");
+  const sysOverdue = annexReal.filter((t) => !t.closed && /overdue/i.test(t.status)).length;
+  const calcOverdue = annexReal.filter((t) => t.overdue === "YES").length;
+  if (sysOverdue !== calcOverdue) push("info", "Overdue: system flag vs PQR due date", `Scigeniq flags ${sysOverdue} open annexes as Overdue against their own end date; ${calcOverdue} are overdue against the parent PQR due date used here.`, [], "reconcile");
+  if (kpi.overdueActions) push("warning", "QA follow-up actions past their target date", `${kpi.overdueActions} follow-up actions are overdue.`, actions.filter((x) => x.overdue).map((x) => ({ key: x.key, label: x.text, note: `${x.product} · due ${x.due}` })), "actions");
 
   return {
-    report, settings, plan, tasks, products, productByKey, planByKey, kpi, movementCurrent,
-    statusSplit, ragCounts, byDept, stages, forms, workload, months, offPlan, offPlanMatrix, quality,
-    owners: [...new Set(tasks.map((t) => t.assignee).filter(Boolean))].sort(),
+    report, settings, plan, tasks, realTasks: real, generatedTasks: generated, products, productByKey, planByKey, kpi, movementCurrent,
+    statusSplit, ragCounts, fqCounts, byDept, bySlot, annexStages, workflowStages, forms, workload, months, offPlan, offPlanMatrix, quality, actions,
+    owners: [...new Set(real.map((t) => t.assignee).filter(Boolean))].sort(),
   };
 }
 
-function stageIdx(s) { const i = STAGE_ORDER.indexOf(s); return i < 0 ? 99 : i; }
-
-/** Department x stage counts for a set of annexes, with "Total general" row. */
+/** Department x stage counts for a set of annexes, with a "Total" row. */
 export function annexMatrix(annexes) {
   const stages = [...new Set(annexes.map((t) => t.stage || "—"))].sort((a, b) => stageIdx(a) - stageIdx(b));
-  if (!stages.length) stages.push("Collecting Data", "Data Review", "Completed");
+  if (!stages.length) stages.push("Not triggered", "Collecting Data", "Data Review", "Completed");
   const rows = DEPARTMENTS.map((d) => {
     const ts = annexes.filter((t) => t.dept === d);
-    const counts = Object.fromEntries(stages.map((s) => [s, ts.filter((t) => (t.stage || "—") === s).length]));
-    return { dept: d, counts, total: ts.length };
+    return { dept: d, counts: Object.fromEntries(stages.map((s) => [s, ts.filter((t) => (t.stage || "—") === s).length])), total: ts.length };
   });
   const totalCounts = Object.fromEntries(stages.map((s) => [s, rows.reduce((n, r) => n + r.counts[s], 0)]));
   return { stages, rows, total: { dept: "Total", counts: totalCounts, total: rows.reduce((n, r) => n + r.total, 0) } };
 }
 
 export const MOVEMENT_METRICS = [
-  ["productsLive", "Products with a live workflow"],
-  ["triggered", "Workflows triggered vs plan"],
-  ["dataTasks", "Data-collection tasks"],
-  ["completed", "Tasks completed"],
-  ["overdueTasks", "Overdue tasks"],
-  ["unassigned", "Unassigned tasks"],
+  ["triggered", "Workflows triggered"],
+  ["requiredAnnexes", "Required annexes"],
+  ["annexClosed", "Annexes closed"],
+  ["annexOpen", "Annexes open (raised)"],
+  ["overdueAnnexes", "Overdue annexes"],
+  ["unassignedOpen", "Unassigned open annexes"],
+  ["fqComplete", "Final QA complete"],
   ["closedOut", "Workflows closed out"],
 ];
-/** For these metrics a rise is bad news. */
-export const UP_IS_BAD = new Set(["overdueTasks", "unassigned"]);
+export const UP_IS_BAD = new Set(["overdueAnnexes", "unassignedOpen", "annexOpen"]);
 
-/** Snapshot the current figures as the comparison baseline. */
 export function snapshotBaseline(model, label) {
-  return {
-    label,
-    date: model.report,
-    metrics: { ...model.movementCurrent },
-    prevPct: Object.fromEntries(model.products.map((p) => [p.key, p.pct])),
-  };
+  return { label, date: model.report, metrics: { ...model.movementCurrent }, prevPct: Object.fromEntries(model.products.map((p) => [p.key, p.pct])) };
 }

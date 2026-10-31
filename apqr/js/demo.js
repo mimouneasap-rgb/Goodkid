@@ -51,7 +51,7 @@ export function demoState() {
       const wfRef = `APQR-DM-${wfNo++}`;
       const product = name;
       const base = { product, dosageForm: form[0], site: "DEMO SITE", criticality: "Low", createdBy: "System" };
-      const wfClosed = maturity > 0.97 && r() > 0.3;
+      const wfClosed = maturity > 0.99 && r() > 0.5;
       tasks.push({ ...base, id: `t${tasks.length}`, ref: wfRef, department: "QA", stream: "APQR Workflow", taskClass: "Workflow", taskType: "APQR", title: `APQR , ${product}`, stage: wfClosed ? "Closed" : "Data Collection", status: wfClosed ? "Completed" : due.slice(0, 10) < report ? "Overdue" : "Open", assignee: pick(["Unassigned", PEOPLE[0], PEOPLE[0]]), created, start: created, closedOn: wfClosed ? edate(created.slice(0, 10), 4) : "", closure: wfClosed ? "Closed" : "Not Closed", taskEnd: due });
       const suffix = { Tablets: "Tablet", "Hard Capsule": "Capsule", "Liquid/Syrup": "Liquid", "Semi Solid": "Semi Solid" }[form[0]];
       const qcRef = `QCTAB-DM-${qcNo++}`;
@@ -68,16 +68,24 @@ export function demoState() {
         ["Validation", "Validation", "VL Process Data Collection", "QA Data Collection", wfRef],
       ];
       const deptSpeed = { Production: 0.25, QC: 0.12, Compliance: 0, QA: -0.05, Validation: -0.1, RA: -0.18 };
+      let allDone = true, lastClose = created.slice(0, 10);
       for (const [dept, stream, title, type, ref] of annexes) {
         const p = maturity + deptSpeed[dept] + (r() - 0.5) * 0.4;
         const done = wfClosed || p > 0.75;
         const review = !done && p > 0.5;
         const closedOn = done ? edate(created.slice(0, 10), 1 + Math.floor(r() * Math.max(1, ageDays / 30))) : "";
+        if (!done) allDone = false; else if (closedOn > lastClose) lastClose = closedOn;
         tasks.push({ ...base, id: `t${tasks.length}`, ref, department: dept, stream, taskClass: "Data Collection", taskType: type, title, stage: done ? "Completed" : review ? "Data Review" : "Collecting Data", status: done ? "Completed" : r() > 0.8 ? "Overdue" : "Open", assignee: r() > 0.22 ? pick(PEOPLE) : "Unassigned", created, start: created, closedOn: closedOn > report ? report : closedOn, closure: done ? "Closed" : "Not Closed", taskEnd: edate(created.slice(0, 10), 2) + "T09:00" });
-        if (done && r() > 0.45) {
+        if (done && r() > 0.7) {
           const sign = closedOn > report ? report : closedOn;
           tasks.push({ ...base, id: `t${tasks.length}`, ref: `APV-DM-${apvNo++}`, department: "Approval", stream: "Approval", taskClass: "Approval", taskType: "Approval", title: "Approval", stage: r() > 0.985 ? "Rejected" : "Approved", status: "Completed", assignee: pick(PEOPLE), created: sign, start: sign, closedOn: sign, closure: "Closed", taskEnd: sign });
         }
+      }
+      // Final QA compilation, raised by the APQR Owner once all ten annexes are closed
+      if (allDone && (wfClosed || r() > 0.3)) {
+        const raised = lastClose > report ? report : lastClose;
+        const fqDone = wfClosed || r() > 0.35;
+        tasks.push({ ...base, id: `t${tasks.length}`, ref: wfRef, department: "QA", stream: "QA", taskClass: "Data Collection", taskType: "QA Data Collection", title: "Final QA Data Collection", stage: fqDone ? "Completed" : "Collecting Data", status: fqDone ? "Completed" : "Open", assignee: PEOPLE[1], created: raised, start: raised, closedOn: fqDone ? (edate(raised, 1) > report ? report : edate(raised, 1)) : "", closure: fqDone ? "Closed" : "Not Closed", taskEnd: edate(raised, 1) });
       }
     }
   }

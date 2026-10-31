@@ -1,14 +1,16 @@
 // Chart builders. Each returns an HTML/SVG string. Colours are CSS custom
 // properties so light and dark themes swap in one place; every mark carries a
 // data-tip for the shared hover tooltip.
-import { esc, tip, fmtN, fmtPct, fmtMonthShort } from "./ui.js";
+import { esc, tip, fmtN, fmtPct, fmtMonthShort, icon, slotCls } from "./ui.js";
+import { SLOTS } from "./engine.js";
 
-export const DEPT_VAR = { QA: "--d1", QC: "--d2", Production: "--d3", RA: "--d4", Validation: "--d5", Compliance: "--d6" };
+export const DEPT_VAR = { Compliance: "--d1", Production: "--d2", QA: "--d3", QC: "--d4", RA: "--d5", "Supplier Qualification": "--d6", "Validation Metrology": "--d7", "Validation Process": "--d8" };
 export const deptColor = (d) => `var(${DEPT_VAR[d] || "--muted"})`;
 const STAGE_VARS = ["--s1", "--s2", "--s3", "--s4", "--s5"];
 export function stageColor(stage, stages) {
   if (/complet|approved|closed/i.test(stage)) return "var(--s-done)";
-  const i = stages.filter((s) => !/complet|approved|closed/i.test(s)).indexOf(stage);
+  if (/not triggered/i.test(stage)) return "var(--slot-nt)";
+  const i = stages.filter((s) => !/complet|approved|closed|not triggered/i.test(s)).indexOf(stage);
   return `var(${STAGE_VARS[Math.max(0, i)] || "--s1"})`;
 }
 
@@ -162,3 +164,14 @@ export function progressBar(pct, { tone = "" } = {}) {
   const p = Math.max(0, Math.min(1, pct || 0));
   return `<div class="pbar ${tone}"><span style="width:${(p * 100).toFixed(1)}%"></span></div>`;
 }
+
+/** The ten annexe slots of a product as a row of status cells. */
+export function slotCells(p) {
+  return `<div class="slots">${SLOTS.map((s) => {
+    const st = p.slots[s.key].status;
+    const n = p.slots[s.key].tasks.length;
+    const glyph = st === "OK" ? icon("check") : st === "MISSING" ? "!" : st === "open" ? (n > 1 ? n : "") : "";
+    return `<span class="slot ${slotCls(st)}" data-tip="${tip(s.label, [["Status", st === "open" ? "Raised, not closed" : st === "OK" ? "Closed" : st === "MISSING" ? "Never raised" : "Not triggered"], ["Tasks", String(n)]])}">${glyph}</span>`;
+  }).join("")}</div>`;
+}
+export const slotHead = () => `<div class="slot-head">${SLOTS.map((s) => `<span title="${esc(s.label)}">${esc(s.short)}</span>`).join("")}</div>`;

@@ -2,7 +2,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readXlsx, writeXlsx, parseCsv, serialToIso } from "../apqr/js/xlsx.js";
-import { compute, eomonth, edate, monthYearToEnd, houseDept, productKey, snapshotBaseline } from "../apqr/js/engine.js";
+import { compute, eomonth, edate, monthYearToEnd, houseDept, productKey, snapshotBaseline, classifyTask } from "../apqr/js/engine.js";
 import { parseDate, classifyDept, productFromParent, transformScigeniq, guessMapping, detect, importTrackerWorkbook, mergeTasks } from "../apqr/js/importers.js";
 import { buildWorkbook } from "../apqr/js/exporter.js";
 import { demoState } from "../apqr/js/demo.js";
@@ -37,50 +37,86 @@ test("planned PQR month is the month after review end; overdue = 1st + 3 months"
   assert.equal(m.tasks[0].overdue, "YES");
 });
 
-test("RAG: complete, overdue, due soon, on track", () => {
-  const done = compute(baseState([task({ stage: "Completed", closure: "Closed", closedOn: "2026-06-01" })]));
+const SLOT_TITLES = ["CM Data Collection", "IPC Data Collection - Tablet", "Process Data Collection - Tablet", "QA Data Collection", "QC Data Collection - Tablet", "QC OOS/OOT Data Collection", "RA Data Collection", "Supplier Data Collection", "Validation Data Collection", "VL Process Data Collection"];
+const closedTask = (title) => task({ title, stage: "Completed", status: "Completed", closure: "Closed", closedOn: "2026-06-01" });
+
+test("RAG: complete needs the Final QA closed; overdue, due soon, on track", () => {
+  const allTen = SLOT_TITLES.map(closedTask);
+  const ready = compute(baseState(allTen));
+  assert.equal(ready.products[0].slotsOk, 10);
+  assert.equal(ready.products[0].fqSignal, "NOT TRIGGERED - data ready");
+  assert.equal(ready.products[0].rag, "OVERDUE");
+  const done = compute(baseState([...allTen, closedTask("Final QA Data Collection")]));
   assert.equal(done.products[0].rag, "COMPLETE");
-  assert.equal(done.products[0].pct, 1);
-  const late = compute(baseState([task(), task({ title: "RA Data Collection", department: "RA" })]));
-  assert.equal(late.products[0].rag, "OVERDUE");
-  assert.equal(late.products[0].overdue, 2);
-  assert.equal(late.products[0].bottleneck, "several");
+  assert.equal(done.products[0].fqSignal, "Complete");
   const soon = compute(baseState([task()], "2026-07-25"));
   assert.equal(soon.products[0].rag, "DUE SOON");
-  const ok = compute(baseState([task({ taskEnd: "" })], "2026-06-15"));
+  const ok = compute(baseState([task()], "2026-06-15"));
   assert.equal(ok.products[0].rag, "ON TRACK");
 });
 
-test("approvals and workflow tasks don't count toward % complete", () => {
-  const m = compute(baseState([
-    task({ stage: "Completed", closure: "Closed", closedOn: "2026-06-01" }),
-    task({ title: "Approval", taskClass: "Approval", department: "Approval", stage: "Approved", closure: "Closed", ref: "APV-T-1" }),
-    task({ title: `APQR , ${PRODUCT}`, taskClass: "Workflow", stage: "Data Collection", status: "Open" }),
-  ], "2026-06-15"));
-  assert.equal(m.products[0].dataTasks, 1);
-  assert.equal(m.products[0].approvals, 1);
-  assert.equal(m.kpi.dataTasks, 1);
+test("slots: OK when any task closed, open when raised, MISSING when never raised", () => {
+  const m = compute(baseState([closedTask("CM Data Collection"), task({ title: "RA Data Collection" }), task({ title: "RA Data Collection", stage: "Completed", closure: "Closed" })], "2026-06-15"));
+  const p = m.products[0];
+  assert.equal(p.slots.Compliance.status, "OK");
+  assert.equal(p.slots.RA.status, "OK");
+  assert.equal(p.slots.QA.status, "MISSING");
+  assert.equal(p.slotsOk, 2);
+  assert.ok(p.flags.includes("MISSING ANNEXE"));
 });
 
-test("plan products without tasks are 'not triggered'", () => {
+test("Final QA closed with fewer than ten annexes is flagged as a gap", () => {
+  const m = compute(baseState([closedTask("CM Data Collection"), closedTask("Final QA Data Collection")]));
+  assert.equal(m.products[0].gap, true);
+  assert.equal(m.kpi.gaps, 1);
+});
+
+test("approvals, workflow and Final QA don't count as annexes", () => {
+  const m = compute(baseState([
+    closedTask("QA Data Collection"),
+    task({ title: "Approval", taskClass: "Approval", stage: "Approved", closure: "Closed", ref: "APV-T-1", taskType: "Approval" }),
+    task({ title: `APQR , ${PRODUCT}`, taskClass: "Workflow", taskType: "APQR", stage: "Data Collection" }),
+    task({ title: "Final QA Data Collection" }),
+  ], "2026-06-15"));
+  assert.equal(m.products[0].annexTotal, 1);
+  assert.equal(m.products[0].approvals, 1);
+  assert.equal(m.products[0].fqSignal, "Raised, not complete");
+});
+
+test("untriggered planned products carry ten generated annexes and a Final QA", () => {
   const s = baseState([]);
-  s.plan.push({ ...s.plan[0], id: "p2", product: "BETA 5 mg Tablets-SITE", reviewEnd: "10/2026", periodEnd: "2026-10-31" });
+  s.plan.push({ ...s.plan[0], id: "p2", product: "BETA 5 mg Capsules-SITE", process: "Hard Capsule", reviewEnd: "10/2026", periodEnd: "2026-10-31" });
   const m = compute(s);
   assert.equal(m.kpi.triggered, 0);
+  assert.equal(m.kpi.requiredAnnexes, 20);
+  assert.equal(m.kpi.annexNotRaised, 20);
+  assert.equal(m.generatedTasks.length, 24);
   assert.equal(m.plan[1].tracking, "Not yet triggered");
   assert.equal(m.plan[0].tracking, "NOT TRIGGERED - past due");
+  const beta = m.productByKey.get(productKey("BETA 5 mg Capsules-SITE"));
+  assert.equal(beta.rag, "Not yet due");
+  assert.equal(m.productByKey.get(productKey(PRODUCT)).rag, "NOT STARTED - overdue");
+  assert.ok(m.generatedTasks.some((t) => t.title === "Hard Capsule Data Collection"));
 });
 
-test("department mapping: CM is Compliance, VL is Validation, supplier is QA", () => {
-  assert.deepEqual(classifyDept("CM Data Collection", "QA Data Collection"), ["Compliance", "Compliance"]);
-  assert.deepEqual(classifyDept("VL Process Data Collection", "QA Data Collection"), ["Validation", "Validation"]);
-  assert.deepEqual(classifyDept("QC OOS/OOT Data Collection", "QA Data Collection"), ["QC", "QC"]);
-  assert.deepEqual(classifyDept("Hard Capsule Data Collection", "Process Data Collection - Hard Capsule"), ["Production", "Process"]);
-  assert.deepEqual(classifyDept("IPC Data Collection - Tablet", ""), ["Production", "IPC"]);
-  assert.deepEqual(classifyDept("Supplier Data Collection", "QA Data Collection"), ["QA", "Supplier"]);
-  assert.deepEqual(classifyDept("Final QA Data Collection", ""), ["QA", "QA"]);
-  assert.equal(houseDept("Supplier Qualification"), "QA");
-  assert.equal(houseDept("Validation Metrology"), "Validation");
+test("classification: owning department from the title, slot by annexe", () => {
+  const c = (title, type = "QA Data Collection", department = "") => classifyTask({ title, type, department });
+  assert.deepEqual([c("CM Data Collection").slot, c("CM Data Collection").dept, c("CM Data Collection").shared], ["Compliance", "Compliance", true]);
+  assert.equal(c("Supplier Data Collection").dept, "Supplier Qualification");
+  assert.equal(c("VL Process Data Collection").slot, "Validation Process");
+  assert.equal(c("VL Data Collection").slot, "Validation Process");
+  assert.equal(c("Validation Data Collection", "Validation Data Collection").slot, "Validation Metrology");
+  assert.equal(c("QC Data Collection - Tablet", "QC Data Collection - Tablet").slot, "QC main");
+  assert.equal(c("QC OOS/OOT Data Collection").slot, "QC OOS/OOT");
+  assert.equal(c("QC Data Collection").slot, "QC OOS/OOT");
+  assert.equal(c("Hard Capsule Data Collection", "Process Data Collection - Hard Capsule").slot, "Process");
+  assert.equal(c("IPC Data Collection - Tablet", "IPC Data Collection - Tablet").dept, "Production");
+  assert.equal(c("Final QA Data Collection").role, "Final QA compilation");
+  assert.equal(classifyTask({ title: "Approval", type: "Approval", ref: "APV-KE-1" }).role, "Approval");
+  assert.equal(classifyTask({ title: "APQR , X", type: "APQR" }).role, "Parent workflow");
+  assert.deepEqual(classifyDept("Supplier Data Collection", "QA Data Collection"), ["Supplier Qualification", "Supplier"]);
+  assert.equal(houseDept("Validation Metrology"), "Validation Metrology");
+  assert.equal(houseDept("Supplier Qualification"), "Supplier Qualification");
 });
 
 test("parseDate handles Scigeniq text dates and ISO", () => {
@@ -113,6 +149,8 @@ test("Scigeniq export: products, classes, exclusions and duplicated parents", ()
   assert.equal(res.stats.resolvedDup, 1);
   const byTitle = Object.fromEntries(res.tasks.map((t) => [t.title, t]));
   assert.equal(byTitle["CM Data Collection"].department, "Compliance");
+  assert.equal(byTitle["CM Data Collection"].annexSlot, "Compliance");
+  assert.equal(byTitle["QC OOS/OOT Data Collection"].annexSlot, "QC OOS/OOT");
   assert.equal(byTitle["CM Data Collection"].closure, "Closed");
   assert.equal(byTitle["Approval"].taskClass, "Approval");
   assert.equal(byTitle[`APQR , ${PRODUCT}`].taskClass, "Workflow");
