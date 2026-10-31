@@ -184,13 +184,28 @@ export function tip(title, rows = [], swatch) {
   return esc(`<div class="tip-h">${sw}${esc(title)}</div>${rows.map(([k, v]) => `<div class="tip-r"><span>${esc(k)}</span><b>${esc(v)}</b></div>`).join("")}`);
 }
 
-export function download(blob, filename) {
+/**
+ * Offer a file to the user. Inside the claude.ai viewer this goes through the
+ * viewer's save prompt (the page cannot download directly there). Resolves
+ * true when the file was handed over.
+ */
+export async function download(blob, filename) {
+  if (typeof window.claude?.use === "function") {
+    const dl = await window.claude.use("downloads").catch(() => null);
+    if (!dl) { toast("Saving files isn’t available in this view.", { kind: "error" }); return false; }
+    try { await dl.save({ filename, data: blob }); return true; }
+    catch (e) {
+      if (e?.code !== "declined") toast(e?.code === "rate_limited" ? "A save prompt is already open." : `The file couldn’t be saved (${e?.code || "error"}).`, { kind: "error" });
+      return false;
+    }
+  }
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
   a.download = filename;
   document.body.append(a);
   a.click();
   setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+  return true;
 }
 
 export function debounce(fn, ms = 160) {

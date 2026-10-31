@@ -240,13 +240,11 @@ export async function exportExcel() {
   try {
     const blob = await buildWorkbook(store.getState(), store.getModel());
     const d = store.getModel().report.replaceAll("-", "");
-    download(blob, `APQR_Master_Tracker_${d}.xlsx`);
-    toast("Excel workbook exported", { kind: "success" });
+    if (await download(blob, `APQR_Master_Tracker_${d}.xlsx`)) toast("Excel workbook exported", { kind: "success" });
   } catch (e) { console.error(e); toast(`Export failed: ${e.message}`, { kind: "error" }); }
 }
-export function exportJson() {
-  download(backupJson(store.getState()), `APQR_Tracker_backup_${new Date().toISOString().slice(0, 10)}.json`);
-  toast("Backup saved", { kind: "success" });
+export async function exportJson() {
+  if (await download(backupJson(store.getState()), `APQR_Tracker_backup_${new Date().toISOString().slice(0, 10)}.json`)) toast("Backup saved", { kind: "success" });
 }
 
 /* ------------------------------------------------------- demo / reset */
@@ -265,6 +263,11 @@ export async function loadDemo() {
   s.products = {};
   store.replace(s, { label: "Load demo" });
   toast("Demo programme loaded (fictional data)", { kind: "success", action: "Undo", onAction: () => store.undo() });
+}
+export async function resetToSeed() {
+  if (!(await confirmDialog({ title: "Go back to the published data?", body: "Your changes in this browser (stages, comments, imports, baseline) will be replaced by the data this page was published with.", confirm: "Reset", danger: true }))) return;
+  store.replace(store.seedState(), { label: "Reset to published data" });
+  toast("Published data restored", { kind: "success", action: "Undo", onAction: () => store.undo() });
 }
 export async function clearAll() {
   if (!(await confirmDialog({ title: "Clear all data?", body: "The plan, task register, comments, baseline and audit trail will be removed from this browser.", confirm: "Clear everything", danger: true }))) return;

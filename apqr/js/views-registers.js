@@ -307,7 +307,7 @@ export const data = {
         <div style="display:grid;gap:10px">
           <button class="btn" data-action="export-xlsx" style="justify-content:flex-start;white-space:normal;height:auto;min-height:40px;padding:9px 14px;text-align:left">${icon("download")}Excel workbook (.xlsx): Dashboard, Tracker, Plan, Task Register, Workload, Annexes, Audit Trail</button>
           <button class="btn" data-action="export-json" style="justify-content:flex-start;white-space:normal;height:auto;min-height:40px;padding:9px 14px;text-align:left">${icon("download")}Full backup (.json), to restore later or move to another computer</button>
-          <button class="btn" data-action="print" style="justify-content:flex-start">${icon("print")}Print / save the current page as PDF</button>
+          ${window.claude ? "" : `<button class="btn" data-action="print" style="justify-content:flex-start">${icon("print")}Print / save the current page as PDF</button>`}
         </div>
         <p class="muted" style="font-size:12px;margin:14px 0 0">Source: <b>${esc(s.meta.source || "none")}</b>${s.meta.importedAt ? ` · imported ${fmtDate(s.meta.importedAt.slice(0, 10))}` : ""}</p>
       </section>
@@ -347,6 +347,7 @@ export const data = {
       <section class="card span-12 reveal">
         <div class="card-h"><div><h3>Demo & reset</h3><p>Data lives only in this browser (local storage). Export a backup regularly.</p></div></div>
         <div style="display:flex;gap:10px;flex-wrap:wrap">
+          ${store.hasSeed() ? `<button class="btn" data-action="reset-seed">${icon("undo")}Reset to the published data</button>` : ""}
           <button class="btn" data-action="demo">${icon("sparkle")}Load demo programme</button>
           <button class="btn btn-ghost" data-action="clear" style="color:var(--crit-ink)">${icon("trash")}Clear all data</button>
         </div>

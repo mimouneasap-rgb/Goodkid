@@ -19,6 +19,20 @@ export function emptyState() {
   };
 }
 
+/** Data embedded in the page (a published copy carries the user's tracker). */
+function readSeed() {
+  try {
+    const el = typeof document !== "undefined" && document.getElementById("apqr-seed");
+    return el ? JSON.parse(el.textContent) : null;
+  } catch { return null; }
+}
+export const hasSeed = () => !!readSeed();
+export function seedState() {
+  const seed = readSeed();
+  const base = emptyState();
+  return seed ? { ...base, ...seed, meta: { ...base.meta, ...seed.meta }, settings: { ...base.settings, ...seed.settings } } : base;
+}
+
 let state = load();
 let model = compute(state);
 let undoSnapshot = null;
@@ -32,8 +46,8 @@ function load() {
       const base = emptyState();
       return { ...base, ...parsed, meta: { ...base.meta, ...parsed.meta }, settings: { ...base.settings, ...parsed.settings } };
     }
-  } catch { /* storage unavailable or corrupt: start empty */ }
-  return emptyState();
+  } catch { /* storage unavailable or corrupt: start from the seed or empty */ }
+  return seedState();
 }
 
 let saveTimer;

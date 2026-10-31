@@ -25,12 +25,16 @@ const NAV = [
 
 let current = "dashboard";
 
-function parseHash() {
-  const h = location.hash.replace(/^#\/?/, "");
+// Links inside the app look like "#/tracker?rag=OVERDUE". The address bar
+// only ever shows the plain view name ("#tracker"), because embedded viewers
+// pass nothing but a plain #name; filter parameters stay in memory.
+function parseHref(href) {
+  const h = String(href || "").replace(/^#\/?/, "");
   const [path, query = ""] = h.split("?");
   const params = Object.fromEntries(new URLSearchParams(query));
   return { view: VIEWS[path] ? path : "dashboard", params };
 }
+let ownHash = null;
 
 /* ------------------------------------------------------------ render */
 
@@ -38,7 +42,7 @@ function renderNav(m) {
   $("#nav").innerHTML = NAV.map((n) => {
     if (n.sec) return `<div class="nav-sec">${n.sec}</div>`;
     const c = store.hasData() && n.count ? n.count(m) : "";
-    return `<a href="#/${n.id}" class="${n.id === current ? "active" : ""}" ${n.id === current ? 'aria-current="page"' : ""}>${icon(n.icon)}<span>${n.label}</span>${c !== "" && c !== 0 ? `<span class="count ${n.alert ? "alert" : ""}">${fmtN(c)}</span>` : ""}</a>`;
+    return `<a href="#${n.id}" class="${n.id === current ? "active" : ""}" ${n.id === current ? 'aria-current="page"' : ""}>${icon(n.icon)}<span>${n.label}</span>${c !== "" && c !== 0 ? `<span class="count ${n.alert ? "alert" : ""}">${fmtN(c)}</span>` : ""}</a>`;
   }).join("");
   const s = store.getState();
   $("#side-foot").innerHTML = store.hasData() ? `<div class="source-card"><b>${esc(s.meta.programme)}</b>${esc(s.meta.source || "Entered in the app")}
@@ -108,14 +112,26 @@ function render() {
 
 /* ------------------------------------------------------------ routing */
 
-function route() {
-  const { view, params } = parseHash();
+function go(view, params = {}) {
   const changed = view !== current;
   current = view;
   VIEWS[view].params?.(params);
+  const target = `#${view}`;
+  if (location.hash !== target) {
+    ownHash = target;
+    try { history.replaceState(null, "", target); ownHash = null; } catch { location.hash = target; }
+  }
   render();
   if (changed) { window.scrollTo(0, 0); $("#side").classList.remove("open"); }
   if (params.product && view !== "tasks") openProduct(params.product);
+}
+export function navigate(href) {
+  const { view, params } = parseHref(href);
+  go(view, params);
+}
+function route() {
+  if (ownHash && location.hash === ownHash) { ownHash = null; return; }
+  navigate(location.hash);
 }
 
 /* ------------------------------------------------------------ search */
@@ -186,17 +202,19 @@ function initGlobal() {
   document.addEventListener("click", (e) => {
     const a = e.target.closest("[data-action]");
     if (a) {
-      const fn = { import: act.pickFile, "export-xlsx": act.exportExcel, "export-json": act.exportJson, demo: act.loadDemo, clear: act.clearAll, print: () => window.print(), "report-date": act.editReportDate }[a.dataset.action];
+      const fn = { import: act.pickFile, "export-xlsx": act.exportExcel, "export-json": act.exportJson, demo: act.loadDemo, clear: act.clearAll, "reset-seed": act.resetToSeed, print: () => window.print(), "report-date": act.editReportDate }[a.dataset.action];
       if (fn) { e.preventDefault(); fn(); }
       return;
     }
     const op = e.target.closest("[data-open-product]");
     if (op) { openProduct(op.dataset.openProduct); return; }
+    const link = e.target.closest('a[href^="#"]');
+    if (link && !e.ctrlKey && !e.metaKey) { e.preventDefault(); if (link.closest("#drawer")) closeDrawer(); navigate(link.getAttribute("href")); return; }
     if (e.target.closest("select,input,textarea,button:not([data-href]),a[href]")) return;
     const row = e.target.closest("#view tr[data-key]");
     if (row) { openProduct(row.dataset.key); return; }
     const href = e.target.closest("[data-href]");
-    if (href) location.hash = href.dataset.href;
+    if (href) navigate(href.dataset.href);
   });
   document.addEventListener("change", (e) => {
     const t = e.target;
@@ -248,7 +266,7 @@ route();
 // Recompute at midnight when the report date follows today.
 setInterval(() => { if (store.getState().settings.useToday && store.getModel().report !== todayIso()) store.refresh(); }, 60000);
 
-if ("serviceWorker" in navigator && location.protocol !== "file:") {
+if ("serviceWorker" in navigator && location.protocol !== "file:" && !window.claude) {
   navigator.serviceWorker.register("sw.js").catch(() => {});
 }
 
