@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>APQR Master Tracker</title>
+  <meta name="description" content="Annual Product Quality Review tracker: plan vs execution, annexes progress, workload and data-quality signals. Imports the APQR master tracker workbook or a Scigeniq eQMS export.">
+  <meta name="theme-color" content="#0a1230">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="APQR Tracker">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Manrope:wght@400;500;600;700;800&display=swap">
+  <link rel="stylesheet" href="css/apqr.css">
+  <script>
+    // Apply the saved theme before first paint.
+    try { const t = localStorage.getItem("apqr-theme"); if (t === "light" || t === "dark") document.documentElement.dataset.theme = t; } catch {}
+  </script>
+</head>
+<body>
+<div class="app" id="app">
+  <aside class="side" id="side">
+    <a class="brand" href="#/dashboard" aria-label="APQR Master Tracker home">
+      <svg class="brand-mark" viewBox="0 0 40 40" aria-hidden="true">
+        <defs><linearGradient id="bm" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#5eead4"/><stop offset=".55" stop-color="#818cf8"/><stop offset="1" stop-color="#c084fc"/></linearGradient></defs>
+        <rect x="1" y="1" width="38" height="38" rx="11" fill="url(#bm)"/>
+        <circle cx="20" cy="20" r="11" fill="none" stroke="#0a1230" stroke-opacity=".25" stroke-width="4"/>
+        <path d="M20 9a11 11 0 0 1 10.4 14.6" fill="none" stroke="#0a1230" stroke-width="4" stroke-linecap="round"/>
+        <path d="m15.5 20.5 3 3 6-6.5" fill="none" stroke="#0a1230" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <span class="brand-text"><b>APQR</b><span>Master Tracker</span></span>
+    </a>
+    <nav class="nav" id="nav" aria-label="Main"></nav>
+    <div class="side-foot" id="side-foot"></div>
+  </aside>
+
+  <div class="main">
+    <header class="top">
+      <button class="icon-btn only-mobile" id="menu-btn" aria-label="Open menu"></button>
+      <div class="top-title">
+        <h1 id="page-title">Command centre</h1>
+        <p id="page-sub" class="muted"></p>
+      </div>
+      <label class="search" id="search-wrap">
+        <span class="search-ic" id="search-ic"></span>
+        <input id="global-search" type="search" placeholder="Search products, refs, people…" autocomplete="off" aria-label="Search">
+        <kbd>/</kbd>
+        <div class="search-pop" id="search-pop" role="listbox" hidden></div>
+      </label>
+      <button class="chip-date" id="report-chip" title="Report date (click to change)"></button>
+      <button class="btn btn-primary" id="import-btn"></button>
+      <button class="icon-btn" id="theme-btn" aria-label="Toggle theme"></button>
+    </header>
+    <main id="view" class="view" tabindex="-1"></main>
+  </div>
+</div>
+
+<aside class="drawer" id="drawer" aria-hidden="true" aria-label="Product detail"></aside>
+<div class="scrim" id="scrim" hidden></div>
+<div class="toasts" id="toasts" aria-live="polite"></div>
+<div class="dropveil" id="dropveil" hidden><div><span id="dropveil-ic"></span><b>Drop to import</b><small>APQR master tracker (.xlsx), Scigeniq export (.xlsx / .csv) or a JSON backup</small></div></div>
+<input type="file" id="file-input" accept=".xlsx,.xlsm,.csv,.json" hidden>
+
+<script type="module" src="js/app.js"></script>
+</body>
+</html>

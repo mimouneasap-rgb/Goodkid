@@ -1,4 +1,56 @@
-# Quality Risk Manager
+# Goodkid quality apps
+
+This repository holds two browser apps with no build step and no dependencies:
+
+| App | Path | What it does |
+| --- | --- | --- |
+| **APQR Master Tracker** | [`apqr/`](apqr/) | Annual Product Quality Review programme tracker (plan vs execution, annexes progress, workload, data-quality signals). Imports the APQR master tracker workbook or a Scigeniq eQMS export. |
+| **Quality Risk Manager** | `/` (root) | FMEA-style quality risk register (see below). |
+
+## APQR Master Tracker
+
+Open `apqr/` (locally: `npm start`, then http://localhost:8080/apqr/; once Pages is on, **https://mimouneasap-rgb.github.io/Goodkid/apqr/**).
+
+### Getting data in
+
+Drop a file anywhere on the page, or use **Import**. The app works out what kind of file it is and shows a preview before it changes anything.
+
+| File | What it brings |
+| --- | --- |
+| APQR master tracker `.xlsx` (sheets *APQR Plan*, *Task Register*, *APQR Tracker*, *Dashboard*) | The approved plan, every Scigeniq task, QA comments, the previous-extract baseline (Prev %, movement block) and the report-date inputs |
+| Scigeniq all-tasks export `.xlsx` / `.csv` | The monthly refresh. Columns are matched by header name (Reference ID, Type, Stage, Status, Title, Parent action, Assigned User, dates…) and you can adjust the mapping. Products come from the *Parent action*. "CM" tasks are mapped to Compliance. Approvals and the parent workflow are counted separately. Non-APQR rows (change controls, deviations…) are set aside on the Insights page. "Task - Duplicated" parents are matched back through their APQR reference or creation batch. The current figures can be saved as the comparison baseline first. |
+| Plan sheet `.xlsx` | Product, Process, Review Start and Review End |
+| App backup `.json` | A full restore |
+
+### Calculations (same as the workbook)
+
+- **Planned PQR month** = the month after the review period ends. **PQR overdue date** = the 1st of that month + 3 months (configurable). Every annexe of a product shares that due date.
+- **% complete** = closed data-collection tasks ÷ all data-collection tasks. Approval signatures and the workflow itself are excluded.
+- **RAG**: COMPLETE (workflow closed or all annexes closed) → OVERDUE (an overdue annexe, or the PQR overdue date has passed) → DUE SOON (workflow due date or PQR overdue date within 14 days) → ON TRACK.
+- **Bottleneck**: the department holding the most open annexes ("several" on a tie).
+
+### Screens
+
+**Command centre** (hero KPIs, RAG split, KPI tiles, a month-by-month runway, annexe burn-up, departments, stages, dosage-form coverage, top workloads, movement vs baseline, quality signals) · **APQR tracker** (filterable, sortable product register, with a product file per row: timeline, annexes with inline stage editing, owner, priority, QA comments and history) · **Plan** (grouped by planned month, add/edit/remove products) · **Annexes progress** (the "Actual APQR Annexes Progress for (MM/YYYY)" chart and counts table per month, plus a department × month completion heatmap) · **Task register** (inline stage and assignee editing, add/edit/delete tasks, CSV export) · **Workload** · **Insights** (data-quality checks and excluded rows) · **Data & settings** (import, Excel/JSON export, baseline, rules, audit trail).
+
+Every edit is written to an audit trail. The **Excel export** has the same layout as the master tracker (Dashboard, APQR Tracker, APQR Plan, Task Register, Owner Workload, Annexes Progress, Excluded Tasks, Audit Trail), so it opens in Excel and can be imported back.
+
+Data is stored only in the browser it was entered in (`localStorage`). Files are read locally and never uploaded. Scigeniq remains the system of record. This tracker has no authentication or e-signatures (21 CFR Part 11 / EU Annex 11).
+
+| Path | Purpose |
+| --- | --- |
+| `apqr/js/xlsx.js` | Dependency-free .xlsx reader/writer (zip + XML) and CSV parser |
+| `apqr/js/engine.js` | Pure calculation engine (plan, tasks, products, KPIs, months, quality signals) |
+| `apqr/js/importers.js` | Master tracker, Scigeniq and plan importers |
+| `apqr/js/exporter.js` | Excel workbook and JSON backup export |
+| `apqr/js/store.js`, `actions.js` | State, persistence, undo, audit trail and edit/import flows |
+| `apqr/js/app.js`, `views-*.js`, `drawer.js`, `charts.js`, `ui.js` | Interface |
+| `apqr/js/demo.js` | Fictional demo programme |
+| `tests/apqr.test.js` | Unit tests (`npm test`) |
+
+---
+
+## Quality Risk Manager (root app)
 
 A lightweight quality risk management (QRM) app for identifying, scoring,
 controlling and reviewing quality risks, following the FMEA approach used in

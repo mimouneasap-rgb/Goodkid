@@ -1,0 +1,16 @@
+{
+  "name": "APQR Master Tracker",
+  "short_name": "APQR Tracker",
+  "description": "Annual Product Quality Review tracker: plan vs execution, annexes progress, workload and data-quality signals.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#0a1230",
+  "theme_color": "#0a1230",
+  "icons": [
+    { "src": "icons/icon.svg", "sizes": "any", "type": "image/svg+xml" },
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
