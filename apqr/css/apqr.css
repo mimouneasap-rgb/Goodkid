@@ -693,3 +693,6 @@ dialog.modal[open] { animation: pop .22s cubic-bezier(.2, .8, .2, 1); }
 .dr-back { display: inline-flex; align-items: center; gap: 6px; margin: -6px 0 10px -6px; padding: 5px 10px 5px 6px; border-radius: 10px; border: 1px solid rgba(255, 255, 255, .15); background: rgba(255, 255, 255, .08); color: #e8ebff; font-weight: 700; font-size: 12.5px; cursor: pointer; }
 .dr-back:hover { background: rgba(255, 255, 255, .16); }
 .dr-back .ic { width: 16px; height: 16px; }
+.form-grid > *, .f { min-width: 0; }
+.f select, .f input:not([type=checkbox]) { width: 100%; min-width: 0; max-width: 100%; text-overflow: ellipsis; }
+.field select { max-width: 260px; text-overflow: ellipsis; }

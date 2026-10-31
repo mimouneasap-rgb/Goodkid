@@ -5,6 +5,7 @@ import { ring, deptColor, slotCells } from "./charts.js";
 import { SLOTS, dayInt } from "./engine.js";
 import * as store from "./store.js";
 import * as act from "./actions.js";
+import { peopleSelect, listSelect } from "./lists.js";
 
 let openKey = null;
 let lastFocus = null;
@@ -68,6 +69,7 @@ function render() {
   const p = m.productByKey.get(openKey);
   if (!p) return;
   const s = store.getState();
+  const L = store.lists();
   const approvals = p.tasks.filter((t) => t.isApproval);
   const wfs = p.tasks.filter((t) => t.isWorkflow && !t.generated);
   const audit = s.audit.filter((a) => a.key === p.key).slice(0, 40);
@@ -131,17 +133,17 @@ function render() {
 
     <section class="card">
       <div class="card-h"><div><h3>Follow-up actions</h3><p>What has to happen next, who does it, by when</p></div><div class="tools"><button class="btn btn-sm btn-primary" data-add-action>${icon("plus")}Add action</button></div></div>
-      <div style="display:grid;gap:8px">${p.actions.length ? p.actions.slice().sort((a, b) => Number(a.done) - Number(b.done) || String(a.due).localeCompare(String(b.due))).map((a) => `<div class="action-row ${a.done ? "done" : ""} ${a.overdue ? "late" : ""}"><input type="checkbox" data-action-toggle="${esc(a.id)}" ${a.done ? "checked" : ""} aria-label="Mark done"><div style="min-width:0"><b>${esc(a.text)}</b><small>${esc(a.owner || "no owner")} · ${a.due ? `${a.overdue ? '<span style="color:var(--crit-ink);font-weight:700">' : ""}due ${fmtDate(a.due)}${a.overdue ? "</span>" : ""}` : "no target date"}</small></div><button class="icon-btn sm" data-action-edit="${esc(a.id)}" aria-label="Edit action">${icon("edit")}</button></div>`).join("") : '<p class="muted" style="margin:0">No actions yet.</p>'}</div>
+      <div style="display:grid;gap:8px">${p.actions.length ? p.actions.slice().sort((a, b) => Number(a.done) - Number(b.done) || String(a.due).localeCompare(String(b.due))).map((a) => `<div class="action-row ${a.done ? "done" : ""} ${a.overdue ? "late" : ""}"><input type="checkbox" data-action-toggle="${esc(a.id)}" ${a.done ? "checked" : ""} aria-label="Mark done"><div style="min-width:0"><b>${esc(a.label)}</b><small>${esc(a.owner || "no owner")} · ${a.due ? `${a.overdue ? '<span style="color:var(--crit-ink);font-weight:700">' : ""}due ${fmtDate(a.due)}${a.overdue ? "</span>" : ""}` : "no target date"}</small></div><button class="icon-btn sm" data-action-edit="${esc(a.id)}" aria-label="Edit action">${icon("edit")}</button></div>`).join("") : '<p class="muted" style="margin:0">No actions yet.</p>'}</div>
     </section>
 
     <section class="card">
       <div class="card-h"><div><h3>QA notes</h3><p>Kept across imports, exported to the workbook and published with the team version</p></div></div>
       <div class="form-grid" style="margin-bottom:12px">
-        <label class="f">APQR owner<input data-pf="owner" id="pf-owner" list="dl-drawer-owners" value="${esc(s.products[p.key]?.owner || "")}" placeholder="${esc(p.scigeniqOwner || "Unassigned")} (from Scigeniq)"></label>
-        <label class="f">Priority<select data-pf="priority" id="pf-priority">${["", "High", "Medium", "Low"].map((x) => `<option value="${x}"${(p.priority || "") === x ? " selected" : ""}>${x || "—"}</option>`).join("")}</select></label>
+        <label class="f">APQR owner${peopleSelect(L, s.products[p.key]?.owner || "", { attrs: 'data-pf="owner" id="pf-owner"', empty: `— ${p.scigeniqOwner || "Unassigned"} (from Scigeniq) —` })}</label>
+        <label class="f">Priority${listSelect(L, "priorities", p.priority || "", { attrs: 'data-pf="priority" id="pf-priority"', empty: "—" })}</label>
       </div>
       <label class="f">QA comments<textarea class="notes" data-pf="comments" id="pf-comments" placeholder="Context for the review: decisions taken, deviations noted, who was contacted…">${esc(p.comments)}</textarea></label>
-      <datalist id="dl-drawer-owners">${m.owners.map((u) => `<option value="${esc(u)}">`).join("")}</datalist>
+
     </section>
 
     ${approvals.length || wfs.length ? `<section class="card"><div class="card-h"><div><h3>Workflow & approvals</h3><p>The APQR parent workflow and its electronic signature records</p></div></div><div class="task-list">${[...wfs, ...approvals].map(task).join("")}</div></section>` : ""}

@@ -8,6 +8,7 @@
 //     by header name, and the caller can override the mapping.
 //  3. A plan-only sheet (Product, Process, Review Start, Review End...).
 import { productKey, houseDept, monthYearToEnd, refNum, classifyTask, ROLES, SLOT_BY_KEY } from "./engine.js";
+import { LIST_DEFS } from "./lists.js";
 
 /* ------------------------------------------------------------------ helpers */
 
@@ -282,21 +283,44 @@ export function importTrackerWorkbook(workbook) {
   const ah = findHeaderRow(acRows, ["Product", "Action", "Owner", "Target date", "Done"]);
   if (ah.row >= 0 && ah.score >= 3) {
     const idx = headerIndex(acRows[ah.row]);
-    const c = { product: pick(idx, "Product"), text: pick(idx, "Action"), owner: pick(idx, "Owner"), due: pick(idx, "Target date"), done: pick(idx, "Done"), created: pick(idx, "Raised") };
+    const c = { product: pick(idx, "Product"), text: pick(idx, "Action"), details: pick(idx, "Details"), owner: pick(idx, "Owner"), due: pick(idx, "Target date"), done: pick(idx, "Done"), created: pick(idx, "Raised") };
     for (let r = ah.row + 1; r < acRows.length; r++) {
       const row = acRows[r];
       const product = str(cell(row, c.product)), text = str(cell(row, c.text));
       if (!product || !text) continue;
       const key = productKey(product);
       products[key] = products[key] || {};
-      (products[key].actions = products[key].actions || []).push({ id: uid(), text, owner: str(cell(row, c.owner)), due: parseDate(cell(row, c.due)), done: /^(yes|true|done|1)$/i.test(str(cell(row, c.done))), created: parseDate(cell(row, c.created)) });
+      const details = c.details >= 0 ? str(cell(row, c.details)) : null;
+      (products[key].actions = products[key].actions || []).push({ id: uid(), ...(details !== null ? { type: text, text: details } : { text }), owner: str(cell(row, c.owner)), due: parseDate(cell(row, c.due)), done: /^(yes|true|done|1)$/i.test(str(cell(row, c.done))), created: parseDate(cell(row, c.created)) });
     }
+  }
+
+  // Managed lists (exported by the app)
+  let lists = null;
+  const liRows = sheet(/^lists$/i);
+  const lh = findHeaderRow(liRows, ["List", "Value", "Type", "Department", "Annexe"]);
+  if (lh.row >= 0 && lh.score >= 3) {
+    const idx = headerIndex(liRows[lh.row]);
+    const c = { list: pick(idx, "List"), value: pick(idx, "Value"), type: pick(idx, "Type"), dept: pick(idx, "Department"), slot: pick(idx, "Annexe") };
+    const byLabel = Object.fromEntries(LIST_DEFS.map((d) => [d.label.toLowerCase(), d]));
+    lists = {};
+    for (let r = lh.row + 1; r < liRows.length; r++) {
+      const row = liRows[r];
+      const def = byLabel[str(cell(row, c.list)).toLowerCase()];
+      const name = str(cell(row, c.value));
+      if (!def || !name) continue;
+      const item = { name };
+      if (def.kind === "people") { item.type = str(cell(row, c.type)) || "user"; item.dept = str(cell(row, c.dept)); }
+      if (def.kind === "titles") item.slot = str(cell(row, c.slot));
+      (lists[def.key] = lists[def.key] || []).push(item);
+    }
+    if (!Object.keys(lists).length) lists = null;
   }
 
   const hasBaseline = Object.keys(prevPct).length || Object.keys(baselineMetrics).length;
   return {
     plan, tasks, products, excluded, settings, warnings,
-    programme, organisation, planRef,
+    programme, organisation, planRef, lists,
     baseline: hasBaseline ? { label: baselineLabel || "previous extract", metrics: baselineMetrics, prevPct } : null,
   };
 }

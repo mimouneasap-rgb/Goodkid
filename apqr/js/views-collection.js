@@ -7,6 +7,7 @@ import { DEPARTMENTS, SLOTS, monthLabel } from "./engine.js";
 import * as store from "./store.js";
 import * as act from "./actions.js";
 import { csv } from "./views-registers.js";
+import { peopleSelect } from "./lists.js";
 
 const STAGE_COLOR = { "Not triggered": "var(--slot-nt)", "Collecting Data": "var(--s1)", "Data Review": "var(--d7)", Completed: "var(--good)" };
 const PAGE = 100;
@@ -123,9 +124,9 @@ export const collection = {
             <button class="btn btn-sm btn-ghost" data-cv-selall>Select all shown</button>
             <button class="btn btn-sm btn-ghost" data-cv-selnone>Clear</button>
             <span class="grow"></span>
-            <label class="field">Owner<input id="cv-owner" list="dl-people" placeholder="Name" style="width:150px"></label>
+            <label class="field">Owner${peopleSelect(store.lists(), "", { attrs: 'id="cv-owner"', empty: "Choose…" })}</label>
             <button class="btn btn-sm" data-cv-apply="collector">Set owner</button>
-            <label class="field">Reviewer<input id="cv-reviewer" list="dl-people" placeholder="Name" style="width:150px"></label>
+            <label class="field">Reviewer${peopleSelect(store.lists(), "", { attrs: 'id="cv-reviewer"', empty: "Choose…" })}</label>
             <button class="btn btn-sm" data-cv-apply="reviewer">Set reviewer</button>
             <button class="btn btn-sm btn-ghost" data-cv-apqr-owner title="Use each product's APQR owner as the data reviewer">Reviewer = APQR owner</button>
           </div>
@@ -133,7 +134,7 @@ export const collection = {
         <div data-region="list">${this.list(m)}</div>
       </section>
     </div>
-    <datalist id="dl-people">${m.people.map((u) => `<option value="${esc(u)}">`).join("")}</datalist>`;
+    `;
   },
   list(m) {
     const rows = listRows(m);
@@ -141,6 +142,7 @@ export const collection = {
     cv.page = Math.min(cv.page, pages - 1);
     const view = rows.slice(cv.page * PAGE, cv.page * PAGE + PAGE);
     const stageOf = m.collection.stageOf;
+    const L = store.lists();
     return `<div class="table-wrap" style="max-height:640px"><table class="data"><thead><tr><th style="width:34px"></th><th>Product</th><th>Annexe</th><th>Planned</th><th>Stage</th><th>Data collection owner</th><th>Data reviewer</th><th>PQR due</th></tr></thead><tbody>
       ${view.map((t) => `<tr data-coll-row="${esc(t.id)}">
         <td><input type="checkbox" data-cv-sel="${esc(t.id)}" ${cv.sel.has(t.id) ? "checked" : ""} aria-label="Select"></td>
@@ -148,8 +150,8 @@ export const collection = {
         <td style="white-space:nowrap"><span style="display:inline-flex;align-items:center;gap:6px"><i style="width:8px;height:8px;border-radius:50%;background:${deptColor(t.dept)}"></i>${esc(SLOTS.find((s) => s.key === t.slot)?.label || t.slot)}</span></td>
         <td style="white-space:nowrap">${monthLabel(t.plannedMonth) || "–"}</td>
         <td style="white-space:nowrap"><span class="pill" style="background:color-mix(in srgb, ${STAGE_COLOR[stageOf(t)]} 18%, var(--surface));color:var(--ink)">${esc(stageOf(t) === "Data Review" ? "In review" : stageOf(t) === "Collecting Data" ? "Collecting" : stageOf(t))}</span></td>
-        <td><div style="display:grid;gap:3px"><input class="inline" data-cv-person="collector|${esc(t.id)}" list="dl-people" value="${t.collectorPerson ? esc(t.collector) : ""}" placeholder="Name a person" aria-label="Data collection owner" style="max-width:190px">${t.collectorPerson ? "" : `<small class="muted">${personTag(t.collector, t.collectorType)}</small>`}</div></td>
-        <td><input class="inline" data-cv-person="reviewer|${esc(t.id)}" list="dl-people" value="${esc(t.reviewer)}" placeholder="not set" aria-label="Data reviewer" style="max-width:190px;${t.reviewer ? "" : "box-shadow:inset 0 0 0 1px var(--warn)"}"></td>
+        <td><div style="display:grid;gap:3px">${peopleSelect(L, t.collectorPerson ? t.collector : (t.collector && t.collectorType !== "user" && t.app?.collector ? t.collector : ""), { cls: "inline", attrs: `data-cv-person="collector|${esc(t.id)}" aria-label="Data collection owner" style="max-width:200px"`, empty: "— name a person —", dept: t.dept })}${t.collectorPerson ? "" : `<small class="muted">${personTag(t.collector, t.collectorType)}</small>`}</div></td>
+        <td>${peopleSelect(L, t.reviewer, { cls: "inline", attrs: `data-cv-person="reviewer|${esc(t.id)}" aria-label="Data reviewer" style="max-width:200px;${t.reviewer ? "" : "box-shadow:inset 0 0 0 1px var(--warn)"}"`, empty: "— not set —" })}</td>
         <td style="white-space:nowrap">${fmtDate(t.due)}${t.overdue === "YES" ? ' <span class="tag crit">LATE</span>' : ""}</td>
       </tr>`).join("") || '<tr><td colspan="8" class="empty-row">No annexes match.</td></tr>'}
     </tbody></table></div>
@@ -165,7 +167,7 @@ export const collection = {
       const sel = e.target.closest("[data-cv-sel]");
       if (sel) { if (sel.checked) cv.sel.add(sel.dataset.cvSel); else cv.sel.delete(sel.dataset.cvSel); updateSel(); return; }
       const per = e.target.closest("[data-cv-person]");
-      if (per) { const [field, id] = per.dataset.cvPerson.split("|"); act.setTaskPerson([id], field, per.value, "user"); }
+      if (per) { const [field, id] = per.dataset.cvPerson.split("|"); act.setTaskPerson([id], field, per.value); }
     });
     root.addEventListener("click", (e) => {
       if (e.target.closest("[data-cv-selall]")) { for (const t of listRows(store.getModel())) cv.sel.add(t.id); region(); return; }
@@ -177,8 +179,8 @@ export const collection = {
         const field = ap.dataset.cvApply;
         const name = root.querySelector(field === "collector" ? "#cv-owner" : "#cv-reviewer").value.trim();
         if (!cv.sel.size) return import("./ui.js").then(({ toast }) => toast("Select annexes in the list first.", { kind: "error" }));
-        if (!name) return import("./ui.js").then(({ toast }) => toast("Type a name first.", { kind: "error" }));
-        act.setTaskPerson([...cv.sel], field, name, "user");
+        if (!name) return import("./ui.js").then(({ toast }) => toast("Choose a name first.", { kind: "error" }));
+        act.setTaskPerson([...cv.sel], field, name);
         cv.sel.clear();
         return;
       }
@@ -187,7 +189,7 @@ export const collection = {
         const ids = cv.sel.size ? [...cv.sel] : listRows(m).filter((t) => !t.reviewerPerson).map((t) => t.id);
         const byOwner = new Map();
         for (const id of ids) { const t = m.realTasks.find((x) => x.id === id); const p = t && m.productByKey.get(t.key); if (p && p.owner && p.owner !== "Unassigned") { if (!byOwner.has(p.owner)) byOwner.set(p.owner, []); byOwner.get(p.owner).push(id); } }
-        for (const [owner, list] of byOwner) act.setTaskPerson(list, "reviewer", owner, "user");
+        for (const [owner, list] of byOwner) act.setTaskPerson(list, "reviewer", owner);
         cv.sel.clear();
         return;
       }

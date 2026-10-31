@@ -3,6 +3,7 @@
 import * as store from "./store.js";
 import { compute, snapshotBaseline, productKey, dayInt, isoFromDay, CLASSES, STAGE_ORDER, monthYearToEnd, SLOTS, SLOT_BY_KEY, ROLES, classifyTask } from "./engine.js";
 import { teamStatus, publishForTeam } from "./team.js";
+import { listSelect, peopleSelect, titleSelect, typeOf } from "./lists.js";
 import { readXlsx, parseCsv } from "./xlsx.js";
 import { detect, importTrackerWorkbook, guessMapping, transformScigeniq, importPlanSheet, mergeTasks, SCIGENIQ_FIELDS, findHeaderRow, uid } from "./importers.js";
 import { buildWorkbook, backupJson } from "./exporter.js";
@@ -48,16 +49,18 @@ export function setTaskStage(id, stage) {
   });
 }
 export function setTaskAssignee(id, user) {
+  user = user || "Unassigned";
   const t = store.getState().tasks.find((x) => x.id === id);
   if (!t || t.assignee === user) return;
   const from = t.assignee;
-  store.update((st) => { const x = st.tasks.find((y) => y.id === id); x.assignee = user || "Unassigned"; markApp(x, ["assignee"]); }, {
+  store.update((st) => { const x = st.tasks.find((y) => y.id === id); x.assignee = user; const ty = typeOf(store.lists(), user); if (user !== "Unassigned" && ty !== "user") x.assigneeType = ty; else delete x.assigneeType; markApp(x, ["assignee", "assigneeType"]); }, {
     audit: [{ entity: "task", key: productKey(t.product), label: `${t.ref} · ${t.title}`, field: "assignee", from, to: user || "Unassigned" }],
   });
 }
 
 /** Set the data collection owner or data reviewer on one or many tasks. */
-export function setTaskPerson(ids, field, name, type = "user") {
+export function setTaskPerson(ids, field, name, type) {
+  type = type || (name ? typeOf(store.lists(), String(name).trim()) : "user");
   const s = store.getState();
   const set = new Set(ids);
   const targets = s.tasks.filter((t) => set.has(t.id));
@@ -105,9 +108,9 @@ export function preserveAppChanges(existing, incoming) {
 }
 
 function stageOptions(current) {
-  const model = store.getModel();
-  const set = new Set([...STAGE_ORDER, ...model.tasks.map((t) => t.stage).filter(Boolean)]);
-  return [...set].map((s) => `<option${s === current ? " selected" : ""}>${esc(s)}</option>`).join("");
+  const names = store.lists().stages.map((x) => x.name).filter((n) => n !== "Not triggered");
+  const opts = names.includes(current) || !current ? names : [current, ...names];
+  return opts.map((s) => `<option value="${esc(s)}"${s === current ? " selected" : ""}>${esc(s)}${names.includes(s) ? "" : " (not in list)"}</option>`).join("");
 }
 export function stageSelect(t, cls = "") {
   return raw(`<select class="${cls}" data-task-stage="${esc(t.id)}" aria-label="Stage">${stageOptions(t.stage)}</select>`);
@@ -117,29 +120,30 @@ export function editTask(task, defaults = {}) {
   const model = store.getModel();
   const isNew = !task;
   const t = task ? { ...task } : { id: uid(), ref: "", product: "", dosageForm: "", site: "", department: "QA", stream: "QA", taskClass: "Data Collection", taskType: "", title: "", stage: "Collecting Data", status: "Open", assignee: "Unassigned", criticality: "Low", created: model.report, start: model.report, closedOn: "", closure: "Not Closed", createdBy: store.getState().meta.user || "", taskEnd: "", ...defaults };
-  const products = [...new Set([...model.plan.map((p) => p.product), ...model.products.map((p) => p.product)])].sort();
+  const products = [...new Set([...model.plan.map((p) => p.product), ...model.products.map((p) => p.product), t.product].filter(Boolean))].sort();
+  const LISTS = store.lists();
+  const ROLE0 = t.taskRole || classifyTask(t).role;
+  const SLOT0 = t.annexSlot || classifyTask(t).slot || "";
+  const titleSlot = (role, slot) => (role === ROLES.FINAL ? "Final QA" : role === ROLES.ANNEX ? slot : "__none__");
   const d = openDialog(html`<form method="dialog" class="modal-body" id="task-form">
     <h2 class="modal-title">${isNew ? "Add task" : "Edit task"}</h2>
     <div class="form-grid">
-      <label class="f">Reference ID<input name="ref" value="${t.ref}" placeholder="APQR-KE-123" required></label>
-      <label class="f">Assigned to<input name="assignee" list="dl-users" value="${t.assignee}"></label>
-      <label class="f full">Product<input name="product" list="dl-products" value="${t.product}" required></label>
-      <label class="f full">Title<input name="title" value="${t.title}" placeholder="QC Data Collection - Tablet"></label>
-      <label class="f">Role<select name="taskRole">${Object.values(ROLES).map((x) => raw(`<option${x === (t.taskRole || classifyTask(t).role) ? " selected" : ""}>${x}</option>`))}</select></label>
-      <label class="f">Annexe slot<select name="annexSlot"><option value="">—</option>${SLOTS.map((x) => raw(`<option value="${esc(x.key)}"${x.key === (t.annexSlot || classifyTask(t).slot) ? " selected" : ""}>${esc(x.label)} (${esc(x.dept)})</option>`))}</select><small>Which of the ten required annexes this task fills.</small></label>
+      <label class="f">Reference ID<input name="ref" value="${t.ref}" placeholder="APQR-KE-123" required><small>The Scigeniq reference of the task.</small></label>
+      <label class="f">Assigned to${raw(peopleSelect(LISTS, t.assignee, { name: "assignee", empty: "— Unassigned —" }))}<small>Person, group or role, from the People list.</small></label>
+      <label class="f full">Product${raw(`<select name="product" required><option value="">Choose a product…</option>${products.map((p) => `<option value="${esc(p)}"${p === t.product ? " selected" : ""}>${esc(p)}</option>`).join("")}</select>`)}</label>
+      <label class="f">Role<select name="taskRole">${Object.values(ROLES).map((x) => raw(`<option${x === ROLE0 ? " selected" : ""}>${x}</option>`))}</select></label>
+      <label class="f">Annexe slot<select name="annexSlot"><option value="">—</option>${SLOTS.map((x) => raw(`<option value="${esc(x.key)}"${x.key === SLOT0 ? " selected" : ""}>${esc(x.label)} (${esc(x.dept)})</option>`))}</select><small>Which of the ten required annexes this task fills.</small></label>
+      <label class="f full" data-title-wrap>Title${raw(titleSelect(LISTS, titleSlot(ROLE0, SLOT0), t.title))}</label>
       <label class="f">Stage<select name="stage">${raw(stageOptions(t.stage))}</select></label>
-      <label class="f">Assigned to is a<select name="assigneeType">${["user", "role", "group"].map((x) => raw(`<option${x === (t.assigneeType || "user") ? " selected" : ""}>${x}</option>`))}</select><small>Scigeniq tasks can go to a person, a role or a group.</small></label>
-      <label class="f">Data collection owner<input name="collector" list="dl-users" value="${t.collector || ""}" placeholder="Person who collects the data"></label>
-      <label class="f">Data reviewer<input name="reviewer" list="dl-users" value="${t.reviewer || ""}" placeholder="Person who reviews the data"></label>
-      <label class="f">Status<input name="status" value="${t.status}" list="dl-status"></label>
+      <label class="f">Status${raw(listSelect(LISTS, "statuses", t.status, { name: "status", empty: null }))}</label>
+      <label class="f">Data collection owner${raw(peopleSelect(LISTS, t.collector || "", { name: "collector", empty: "— same as assigned —" }))}</label>
+      <label class="f">Data reviewer${raw(peopleSelect(LISTS, t.reviewer || "", { name: "reviewer", empty: "— not set —" }))}</label>
+      <label class="f">Criticality${raw(listSelect(LISTS, "criticality", t.criticality, { name: "criticality", empty: "—" }))}</label>
       <label class="f">Created<input type="date" name="created" value="${(t.created || "").slice(0, 10)}"></label>
       <label class="f">Closed on<input type="date" name="closedOn" value="${(t.closedOn || "").slice(0, 10)}"></label>
       <label class="f">Task end date (Scigeniq)<input type="date" name="taskEnd" value="${(t.taskEnd || "").slice(0, 10)}"></label>
-      <label class="f">Criticality<select name="criticality">${["Low", "Medium", "High"].map((x) => raw(`<option${x === t.criticality ? " selected" : ""}>${x}</option>`))}</select></label>
     </div>
-    <datalist id="dl-products">${products.map((p) => raw(`<option value="${esc(p)}">`))}</datalist>
-    <datalist id="dl-users">${model.owners.map((p) => raw(`<option value="${esc(p)}">`))}</datalist>
-    <datalist id="dl-status"><option value="Open"><option value="Overdue"><option value="Completed"></datalist>
+    <p class="muted" style="margin:0;font-size:12px">Missing an entry? Add it on the <a href="#/lists" data-close-dialog>Lists</a> page.</p>
     <div class="modal-actions">
       ${isNew ? "" : raw(`<button type="button" class="btn btn-ghost" data-act="delete" style="margin-right:auto;color:var(--crit-ink)">${icon("trash")}Delete</button>`)}
       <button type="button" class="btn btn-ghost" data-close>Cancel</button>
@@ -150,9 +154,12 @@ export function editTask(task, defaults = {}) {
       if (v !== "ok") return;
       const f = new FormData(d.querySelector("form"));
       const next = { ...t };
-      for (const k of ["ref", "product", "title", "assignee", "status", "taskClass", "criticality", "taskRole", "annexSlot", "assigneeType", "collector", "reviewer"]) next[k] = String(f.get(k) || "").trim();
-      if (!next.collector) delete next.collector; else next.collectorType = next.collectorType || "user";
-      if (!next.reviewer) delete next.reviewer; else next.reviewerType = next.reviewerType || "user";
+      for (const k of ["ref", "product", "title", "assignee", "status", "criticality", "taskRole", "annexSlot", "collector", "reviewer"]) next[k] = String(f.get(k) || "").trim();
+      if (!next.title) next.title = t.title || (next.taskRole === ROLES.WORKFLOW ? `APQR , ${next.product}` : next.taskRole === ROLES.APPROVAL ? "Approval" : "");
+      next.assigneeType = next.assignee ? typeOf(LISTS, next.assignee) : "";
+      if (!next.assigneeType) delete next.assigneeType;
+      if (!next.collector) { delete next.collector; delete next.collectorType; } else next.collectorType = typeOf(LISTS, next.collector);
+      if (!next.reviewer) { delete next.reviewer; delete next.reviewerType; } else next.reviewerType = typeOf(LISTS, next.reviewer);
       if (next.taskRole === ROLES.APPROVAL) next.taskClass = "Approval";
       else if (next.taskRole === ROLES.WORKFLOW) next.taskClass = "Workflow";
       else next.taskClass = "Data Collection";
@@ -180,6 +187,14 @@ export function editTask(task, defaults = {}) {
       toast(isNew ? "Task added" : "Task updated", { kind: "success" });
     },
   });
+  d.querySelector("form").addEventListener("change", (e) => {
+    if (e.target.name !== "taskRole" && e.target.name !== "annexSlot") return;
+    const f = d.querySelector("form");
+    const wrap = f.querySelector("[data-title-wrap]");
+    const cur = f.elements.namedItem("title")?.value || "";
+    wrap.innerHTML = `Title${titleSelect(LISTS, titleSlot(f.taskRole.value, f.annexSlot.value), cur)}`;
+  });
+  d.querySelector("[data-close-dialog]")?.addEventListener("click", () => d.close("cancel"));
   d.querySelector('[data-act="delete"]')?.addEventListener("click", async () => {
     d.close("cancel");
     if (await confirmDialog({ title: "Delete this task?", body: `${t.ref} · ${t.title} will be removed from the task register.`, confirm: "Delete", danger: true })) {
@@ -201,15 +216,15 @@ export function editPlan(row) {
     <h2 class="modal-title">${isNew ? "Add planned product" : "Edit planned product"}</h2>
     <div class="form-grid">
       <label class="f full">Product<input name="product" value="${p.product}" required placeholder="Brand (Molecule) strength form (pack)-SITE"><small>Must match the product name used in Scigeniq (the text after “APQR ,” in the parent action).</small></label>
-      <label class="f">Process / dosage form<input name="process" list="dl-forms" value="${p.process}"></label>
-      <label class="f">Site<input name="site" value="${p.site}"></label>
+      <label class="f">Process / dosage form${raw(listSelect(store.lists(), "dosageForms", p.process, { name: "process", empty: "—" }))}</label>
+      <label class="f">Site${raw(listSelect(store.lists(), "sites", p.site, { name: "site", empty: "—" }))}</label>
       <label class="f">Review start<input type="month" name="reviewStart" value="${toMonthInput(p.reviewStart)}"></label>
       <label class="f">Review end<input type="month" name="reviewEnd" value="${toMonthInput(p.reviewEnd)}" required><small>The planned PQR month is the month after this.</small></label>
       <label class="f">Plan #<input name="no" value="${p.no}"></label>
-      <label class="f">Exec. year<input name="execYear" value="${p.execYear}"></label>
-      <label class="f">Plan status<select name="planStatus">${["Approved", "Draft", "Cancelled"].map((x) => raw(`<option${x === p.planStatus ? " selected" : ""}>${x}</option>`))}</select></label>
+      <label class="f">Exec. year<select name="execYear">${[...new Set([String(p.execYear || ""), ...Array.from({ length: 9 }, (_, i) => String(new Date().getFullYear() - 3 + i))])].filter(Boolean).sort().map((y) => raw(`<option${String(p.execYear) === y ? " selected" : ""}>${y}</option>`))}</select></label>
+      <label class="f">Plan status${raw(listSelect(store.lists(), "planStatuses", p.planStatus, { name: "planStatus", empty: null }))}</label>
     </div>
-    <datalist id="dl-forms">${forms.map((x) => raw(`<option value="${esc(x)}">`))}</datalist>
+    <p class="muted" style="margin:0;font-size:12px">Process, site and plan status come from the Lists page.</p>
     <div class="modal-actions">
       ${isNew ? "" : raw(`<button type="button" class="btn btn-ghost" data-act="delete" style="margin-right:auto;color:var(--crit-ink)">${icon("trash")}Remove</button>`)}
       <button type="button" class="btn btn-ghost" data-close>Cancel</button>
@@ -264,8 +279,8 @@ export function editReportDate() {
     <label class="f check"><input type="checkbox" name="useToday" ${s.useToday ? "checked" : ""}> Always use today’s date</label>
     <label class="f">Fixed report date<input type="date" name="reportDate" value="${s.reportDate}"></label>
     <div class="form-grid">
-      <label class="f">PQR overdue after (months)<input type="number" min="0" max="24" name="overdueMonths" value="${s.overdueMonths}"><small>From the 1st of the planned PQR month.</small></label>
-      <label class="f">“Due soon” threshold (days)<input type="number" min="0" max="365" name="dueSoonDays" value="${s.dueSoonDays}"></label>
+      <label class="f">PQR overdue after (months)<select name="overdueMonths"><option value="1"${s.overdueMonths == 1 ? " selected" : ""}>1</option><option value="2"${s.overdueMonths == 2 ? " selected" : ""}>2</option><option value="3"${s.overdueMonths == 3 ? " selected" : ""}>3</option><option value="4"${s.overdueMonths == 4 ? " selected" : ""}>4</option><option value="5"${s.overdueMonths == 5 ? " selected" : ""}>5</option><option value="6"${s.overdueMonths == 6 ? " selected" : ""}>6</option><option value="7"${s.overdueMonths == 7 ? " selected" : ""}>7</option><option value="8"${s.overdueMonths == 8 ? " selected" : ""}>8</option><option value="9"${s.overdueMonths == 9 ? " selected" : ""}>9</option><option value="10"${s.overdueMonths == 10 ? " selected" : ""}>10</option><option value="11"${s.overdueMonths == 11 ? " selected" : ""}>11</option><option value="12"${s.overdueMonths == 12 ? " selected" : ""}>12</option></select><small>From the 1st of the planned PQR month.</small></label>
+      <label class="f">“Due soon” threshold (days)<select name="dueSoonDays"><option value="0"${s.dueSoonDays == 0 ? " selected" : ""}>0</option><option value="7"${s.dueSoonDays == 7 ? " selected" : ""}>7</option><option value="10"${s.dueSoonDays == 10 ? " selected" : ""}>10</option><option value="14"${s.dueSoonDays == 14 ? " selected" : ""}>14</option><option value="21"${s.dueSoonDays == 21 ? " selected" : ""}>21</option><option value="30"${s.dueSoonDays == 30 ? " selected" : ""}>30</option><option value="45"${s.dueSoonDays == 45 ? " selected" : ""}>45</option><option value="60"${s.dueSoonDays == 60 ? " selected" : ""}>60</option></select></label>
     </div>
     <div class="modal-actions"><button type="button" class="btn btn-ghost" data-close>Cancel</button><button class="btn btn-primary" value="ok">Apply</button></div>
   </form>`, {
@@ -413,6 +428,7 @@ function previewTracker(wb, fileName) {
       store.replace({
         ...current,
         meta: { ...current.meta, programme: current.meta.programme && current.meta.programme !== "APQR Master Tracker" ? current.meta.programme : prog ? `${prog.charAt(0)}${prog.slice(1).toLowerCase()} APQR programme` : "APQR Master Tracker", organisation: current.meta.organisation || imp.organisation || "", planRef: current.meta.planRef || imp.planRef || "", source: fileName, sourceDate: imp.settings.reportDate || "", importedAt: new Date().toISOString() },
+        lists: imp.lists || current.lists,
         settings, plan: imp.plan, tasks: f.get("keepApp") ? preserveAppChanges(current.tasks, imp.tasks).tasks : imp.tasks, products, excluded: imp.excluded, baseline: imp.baseline,
         audit: [{ at: new Date().toISOString(), user: current.meta.user || "local user", entity: "data", label: fileName, field: "import", from: "", to: `master tracker: ${imp.plan.length} plan rows, ${imp.tasks.length} tasks` }, ...current.audit],
       }, { label: "Import tracker" });
@@ -530,6 +546,7 @@ function scigeniqWizard(wb, kind, fileName) {
       if (snapshot && hadTasks) { st.baseline = snapshotBaseline(before, label || fmtDate(before.report)); for (const k of Object.keys(st.products)) delete st.products[k].isNew; }
       if (mode === "replace") { const pr = preserveAppChanges(st.tasks, res.tasks); st.tasks = pr.tasks; st.excluded = res.excluded; preserved = pr; }
       else { const snap = JSON.parse(JSON.stringify(st.tasks)); const m = mergeTasks(st.tasks, res.tasks); const pr = preserveAppChanges(snap, m.tasks); st.tasks = pr.tasks; st.excluded = [...st.excluded, ...res.excluded]; preserved = pr; }
+      store.syncLists(st);
       st.meta.source = fileName;
       st.meta.sourceDate = new Date().toISOString().slice(0, 10);
       st.meta.importedAt = new Date().toISOString();
@@ -550,12 +567,13 @@ export function editAction(productKeyArg, action) {
     <h2 class="modal-title">${isNew ? "Add follow-up action" : "Edit follow-up action"}</h2>
     <div class="form-grid">
       ${key ? raw(`<div class="f full">Product<b style="font-size:13.5px;color:var(--ink)">${esc(model.productByKey.get(key)?.product || "")}</b></div>`) : raw(`<label class="f full">Product<select name="product" required><option value="">Choose a product…</option>${products.map((p) => `<option value="${esc(p.key)}">${esc(p.label)}</option>`).join("")}</select></label>`)}
-      <label class="f full">Action<textarea name="text" required placeholder="e.g. Raise the Final QA Data Collection in Scigeniq">${a.text}</textarea></label>
-      <label class="f">Owner<input name="owner" list="dl-act-owners" value="${a.owner}" placeholder="Who will do it"></label>
+      <label class="f full">Action${raw(listSelect(store.lists(), "actionTypes", a.type || "", { name: "type", empty: "Choose an action…", attrs: "required" }))}</label>
+      <label class="f full">Details <small>(optional)</small><textarea name="text" placeholder="Anything specific: which annexe, who was contacted…">${a.type ? a.text : a.text}</textarea></label>
+      <label class="f">Owner${raw(peopleSelect(store.lists(), a.owner, { name: "owner", empty: "— no owner —" }))}</label>
       <label class="f">Target date<input type="date" name="due" value="${a.due}"></label>
       <label class="f check full"><input type="checkbox" name="done" ${a.done ? "checked" : ""}> Done</label>
     </div>
-    <datalist id="dl-act-owners">${model.owners.map((u) => raw(`<option value="${esc(u)}">`))}</datalist>
+
     <div class="modal-actions">
       ${isNew ? "" : raw(`<button type="button" class="btn btn-ghost" data-act="delete" style="margin-right:auto;color:var(--crit-ink)">${icon("trash")}Delete</button>`)}
       <button type="button" class="btn btn-ghost" data-close>Cancel</button>
@@ -566,8 +584,8 @@ export function editAction(productKeyArg, action) {
       const f = new FormData(d.querySelector("form"));
       key = key || String(f.get("product") || "");
       if (!key) return;
-      const next = { ...a, text: String(f.get("text") || "").trim(), owner: String(f.get("owner") || "").trim(), due: String(f.get("due") || ""), done: !!f.get("done") };
-      if (!next.text) return;
+      const next = { ...a, type: String(f.get("type") || ""), text: String(f.get("text") || "").trim(), owner: String(f.get("owner") || "").trim(), due: String(f.get("due") || ""), done: !!f.get("done") };
+      if (!next.type && !next.text) return;
       if (next.done && !a.done) next.doneAt = model.report;
       const label = model.productByKey.get(key)?.product || key;
       store.update((st) => {
@@ -575,7 +593,7 @@ export function editAction(productKeyArg, action) {
         const list = st.products[key].actions = st.products[key].actions || [];
         const i = list.findIndex((x) => x.id === next.id);
         if (i >= 0) list[i] = next; else list.push(next);
-      }, { audit: [{ entity: "action", key, label, field: isNew ? "added" : "updated", from: isNew ? "" : a.text, to: `${next.text}${next.due ? ` (due ${next.due})` : ""}${next.done ? " [done]" : ""}` }] });
+      }, { audit: [{ entity: "action", key, label, field: isNew ? "added" : "updated", from: isNew ? "" : a.text, to: `${next.type || next.text}${next.due ? ` (due ${next.due})` : ""}${next.done ? " [done]" : ""}` }] });
       toast(isNew ? "Action added" : "Action updated", { kind: "success" });
     },
   });
@@ -630,4 +648,93 @@ export async function publishTeam() {
     else toast(`Publishing failed${code ? ` (${code})` : ""}. Your changes are still saved in this browser.`, { kind: "error", timeout: 8000 });
     store.refresh();
   }
+}
+
+/* ----------------------------------------------------------- managed lists */
+
+import { LIST_BY_KEY, isLocked, usageCount, replaceEverywhere, getLists, addMissingFromData } from "./lists.js";
+
+const itemKey = (def, x) => (def.kind === "titles" ? `${x.slot}|${x.name}` : x.name);
+
+export function addListItem(key, item) {
+  const def = LIST_BY_KEY[key];
+  const name = String(item.name || "").trim();
+  if (!name) { toast("Type a value first.", { kind: "error" }); return false; }
+  const cur = getLists(store.getState())[key];
+  if (cur.some((x) => itemKey(def, x) === itemKey(def, { ...item, name }))) { toast(`“${name}” is already in the list.`, { kind: "error" }); return false; }
+  store.update((st) => { st.lists = getLists(st); st.lists[key] = [...st.lists[key], { ...item, name }]; }, { audit: [{ entity: "list", label: def.label, field: "added", from: "", to: name }] });
+  toast(`Added “${name}” to ${def.label}`, { kind: "success" });
+  return true;
+}
+
+export async function renameListItem(key, index, newName) {
+  const def = LIST_BY_KEY[key];
+  const st0 = store.getState();
+  const cur = getLists(st0)[key];
+  const old = cur[index];
+  const name = String(newName || "").trim();
+  if (!old || !name || name === old.name) return false;
+  if (isLocked(key, old.name)) { toast("This entry is built in and can’t be renamed.", { kind: "error" }); return false; }
+  if (cur.some((x, i) => i !== index && itemKey(def, x) === itemKey(def, { ...old, name }))) { toast(`“${name}” is already in the list.`, { kind: "error" }); return false; }
+  const n = usageCount(st0, key, old.name);
+  if (n && key !== "taskTitles" && !(await confirmDialog({ title: `Rename “${old.name}”?`, body: `It becomes “${name}” in the list and in the ${fmtN(n)} record(s) that use it.`, confirm: "Rename" }))) return false;
+  store.update((st) => {
+    st.lists = getLists(st);
+    const changed = replaceEverywhere(st, key, old.name, name);
+    st.lists[key] = st.lists[key].map((x, i) => (i === index ? { ...x, name } : x));
+    void changed;
+  }, { undoable: true, audit: [{ entity: "list", label: def.label, field: "renamed", from: old.name, to: `${name}${n && key !== "taskTitles" ? ` (${n} records)` : ""}` }] });
+  toast(`Renamed to “${name}”${n && key !== "taskTitles" ? ` in ${fmtN(n)} records` : ""}`, { kind: "success", action: "Undo", onAction: () => store.undo() });
+  return true;
+}
+
+export function updateListItem(key, index, patch) {
+  const def = LIST_BY_KEY[key];
+  const old = getLists(store.getState())[key][index];
+  if (!old) return;
+  const changes = Object.entries(patch).filter(([k, v]) => (old[k] || "") !== v);
+  if (!changes.length) return;
+  store.update((st) => { st.lists = getLists(st); st.lists[key] = st.lists[key].map((x, i) => (i === index ? { ...x, ...patch } : x)); },
+    { audit: changes.map(([k, v]) => ({ entity: "list", label: `${def.label} · ${old.name}`, field: k, from: old[k] || "", to: v })) });
+}
+
+export function deleteListItem(key, index) {
+  const def = LIST_BY_KEY[key];
+  const st0 = store.getState();
+  const cur = getLists(st0)[key];
+  const old = cur[index];
+  if (!old) return;
+  if (isLocked(key, old.name)) { toast("This entry is built in and can’t be deleted.", { kind: "error" }); return; }
+  const n = key === "taskTitles" ? 0 : usageCount(st0, key, old.name);
+  const others = cur.filter((_, i) => i !== index && (def.kind !== "people" || true));
+  const d = openDialog(`<form method="dialog" class="modal-body">
+    <h2 class="modal-title">Delete “${esc(old.name)}”?</h2>
+    ${n ? `<p class="muted" style="margin:0">It is used in <b>${fmtN(n)}</b> record(s). Choose what those records should show instead.</p>
+    <label class="f">Replace with<select name="replace"><option value="__keep">Keep the current value in those records</option><option value="">Clear the value</option>${others.map((x) => `<option value="${esc(x.name)}">${esc(x.name)}</option>`).join("")}</select></label>` : `<p class="muted" style="margin:0">It isn’t used by any record.</p>`}
+    <div class="modal-actions"><button type="button" class="btn btn-ghost" data-close>Cancel</button><button class="btn btn-danger" value="ok">Delete</button></div>
+  </form>`, {
+    onClose: (v) => {
+      if (v !== "ok") return;
+      const rep = n ? new FormData(d.querySelector("form")).get("replace") : "__keep";
+      store.update((st) => {
+        st.lists = getLists(st);
+        if (rep !== "__keep") replaceEverywhere(st, key, old.name, rep);
+        st.lists[key] = st.lists[key].filter((_, i) => i !== index);
+      }, { undoable: true, audit: [{ entity: "list", label: def.label, field: "deleted", from: old.name, to: rep === "__keep" ? (n ? `kept in ${n} records` : "") : rep ? `replaced by ${rep} in ${n} records` : `cleared in ${n} records` }] });
+      toast(`Deleted “${old.name}”`, { action: "Undo", onAction: () => store.undo() });
+    },
+  });
+}
+
+export function moveListItem(key, index, dir) {
+  const cur = getLists(store.getState())[key];
+  const j = index + dir;
+  if (j < 0 || j >= cur.length) return;
+  store.update((st) => { st.lists = getLists(st); const a = [...st.lists[key]]; [a[index], a[j]] = [a[j], a[index]]; st.lists[key] = a; });
+}
+
+export function addMissingListValues() {
+  let added = 0;
+  store.update((st) => { added = addMissingFromData(st); }, { audit: [{ entity: "list", label: "Lists", field: "added from data", from: "", to: "values found in the data" }] });
+  toast(added ? `Added ${fmtN(added)} value(s) found in the data` : "Every value in the data is already in the lists", { kind: "success" });
 }

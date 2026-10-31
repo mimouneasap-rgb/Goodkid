@@ -7,8 +7,12 @@ import * as store from "./store.js";
 import * as act from "./actions.js";
 import { RAG_COLOR, FQ_COLOR } from "./views-overview.js";
 import { teamStatus, inViewer, canRebuild } from "./team.js";
+import { peopleSelect } from "./lists.js";
 
 const RAG_RANK = { OVERDUE: 0, "NOT STARTED - overdue": 1, "DUE SOON": 2, "ON TRACK": 3, COMPLETE: 4, "Not yet due": 5, "No tasks": 6 };
+const isEmpty = (v) => v === null || v === undefined || v === "";
+/** Compare in a direction, but always put empty values last. */
+const cmpDir = (a, b, dir) => (isEmpty(a) !== isEmpty(b) ? (isEmpty(a) ? 1 : -1) : cmp(a, b) * dir);
 const cmp = (a, b) => (a === b ? 0 : a === null || a === undefined || a === "" ? 1 : b === null || b === undefined || b === "" ? -1 : a > b ? 1 : -1);
 const opt = (v, label, sel) => `<option value="${esc(v)}"${String(v) === String(sel) ? " selected" : ""}>${esc(label)}</option>`;
 
@@ -50,8 +54,8 @@ function trackerRows(m) {
   });
   const key = tv.sort;
   rows.sort((a, b) => {
-    const r = key === "rag" ? RAG_RANK[a.rag] - RAG_RANK[b.rag] || cmp(a.daysToOverdue, b.daysToOverdue) : cmp(a[key], b[key]);
-    return r * tv.dir || a.product.localeCompare(b.product);
+    const r = key === "rag" ? (RAG_RANK[a.rag] - RAG_RANK[b.rag] || cmp(a.daysToOverdue, b.daysToOverdue)) * tv.dir : cmpDir(a[key], b[key], tv.dir);
+    return r || a.product.localeCompare(b.product);
   });
   return rows;
 }
@@ -113,7 +117,7 @@ export const tracker = {
     });
     root.querySelector("[data-tv-export]").addEventListener("click", () => {
       const rows = trackerRows(store.getModel());
-      download(csv([["APQR Ref", "Product", "Dosage form", "Triggered", "Workflow stage", "APQR owner", "Planned PQR month", "PQR overdue date", "Days to overdue", ...SLOTS.map((s) => s.label), "Annexes complete", "Open annexes", "Final QA signal", "RAG", "Flags", "Priority", "QA comments", "Open actions"], ...rows.map((p) => [p.ref, p.product, p.dosageForm, p.triggered ? "Yes" : "No", p.wfStage, p.owner, monthLabel(p.plannedMonth), p.overdueDate, p.daysToOverdue ?? "", ...SLOTS.map((s) => p.slots[s.key].status), p.slotsOk, p.annexOpen, p.fqSignal, p.rag, p.flags.join(" "), p.priority, p.comments, p.actions.filter((a) => !a.done).map((a) => a.text).join(" | ")])]), "APQR_tracker_view.csv");
+      download(csv([["APQR Ref", "Product", "Dosage form", "Triggered", "Workflow stage", "APQR owner", "Planned PQR month", "PQR overdue date", "Days to overdue", ...SLOTS.map((s) => s.label), "Annexes complete", "Open annexes", "Final QA signal", "RAG", "Flags", "Priority", "QA comments", "Open actions"], ...rows.map((p) => [p.ref, p.product, p.dosageForm, p.triggered ? "Yes" : "No", p.wfStage, p.owner, monthLabel(p.plannedMonth), p.overdueDate, p.daysToOverdue ?? "", ...SLOTS.map((s) => p.slots[s.key].status), p.slotsOk, p.annexOpen, p.fqSignal, p.rag, p.flags.join(" "), p.priority, p.comments, p.actions.filter((a) => !a.done).map((a) => a.label).join(" | ")])]), "APQR_tracker_view.csv");
     });
   },
 };
@@ -202,7 +206,7 @@ function taskRows(m) {
     if (q && !`${t.ref} ${t.product} ${t.title} ${t.assignee} ${t.stage} ${t.slot}`.toLowerCase().includes(q)) return false;
     return true;
   });
-  rows.sort((a, b) => cmp(a[tk.sort], b[tk.sort]) * tk.dir || a.ref.localeCompare(b.ref));
+  rows.sort((a, b) => cmpDir(a[tk.sort], b[tk.sort], tk.dir) || a.ref.localeCompare(b.ref));
   return rows;
 }
 
@@ -241,13 +245,14 @@ export const tasks = {
       ${prodName ? `<button type="button" class="chipf on" data-tk-clear-product title="Clear product filter">${esc(prodName.slice(0, 40))} ✕</button>` : ""}
     </div>
     <section class="card table-card" data-region="table">${this.table(m)}</section>
-    <datalist id="dl-owners">${m.owners.map((u) => `<option value="${esc(u)}">`).join("")}</datalist>`;
+    `;
   },
   table(m) {
     const rows = taskRows(m);
     const pages = Math.max(1, Math.ceil(rows.length / PAGE));
     tk.page = Math.min(tk.page, pages - 1);
     const view = rows.slice(tk.page * PAGE, tk.page * PAGE + PAGE);
+    const L = store.lists();
     const th = (key, label, cls = "") => `<th data-sort="${key}" class="${cls} ${tk.sort === key ? "sorted" + (tk.dir > 0 ? " asc" : "") : ""}">${label}</th>`;
     return `<div class="table-wrap"><table class="data"><thead><tr>${th("ref", "Ref")}${th("product", "Product")}${th("slot", "Annexe")}${th("title", "Title")}${th("stage", "Stage")}${th("assignee", "Assigned")}${th("created", "Created")}${th("closedOn", "Closed")}${th("due", "Due (PQR)")}${th("ageing", "Age", "r")}<th></th></tr></thead><tbody>
     ${view.map((t) => `<tr data-task-row="${esc(t.id)}" ${t.generated ? `data-key="${esc(t.key)}"` : ""}>
@@ -256,7 +261,7 @@ export const tasks = {
       <td style="white-space:nowrap">${t.isAnnex ? `<span style="display:inline-flex;align-items:center;gap:6px"><i style="width:8px;height:8px;border-radius:50%;background:${deptColor(t.dept)}"></i>${esc(t.slot)}</span>` : `<span class="muted">${esc(t.role)}</span>`}${t.shared && t.isData ? ' <span class="tag" title="Arrives through the shared QA Data Collection stream">QA</span>' : ""}</td>
       <td style="max-width:220px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${esc(t.title)}">${esc(t.title)}</td>
       <td>${t.generated ? '<span class="muted">Not triggered</span>' : act.stageSelect(t, "inline")}</td>
-      <td>${t.generated ? `<span class="muted">${esc(t.assigneeName)}</span>` : `<input class="inline" data-task-assignee="${esc(t.id)}" list="dl-owners" value="${t.assigneeType === "user" ? esc(t.assignee) : ""}" placeholder="${esc(t.assigneeName)} (${esc(t.assigneeType)})" aria-label="Assigned to">`}</td>
+      <td>${t.generated ? `<span class="muted">${esc(t.assigneeName)}</span>` : peopleSelect(L, /^unassigned$/i.test(t.assignee || "") ? "" : t.assignee, { cls: "inline", attrs: `data-task-assignee="${esc(t.id)}" aria-label="Assigned to" title="${esc(t.assigneeName)} (${esc(t.assigneeType)})"`, empty: `— ${t.assigneeInferred ? t.assigneeName : "Unassigned"} —` })}</td>
       <td style="white-space:nowrap">${fmtDate(t.created)}</td>
       <td style="white-space:nowrap">${t.closed ? fmtDate(t.closedOn) : '<span class="muted">open</span>'}</td>
       <td style="white-space:nowrap">${t.due ? fmtDate(t.due) : "–"}${t.overdue === "YES" ? ' <span class="tag crit">LATE</span>' : ""}</td>
@@ -316,7 +321,7 @@ export const actions = {
   },
   rows(m) {
     const q = av.q.toLowerCase();
-    return m.actions.filter((a) => (av.state === "open" ? !a.done : av.state === "late" ? a.overdue : av.state === "done" ? a.done : true) && (!av.owner || a.owner === av.owner) && (!q || `${a.text} ${a.product} ${a.ref} ${a.owner}`.toLowerCase().includes(q)))
+    return m.actions.filter((a) => (av.state === "open" ? !a.done : av.state === "late" ? a.overdue : av.state === "done" ? a.done : true) && (!av.owner || a.owner === av.owner) && (!q || `${a.label} ${a.product} ${a.ref} ${a.owner}`.toLowerCase().includes(q)))
       .sort((a, b) => Number(a.done) - Number(b.done) || cmp(a.due, b.due) || a.product.localeCompare(b.product));
   },
   list(m) {
@@ -324,7 +329,7 @@ export const actions = {
     if (!m.actions.length) return `<div style="display:grid;gap:10px;justify-items:start"><b>No follow-up actions yet</b><p class="muted" style="margin:0">Record what needs to happen to move a review forward: chase an annexe, raise the Final QA, confirm a closure. Each action has an owner and a target date, and shows here and in the product file.</p><button class="btn btn-sm btn-primary" data-av-add>${icon("plus")}Add the first action</button></div>`;
     return `<div style="display:grid;gap:8px">${rows.map((a) => `<div class="action-row ${a.done ? "done" : ""} ${a.overdue ? "late" : ""}">
       <input type="checkbox" data-action-toggle="${esc(a.key)}|${esc(a.id)}" ${a.done ? "checked" : ""} aria-label="Mark done">
-      <div style="min-width:0"><b>${esc(a.text)}</b><small><a href="#" data-open-product="${esc(a.key)}">${esc(a.product)}</a> · ${esc(a.owner || "no owner")} · ${a.due ? `${a.overdue ? '<span style="color:var(--crit-ink);font-weight:700">' : ""}due ${fmtDate(a.due)}${a.overdue ? "</span>" : ""}` : "no target date"}${a.done && a.doneAt ? ` · done ${fmtDate(a.doneAt)}` : ""}</small></div>
+      <div style="min-width:0"><b>${esc(a.label)}</b><small><a href="#" data-open-product="${esc(a.key)}">${esc(a.product)}</a> · ${esc(a.owner || "no owner")} · ${a.due ? `${a.overdue ? '<span style="color:var(--crit-ink);font-weight:700">' : ""}due ${fmtDate(a.due)}${a.overdue ? "</span>" : ""}` : "no target date"}${a.done && a.doneAt ? ` · done ${fmtDate(a.doneAt)}` : ""}</small></div>
       <div style="display:flex;gap:6px;align-items:center">${ragPill(a.rag)}<button class="icon-btn sm" data-action-edit="${esc(a.key)}|${esc(a.id)}" aria-label="Edit action">${icon("edit")}</button></div>
     </div>`).join("") || '<p class="muted">No actions match.</p>'}</div>`;
   },
@@ -343,7 +348,7 @@ export const actions = {
       if (t) { const [key, id] = t.dataset.actionToggle.split("|"); act.toggleAction(key, id, t.checked); }
     });
     root.querySelector("[data-av-export]").addEventListener("click", () => {
-      download(csv([["Product", "APQR Ref", "Action", "Owner", "Target date", "Done", "Overdue"], ...this.rows(store.getModel()).map((a) => [a.product, a.ref, a.text, a.owner, a.due, a.done ? "Yes" : "No", a.overdue ? "YES" : ""])]), "APQR_actions.csv");
+      download(csv([["Product", "APQR Ref", "Action", "Details", "Owner", "Target date", "Done", "Overdue"], ...this.rows(store.getModel()).map((a) => [a.product, a.ref, a.type || a.text, a.type ? a.text : "", a.owner, a.due, a.done ? "Yes" : "No", a.overdue ? "YES" : ""])]), "APQR_actions.csv");
     });
   },
 };
@@ -415,12 +420,12 @@ export const data = {
           <label class="f full">Programme name<input name="programme" id="set-programme" value="${esc(s.meta.programme)}"></label>
           <label class="f">Organisation / site<input name="organisation" id="set-org" value="${esc(s.meta.organisation)}"></label>
           <label class="f">Plan reference<input name="planRef" id="set-planref" value="${esc(s.meta.planRef)}" placeholder="PQRP-KE-1"></label>
-          <label class="f">Your name (for the audit trail)<input name="user" id="set-user" value="${esc(s.meta.user)}" placeholder="e.g. QA reviewer"></label>
+          <label class="f">Your name (for the audit trail)${peopleSelect(store.lists(), s.meta.user, { name: "user", attrs: 'id="set-user"', empty: "— choose your name —", only: ["user"] })}<small>Not listed? Add yourself on the Lists page.</small></label>
           <label class="f">Report date<input type="date" name="reportDate" id="set-date" value="${esc(s.settings.reportDate)}" ${s.settings.useToday ? "disabled" : ""}></label>
           <label class="f check full"><input type="checkbox" name="useToday" id="set-today" ${s.settings.useToday ? "checked" : ""}> Always use today’s date as the report date</label>
-          <label class="f">PQR overdue after (months)<input type="number" min="0" max="24" name="overdueMonths" id="set-months" value="${s.settings.overdueMonths}"><small>From the 1st of the planned PQR month. Confirm against SOPQA0021E.</small></label>
-          <label class="f">“Due soon” threshold (days)<input type="number" min="0" max="365" name="dueSoonDays" id="set-soon" value="${s.settings.dueSoonDays}"></label>
-          <label class="f">“Not triggered – due soon” window (days)<input type="number" min="0" max="365" name="triggerWindowDays" id="set-window" value="${s.settings.triggerWindowDays}"></label>
+          <label class="f">PQR overdue after (months)<select name="overdueMonths" id="set-months"><option value="1"${s.settings.overdueMonths == 1 ? " selected" : ""}>1</option><option value="2"${s.settings.overdueMonths == 2 ? " selected" : ""}>2</option><option value="3"${s.settings.overdueMonths == 3 ? " selected" : ""}>3</option><option value="4"${s.settings.overdueMonths == 4 ? " selected" : ""}>4</option><option value="5"${s.settings.overdueMonths == 5 ? " selected" : ""}>5</option><option value="6"${s.settings.overdueMonths == 6 ? " selected" : ""}>6</option><option value="7"${s.settings.overdueMonths == 7 ? " selected" : ""}>7</option><option value="8"${s.settings.overdueMonths == 8 ? " selected" : ""}>8</option><option value="9"${s.settings.overdueMonths == 9 ? " selected" : ""}>9</option><option value="10"${s.settings.overdueMonths == 10 ? " selected" : ""}>10</option><option value="11"${s.settings.overdueMonths == 11 ? " selected" : ""}>11</option><option value="12"${s.settings.overdueMonths == 12 ? " selected" : ""}>12</option></select><small>From the 1st of the planned PQR month. Confirm against SOPQA0021E.</small></label>
+          <label class="f">“Due soon” threshold (days)<select name="dueSoonDays" id="set-soon"><option value="0"${s.settings.dueSoonDays == 0 ? " selected" : ""}>0</option><option value="7"${s.settings.dueSoonDays == 7 ? " selected" : ""}>7</option><option value="10"${s.settings.dueSoonDays == 10 ? " selected" : ""}>10</option><option value="14"${s.settings.dueSoonDays == 14 ? " selected" : ""}>14</option><option value="21"${s.settings.dueSoonDays == 21 ? " selected" : ""}>21</option><option value="30"${s.settings.dueSoonDays == 30 ? " selected" : ""}>30</option><option value="45"${s.settings.dueSoonDays == 45 ? " selected" : ""}>45</option><option value="60"${s.settings.dueSoonDays == 60 ? " selected" : ""}>60</option></select></label>
+          <label class="f">“Not triggered – due soon” window (days)<select name="triggerWindowDays" id="set-window"><option value="30"${s.settings.triggerWindowDays == 30 ? " selected" : ""}>30</option><option value="45"${s.settings.triggerWindowDays == 45 ? " selected" : ""}>45</option><option value="60"${s.settings.triggerWindowDays == 60 ? " selected" : ""}>60</option><option value="90"${s.settings.triggerWindowDays == 90 ? " selected" : ""}>90</option><option value="120"${s.settings.triggerWindowDays == 120 ? " selected" : ""}>120</option><option value="180"${s.settings.triggerWindowDays == 180 ? " selected" : ""}>180</option></select></label>
           <div class="full" style="display:flex;justify-content:flex-end"><button class="btn btn-primary btn-sm">${icon("check")}Save settings</button></div>
         </form>
       </section>

@@ -7,6 +7,7 @@
 // When a newer version is published, a clean local copy follows it
 // automatically; one with changes keeps them and offers the newer version.
 import { compute, todayIso } from "./engine.js";
+import { getLists, addMissingFromData } from "./lists.js";
 
 const KEY = "apqr-master-tracker-v1";
 const AUDIT_MAX = 3000;
@@ -53,6 +54,8 @@ export function seedInfo() {
 
 let newerSeed = false;
 let state = load();
+// Materialise the managed lists the first time (seeded from the data); not a user change.
+if (!state.lists && (state.plan.length || state.tasks.length)) state.lists = getLists(state);
 let model = compute(state);
 let undoSnapshot = null;
 const listeners = new Set();
@@ -87,6 +90,10 @@ export function flush() {
 }
 
 export const getState = () => state;
+/** The managed drop-down lists in force. */
+export const lists = () => getLists(state);
+/** After an import: add new values found in the data to the lists. */
+export const syncLists = (st) => addMissingFromData(st);
 export const getModel = () => model;
 export const hasData = () => state.plan.length > 0 || state.tasks.length > 0;
 export const canUndo = () => !!undoSnapshot;
@@ -117,6 +124,7 @@ export function update(fn, { audit = [], undoable = false, label, clean = false 
 export function replace(next, { label = "Replace data", clean = false } = {}) {
   undoSnapshot = { json: JSON.stringify(state), label };
   state = merge(emptyState(), next);
+  if (state.plan.length || state.tasks.length) { if (state.lists) addMissingFromData(state); else state.lists = getLists(state); }
   state.meta.dirty = !clean;
   persist();
   emit({ type: "replace" });

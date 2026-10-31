@@ -240,3 +240,30 @@ test("app changes survive a Scigeniq refresh unless Scigeniq has closed the task
   assert.ok(out.tasks.some((t) => t.id === "c"));
   assert.deepEqual([out.kept, out.caughtUp, out.added], [1, 1, 1]);
 });
+
+test("managed lists: seeded from data, rename propagates, delete keeps or replaces, select keeps old values", async () => {
+  const L = await import("../apqr/js/lists.js");
+  const s = baseState([task({ assignee: "Ryma Benali", title: "Supplier Data Collection" }), task({ assignee: "Unassigned", title: "RA Data Collection", reviewer: "Ryma Benali" })]);
+  s.products = { [productKey(PRODUCT)]: { owner: "Ryma Benali", actions: [{ id: "a", type: "Chase the data reviewer", text: "", owner: "Ryma Benali" }] } };
+  const lists = L.getLists(s);
+  const ryma = lists.people.find((x) => x.name === "Ryma Benali");
+  assert.equal(ryma.type, "user");
+  assert.equal(ryma.dept, "Supplier Qualification");
+  assert.ok(lists.people.some((x) => x.name === "RA group" && x.type === "group"));
+  assert.ok(lists.stages.some((x) => x.name === "Collecting Data"));
+  assert.ok(L.isLocked("stages", "Completed"));
+  assert.equal(L.usageCount(s, "people", "Ryma Benali"), 4);
+  assert.equal(L.replaceEverywhere(s, "people", "Ryma Benali", "Ryma BENALI"), 4);
+  assert.equal(s.tasks[0].assignee, "Ryma BENALI");
+  assert.equal(s.tasks[1].reviewer, "Ryma BENALI");
+  assert.equal(s.products[productKey(PRODUCT)].actions[0].owner, "Ryma BENALI");
+  L.replaceEverywhere(s, "people", "Ryma BENALI", "");
+  assert.equal(s.tasks[0].assignee, "Unassigned");
+  assert.equal(s.tasks[1].reviewer, undefined);
+  const html = L.listSelect({ priorities: [{ name: "High" }] }, "priorities", "Urgent", { name: "p" });
+  assert.match(html, /Urgent \(not in list\)/);
+  s.lists = { ...lists, people: lists.people.filter((x) => x.name !== "Amine Tebbi") };
+  s.tasks.push(task({ assignee: "Amine Tebbi", title: "RA Data Collection", ref: "APQR-T-9" }));
+  assert.ok(L.addMissingFromData(s) >= 1);
+  assert.ok(s.lists.people.some((x) => x.name === "Amine Tebbi"));
+});

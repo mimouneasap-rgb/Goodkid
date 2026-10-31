@@ -7,10 +7,11 @@ import { $, $$, esc, icon, fmtN, fmtPct, fmtDate, toast, initTooltip, ragPill } 
 import { dashboard, annexes, finalqa, workflow, workload, insights, bindChartToggles } from "./views-overview.js";
 import { tracker, plan, tasks, actions, data } from "./views-registers.js";
 import { collection } from "./views-collection.js";
+import { listsView } from "./views-lists.js";
 import { initDrawer, openProduct, refreshDrawer, closeDrawer, isOpen } from "./drawer.js";
 import { productKey, todayIso } from "./engine.js";
 
-const VIEWS = { dashboard, tracker, plan, annexes, finalqa, workflow, collection, tasks, workload, actions, insights, data };
+const VIEWS = { dashboard, tracker, plan, annexes, finalqa, workflow, collection, tasks, workload, actions, insights, lists: listsView, data };
 const NAV = [
   { sec: "Overview" },
   { id: "dashboard", label: "Command centre", icon: "dashboard" },
@@ -26,6 +27,7 @@ const NAV = [
   { id: "actions", label: "Actions", icon: "edit", count: (m) => m.kpi.openActions || "", alert: false },
   { sec: "Control" },
   { id: "insights", label: "Insights", icon: "insights", count: (m) => m.quality.filter((q) => q.level === "critical" || q.level === "serious").length || "", alert: true },
+  { id: "lists", label: "Lists", icon: "table" },
   { id: "data", label: "Data & settings", icon: "data" },
 ];
 

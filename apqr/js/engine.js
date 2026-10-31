@@ -172,10 +172,11 @@ const looksLikeGroup = (v) => /\b(group|team|department|dept|role|owner|approver
  * "Unassigned". Those resolve to the owning department's group (annexes) or
  * the role that acts on them (workflow / Final QA / approval), marked inferred.
  */
-export function resolveAssignee(t, role, dept) {
+export function resolveAssignee(t, role, dept, typeOf) {
   if (!UNASSIGNED(t.assignee)) {
-    const type = t.assigneeType && ASSIGNEE_TYPES.includes(t.assigneeType) ? t.assigneeType : looksLikeGroup(t.assignee) ? "group" : "user";
-    return { name: String(t.assignee).trim(), type, inferred: false };
+    const name = String(t.assignee).trim();
+    const type = t.assigneeType && ASSIGNEE_TYPES.includes(t.assigneeType) ? t.assigneeType : typeOf?.get(name) || (looksLikeGroup(t.assignee) ? "group" : "user");
+    return { name, type, inferred: false };
   }
   if (role === ROLES.ANNEX) return { name: groupName(dept), type: "group", inferred: true };
   if (role === ROLES.APPROVAL) return { name: ROLE_APPROVER, type: "role", inferred: true };
@@ -202,6 +203,7 @@ export function compute(state) {
   const R = dayInt(report);
   const ann = state.products || {};
   const prevPct = state.baseline?.prevPct || {};
+  const typeOf = new Map((state.lists?.people || []).map((x) => [x.name, x.type]));
   const hasBaseline = !!state.baseline && Object.keys(prevPct).length > 0;
 
   /* --- plan --- */
@@ -226,12 +228,12 @@ export function compute(state) {
     const closed = isClosed(t);
     const due = pl ? pl.overdueDate : "";
     const D = dayInt(due);
-    const asg = resolveAssignee(t, role, dept);
+    const asg = resolveAssignee(t, role, dept, typeOf);
     const collectorStored = !UNASSIGNED(t.collector);
     const collector = collectorStored ? String(t.collector).trim() : asg.name;
-    const collectorType = collectorStored ? (t.collectorType || (looksLikeGroup(t.collector) ? "group" : "user")) : asg.type;
+    const collectorType = collectorStored ? (typeOf.get(collector) || t.collectorType || (looksLikeGroup(t.collector) ? "group" : "user")) : asg.type;
     const reviewer = UNASSIGNED(t.reviewer) ? "" : String(t.reviewer).trim();
-    const reviewerType = reviewer ? (t.reviewerType || (looksLikeGroup(reviewer) ? "group" : "user")) : "";
+    const reviewerType = reviewer ? (typeOf.get(reviewer) || t.reviewerType || (looksLikeGroup(reviewer) ? "group" : "user")) : "";
     return {
       ...t, key, role, slot, dept, generated,
       assigneeName: asg.name, assigneeType: asg.type, assigneeInferred: asg.inferred,
@@ -320,7 +322,7 @@ export function compute(state) {
     if (triggered && slotsMissing) flags.push("MISSING ANNEXE");
     const pct = slotsOk / 10;
     const prev = prevPct[key];
-    const actions = (a.actions || []).map((x) => ({ ...x, key, overdue: !x.done && x.due && dayInt(x.due) < R }));
+    const actions = (a.actions || []).map((x) => ({ ...x, key, label: x.type ? (x.text ? `${x.type}: ${x.text}` : x.type) : x.text || "", overdue: !x.done && x.due && dayInt(x.due) < R }));
     return {
       key,
       product: pl?.product || realList[0]?.product || key,
@@ -541,7 +543,7 @@ export function compute(state) {
   const sysOverdue = annexReal.filter((t) => !t.closed && /overdue/i.test(t.status)).length;
   const calcOverdue = annexReal.filter((t) => t.overdue === "YES").length;
   if (sysOverdue !== calcOverdue) push("info", "Overdue: system flag vs PQR due date", `Scigeniq flags ${sysOverdue} open annexes as Overdue against their own end date; ${calcOverdue} are overdue against the parent PQR due date used here.`, [], "reconcile");
-  if (kpi.overdueActions) push("warning", "QA follow-up actions past their target date", `${kpi.overdueActions} follow-up actions are overdue.`, actions.filter((x) => x.overdue).map((x) => ({ key: x.key, label: x.text, note: `${x.product} · due ${x.due}` })), "actions");
+  if (kpi.overdueActions) push("warning", "QA follow-up actions past their target date", `${kpi.overdueActions} follow-up actions are overdue.`, actions.filter((x) => x.overdue).map((x) => ({ key: x.key, label: x.label, note: `${x.product} · due ${x.due}` })), "actions");
 
   /* --- groups / roles and their members (named users seen on that work) --- */
   const groups = new Map();

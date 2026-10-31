@@ -38,6 +38,10 @@ Drop a file anywhere on the page, or use **Import**. The app works out what kind
 
 Scigeniq can assign a task to a person, a role or a group, but its export only names people, so role and group assignments arrive as "Unassigned". The app resolves those to the owning department's group (annexes, e.g. "RA group") or to the acting role ("APQR Owner (QA)" for workflows and Final QA, "Approver" for approvals), marked as inferred. Group members are the people seen doing that department's annexes. Each annexe also has a **data collection owner** (defaults to the named assignee) and a **data reviewer** (set in the app), editable one by one or in bulk on the Data collection page.
 
+### Managed drop-down lists
+
+Every value you can set in the app is picked from a list: people, groups and roles (with type and department), workflow stages, task statuses, task titles (by annexe), follow-up action types, priorities, criticality, dosage forms, sites and plan statuses. The **Lists** page lets you add, rename, reorder and delete entries. Renaming updates every record that uses the entry. Deleting asks whether to replace the value in those records or keep it (it then shows as "not in list"). Built-in stages and the department groups and roles drive the calculations and are locked. Lists are seeded from the data, topped up when an import brings new values, published with the team version and exported to Excel (a "Lists" sheet that imports back).
+
 ### Changes made in the app
 
 Stage changes, closures, assignees, owners, reviewers and tasks added in the app are marked "in app". A Scigeniq refresh keeps them, unless Scigeniq has since closed the task itself. A master-tracker import offers to keep them too.

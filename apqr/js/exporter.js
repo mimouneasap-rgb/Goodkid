@@ -3,6 +3,7 @@
 // opens like the workbook and can be imported back into the app.
 import { writeXlsx, S } from "./xlsx.js";
 import { DEPARTMENTS, SLOTS, MOVEMENT_METRICS, FINAL_QA_SIGNALS, monthLabel } from "./engine.js";
+import { getLists, LIST_DEFS } from "./lists.js";
 
 const h = (v) => ({ v, s: S.header });
 const pct = (v) => ({ v, s: S.pct });
@@ -158,8 +159,17 @@ export async function buildWorkbook(state, model) {
     [title("QA FOLLOW-UP ACTIONS")],
     [note("Actions recorded in the app against each product review.")],
     [],
-    ["Product", "APQR Ref", "Action", "Owner", "Target date", "Done", "Raised", "Overdue?"].map(h),
-    ...model.actions.map((a) => [a.product, a.ref, a.text, a.owner, d(a.due), a.done ? "Yes" : "No", d(a.created), a.overdue ? "YES" : ""]),
+    ["Product", "APQR Ref", "Action", "Details", "Owner", "Target date", "Done", "Raised", "Overdue?"].map(h),
+    ...model.actions.map((a) => [a.product, a.ref, a.type || a.text, a.type ? a.text : "", a.owner, d(a.due), a.done ? "Yes" : "No", d(a.created), a.overdue ? "YES" : ""]),
+  ];
+
+  const L = getLists(state);
+  const listsSheet = [
+    [title("MANAGED LISTS - the drop-down values used in the app")],
+    [note("Edit them in the app on the Lists page. Importing this workbook brings them back.")],
+    [],
+    ["List", "Value", "Type", "Department", "Annexe"].map(h),
+    ...LIST_DEFS.flatMap((def) => L[def.key].map((x) => [def.label, x.name, x.type || "", x.dept || "", x.slot || ""])),
   ];
 
   const excluded = [
@@ -185,6 +195,7 @@ export async function buildWorkbook(state, model) {
     { name: "Task Register", rows: tasks, widths: [14, 50, 12, 10, 18, 12, 14, 20, 20, 8, 26, 32, 14, 12, 20, 9, 16, 16, 12, 16, 10, 16, 18, 8, 8, 8, 26, 12, 16], freeze: 5 },
     { name: "Owner Workload", rows: workload, widths: [26, 10, 10, 8, 10, 8, 10, 12, 10, 14, 22], freeze: 5 },
     { name: "Actions", rows: actions, widths: [60, 14, 60, 20, 12, 8, 12, 10], freeze: 5 },
+    { name: "Lists", rows: listsSheet, widths: [28, 50, 10, 24, 22], freeze: 5 },
     { name: "Excluded Tasks", rows: excluded, widths: [14, 18, 14, 12, 40, 50, 20, 14, 30], freeze: 5 },
     { name: "Audit Trail", rows: audit, widths: [20, 18, 10, 50, 16, 24, 24], freeze: 5 },
   ]);
