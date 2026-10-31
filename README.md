@@ -42,6 +42,16 @@ The app is a Progressive Web App. Once hosted, you can install it from the brows
 
 Your risks are stored on the device where you enter them. Use **Export CSV** to back them up or move them to another device.
 
+## HVAC Qualification Master Class
+
+`training/hvac-qualification-masterclass.html` is a self-contained training page on qualifying
+pharmaceutical HVAC systems (EU GMP Annex 1 and 15, ISO 14644, ICH Q9). It has a clickable
+system schematic; each component shows its function, types, critical parameters, DQ/IQ/OQ/PQ
+and requalification tests with step-by-step methods, and FMEA failure modes scored with the
+same rules as this app. It also covers the qualification lifecycle, Annex 1 limits, sampling,
+recovery and door-leakage calculators, and a knowledge check. Open it directly in a browser,
+or at `/training/hvac-qualification-masterclass.html` once the site is hosted.
+
 ## Running locally
 
 Requires Node.js 18 or later. There are no dependencies to install.

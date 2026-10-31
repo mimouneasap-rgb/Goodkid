@@ -1,0 +1,1607 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>HVAC Qualification Master Class</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@500;600;700&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap">
+<style>
+/* Layout: petrol header band, then a schematic workbench (drawing left, inspector panel right),
+   followed by reference sections on a mineral-grey ground. Same visual family as the
+   Quality Risk Manager app: condensed Plex for headings, mono for test IDs and limits. */
+:root {
+  --ground: #e9eeec;
+  --surface: #ffffff;
+  --surface-2: #f3f6f5;
+  --ink: #12201e;
+  --ink-2: #3a4a47;
+  --muted: #5d6e69;
+  --line: #d6dedb;
+  --line-strong: #bdc8c4;
+  --band: #0e2326;
+  --band-ink: #e3eeec;
+  --band-muted: #93b1ac;
+  --band-line: #22403f;
+  --accent: #2f4fd9;
+  --accent-ink: #ffffff;
+  --accent-soft: #e4e9fc;
+  /* air streams */
+  --sa: #2a78d6;
+  --ra: #c27f0e;
+  --oa: #1d9a60;
+  --ea: #9b4f8c;
+  --sig: #7c8a87;
+  /* equipment drawing */
+  --casing: #f7faf9;
+  --casing-line: #7d8e8a;
+  --duct: #eef3f2;
+  --duct-edge: #a9b7b3;
+  --coil-c: #2a78d6;
+  --coil-h: #d0504a;
+  /* grades */
+  --gA: #c9dcfb;
+  --gB: #dbe7f8;
+  --gC: #e5eff0;
+  --gD: #eef3ee;
+  /* semantic (risk levels, same as the Quality Risk Manager) */
+  --low: #1d9a60; --low-bg: #ddf3e8; --low-ink: #136b42;
+  --medium: #d29300; --medium-bg: #fbf0cf; --medium-ink: #8a6100;
+  --high: #e3601a; --high-bg: #fde4d4; --high-ink: #a9440f;
+  --critical: #d0263a; --critical-bg: #fbdde1; --critical-ink: #a8172a;
+  --ok: #1d9a60; --ok-bg: #ddf3e8; --bad: #c0283a; --bad-bg: #fbdde1;
+  --shadow-1: 0 1px 0 rgba(18,32,30,.04), 0 1px 3px rgba(18,32,30,.07);
+  --font-display: "IBM Plex Sans Condensed", "Arial Narrow", "Roboto Condensed", system-ui, sans-serif;
+  --font-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --radius: 10px;
+  --radius-sm: 6px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --ground: #0a1113; --surface: #121b1e; --surface-2: #172427;
+    --ink: #e4edeb; --ink-2: #bccbc7; --muted: #8b9e9a; --line: #24343a; --line-strong: #34494f;
+    --band: #060d0f; --band-ink: #e3eeec; --band-muted: #7d9893; --band-line: #172a2d;
+    --accent: #8098ff; --accent-ink: #0a1113; --accent-soft: #1c2550;
+    --sa: #5aa2f0; --ra: #e0a43a; --oa: #4cc48a; --ea: #c886ba; --sig: #75878a;
+    --casing: #162225; --casing-line: #6f8580; --duct: #1b2a2e; --duct-edge: #3d5459;
+    --coil-c: #5aa2f0; --coil-h: #ec7a72;
+    --gA: #1d3358; --gB: #182a40; --gC: #172b2e; --gD: #16241f;
+    --low-bg: #13352a; --low-ink: #5fd39b; --medium-bg: #3a2f0f; --medium-ink: #f0c25a;
+    --high-bg: #43240f; --high-ink: #f59a63; --critical-bg: #47141c; --critical-ink: #ff8592;
+    --ok-bg: #13352a; --bad-bg: #47141c;
+    --shadow-1: 0 1px 0 rgba(0,0,0,.3), 0 1px 3px rgba(0,0,0,.35);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --ground: #0a1113; --surface: #121b1e; --surface-2: #172427;
+  --ink: #e4edeb; --ink-2: #bccbc7; --muted: #8b9e9a; --line: #24343a; --line-strong: #34494f;
+  --band: #060d0f; --band-ink: #e3eeec; --band-muted: #7d9893; --band-line: #172a2d;
+  --accent: #8098ff; --accent-ink: #0a1113; --accent-soft: #1c2550;
+  --sa: #5aa2f0; --ra: #e0a43a; --oa: #4cc48a; --ea: #c886ba; --sig: #75878a;
+  --casing: #162225; --casing-line: #6f8580; --duct: #1b2a2e; --duct-edge: #3d5459;
+  --coil-c: #5aa2f0; --coil-h: #ec7a72;
+  --gA: #1d3358; --gB: #182a40; --gC: #172b2e; --gD: #16241f;
+  --low-bg: #13352a; --low-ink: #5fd39b; --medium-bg: #3a2f0f; --medium-ink: #f0c25a;
+  --high-bg: #43240f; --high-ink: #f59a63; --critical-bg: #47141c; --critical-ink: #ff8592;
+  --ok-bg: #13352a; --bad-bg: #47141c;
+  --shadow-1: 0 1px 0 rgba(0,0,0,.3), 0 1px 3px rgba(0,0,0,.35);
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body { background: var(--ground); color: var(--ink); font-family: var(--font-body); font-size: 15px; line-height: 1.5; }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--band); }
+h1, h2, h3, h4, h5 { font-family: var(--font-display); text-wrap: balance; margin: 0; line-height: 1.15; }
+p { margin: 0; }
+button { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.wrap { max-width: 1340px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+.mono { font-family: var(--font-mono); }
+.eyebrow { font-family: var(--font-mono); font-size: 11.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+
+/* header */
+.band { background: var(--band); color: var(--band-ink); }
+.band .wrap { padding-block: 28px 22px; display: grid; gap: 18px; grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 900px) { .band .wrap { grid-template-columns: minmax(0, 1.5fr) minmax(280px, 1fr); align-items: end; } }
+.band .eyebrow { color: var(--band-muted); }
+.band h1 { font-size: clamp(30px, 4.4vw, 46px); font-weight: 700; letter-spacing: -.01em; margin-top: 6px; }
+.band .lede { color: var(--band-ink); opacity: .86; max-width: 64ch; margin-top: 10px; font-size: 15.5px; }
+.progress { border: 1px solid var(--band-line); border-radius: var(--radius); padding: 14px 16px; display: grid; gap: 10px; }
+.progress .row { display: flex; justify-content: space-between; gap: 12px; font-size: 13px; color: var(--band-muted); }
+.progress .row b { color: var(--band-ink); font-family: var(--font-mono); font-weight: 500; }
+.meter { height: 6px; background: var(--band-line); border-radius: 3px; overflow: hidden; }
+.meter i { display: block; height: 100%; width: 0; background: var(--oa); transition: width .4s; }
+.regs { display: flex; flex-wrap: wrap; gap: 6px; grid-column: 1 / -1; }
+.regs span { font-family: var(--font-mono); font-size: 11px; color: var(--band-muted); border: 1px solid var(--band-line); border-radius: 4px; padding: 2px 7px; }
+
+/* section nav */
+.secnav { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--surface); border-bottom: 1px solid var(--line); }
+.secnav .wrap { display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; }
+.secnav a { flex: none; padding: 12px 12px; font-size: 13.5px; font-weight: 500; color: var(--ink-2); text-decoration: none; border-bottom: 2px solid transparent; }
+.secnav a:hover { color: var(--accent); border-bottom-color: var(--accent); }
+
+section { padding-block: 34px 8px; }
+.sec-head { display: grid; gap: 6px; margin-bottom: 16px; max-width: 80ch; }
+.sec-head h2 { font-size: clamp(22px, 2.6vw, 28px); font-weight: 600; }
+.sec-head p { color: var(--ink-2); }
+
+/* schematic workbench */
+.bench { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; align-items: start; }
+@media (min-width: 1120px) { .bench { grid-template-columns: minmax(0, 1.55fr) minmax(370px, 1fr); } }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow-1); }
+.drawing { min-width: 0; }
+.drawing-tools { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 10px; padding: 12px 14px; border-bottom: 1px solid var(--line); }
+.toggles { display: flex; flex-wrap: wrap; gap: 6px; }
+.tog { border: 1px solid var(--line-strong); background: var(--surface); border-radius: 999px; padding: 4px 11px; font-size: 12.5px; cursor: pointer; display: inline-flex; gap: 6px; align-items: center; }
+.tog[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--ink); }
+.tog::before { content: ""; width: 8px; height: 8px; border-radius: 50%; border: 1.5px solid var(--muted); }
+.tog[aria-pressed="true"]::before { background: var(--accent); border-color: var(--accent); }
+.hint { font-size: 12.5px; color: var(--muted); align-self: center; }
+.svg-scroll { overflow-x: auto; }
+#schem { display: block; width: 100%; min-width: 820px; height: auto; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; padding: 12px 14px; border-top: 1px solid var(--line); }
+.chip { border: 1px solid var(--line); background: var(--surface-2); border-radius: 6px; padding: 4px 9px 4px 5px; font-size: 12.5px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+.chip .n { font-family: var(--font-mono); font-size: 11px; width: 20px; height: 20px; border-radius: 50%; display: inline-grid; place-items: center; background: var(--surface); border: 1px solid var(--line-strong); }
+.chip.done .n { background: var(--ok-bg); border-color: var(--ok); color: var(--low-ink); }
+.chip.sel { border-color: var(--accent); background: var(--accent-soft); }
+.chip.sel .n { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.legend { display: flex; flex-wrap: wrap; gap: 14px; padding: 10px 14px; border-top: 1px solid var(--line); font-size: 12px; color: var(--muted); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.legend i { width: 22px; height: 3px; border-radius: 2px; display: inline-block; }
+
+/* svg styling */
+.sv-casing { fill: var(--casing); stroke: var(--casing-line); stroke-width: 1.5; }
+.sv-div { stroke: var(--casing-line); stroke-width: 1; stroke-dasharray: 3 3; }
+.sv-sec { font-family: var(--font-mono); font-size: 10px; fill: var(--muted); text-anchor: middle; letter-spacing: .06em; }
+.sv-lbl { font-family: var(--font-mono); font-size: 10.5px; fill: var(--muted); }
+.sv-lbl.c { text-anchor: middle; }
+.sv-duct-e { fill: none; stroke: var(--duct-edge); stroke-width: 24; stroke-linejoin: round; }
+.sv-duct { fill: none; stroke: var(--duct); stroke-width: 21; stroke-linejoin: round; }
+.sv-pipe { fill: none; stroke: var(--casing-line); stroke-width: 2.5; }
+.sv-flow { fill: none; stroke-width: 2.6; stroke-linecap: round; stroke-dasharray: 2 12; animation: flow 1.1s linear infinite; }
+.sv-flow.thin { stroke-width: 1.6; stroke-dasharray: 2 9; opacity: .8; }
+.sa { stroke: var(--sa); } .ra { stroke: var(--ra); } .oa { stroke: var(--oa); } .ea { stroke: var(--ea); }
+@keyframes flow { to { stroke-dashoffset: -14; } }
+.sv-equip { fill: var(--surface); stroke: var(--ink-2); stroke-width: 1.4; }
+.sv-line { fill: none; stroke: var(--ink-2); stroke-width: 1.4; }
+.sv-coil-c { fill: none; stroke: var(--coil-c); stroke-width: 1.3; }
+.sv-coil-h { fill: none; stroke: var(--coil-h); stroke-width: 1.3; }
+.sv-wall { fill: none; stroke: var(--ink-2); stroke-width: 3; }
+.sv-door { fill: none; stroke: var(--muted); stroke-width: 1; stroke-dasharray: 3 3; }
+.room-fill { stroke: none; transition: fill .3s; }
+.gA { fill: var(--gA); } .gB { fill: var(--gB); } .gC { fill: var(--gC); } .gD { fill: var(--gD); }
+.no-grade .room-fill { fill: var(--surface); }
+.sv-grade { font-family: var(--font-display); font-weight: 700; font-size: 30px; fill: var(--ink-2); opacity: .55; }
+.sv-room { font-family: var(--font-body); font-size: 12px; font-weight: 600; fill: var(--ink-2); }
+.sv-small { font-family: var(--font-mono); font-size: 9.5px; fill: var(--muted); }
+.press rect { fill: var(--surface); stroke: var(--ink-2); stroke-width: 1; }
+.press text { font-family: var(--font-mono); font-size: 10.5px; font-weight: 600; fill: var(--ink); text-anchor: middle; }
+.press .arr { fill: none; stroke: var(--accent); stroke-width: 2; marker-end: url(#arrowhead); }
+.no-press .press { display: none; }
+.no-flow .sv-flow { display: none; }
+.sv-sig { fill: none; stroke: var(--sig); stroke-width: 1.2; stroke-dasharray: 4 3; }
+.sv-sensor { fill: var(--surface); stroke: var(--sig); stroke-width: 1.4; }
+.sv-sensor-t { font-family: var(--font-mono); font-size: 7.5px; font-weight: 600; fill: var(--ink-2); text-anchor: middle; }
+.hs { cursor: pointer; outline: none; transition: opacity .2s; }
+.hs .hit { fill: transparent; }
+.hs:hover .hit, .hs:focus-visible .hit { fill: var(--accent-soft); }
+.hs.sel .hit { fill: var(--accent-soft); }
+.hs:hover, .hs:focus-visible { filter: drop-shadow(0 0 2px var(--accent)); }
+.hs.sel { filter: drop-shadow(0 0 2.5px var(--accent)) drop-shadow(0 0 1px var(--accent)); }
+.has-sel .hs:not(.sel) { opacity: .62; }
+.has-sel .hs:not(.sel):hover { opacity: 1; }
+.bdg circle { fill: var(--surface); stroke: var(--ink-2); stroke-width: 1.3; }
+.bdg text { font-family: var(--font-mono); font-size: 10.5px; font-weight: 600; fill: var(--ink); text-anchor: middle; dominant-baseline: central; }
+.hs.sel .bdg circle { fill: var(--accent); stroke: var(--accent); }
+.hs.sel .bdg text { fill: var(--accent-ink); }
+.deco { pointer-events: none; }
+
+/* inspector panel */
+.panel { min-width: 0; display: flex; flex-direction: column; }
+@media (min-width: 1120px) { .panel { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 58px); max-height: calc(100vh - 74px); } }
+.p-head { padding: 16px 18px 12px; border-bottom: 1px solid var(--line); display: grid; gap: 4px; }
+.p-head h3 { font-size: 23px; font-weight: 600; }
+.p-head .role { color: var(--ink-2); font-size: 14px; }
+.p-tabs { display: flex; gap: 2px; padding: 0 12px; border-bottom: 1px solid var(--line); overflow-x: auto; scrollbar-width: none; }
+.p-tabs button { flex: none; background: none; border: 0; border-bottom: 2px solid transparent; padding: 10px 8px; font-size: 13.5px; font-weight: 500; color: var(--muted); cursor: pointer; }
+.p-tabs button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent); }
+.p-body { padding: 16px 18px 18px; overflow-y: auto; display: grid; gap: 16px; align-content: start; min-height: 0; }
+.p-body h4 { font-size: 15px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+.p-body p { max-width: 70ch; }
+.p-foot { display: flex; justify-content: space-between; gap: 8px; padding: 10px 14px; border-top: 1px solid var(--line); }
+.btn { border: 1px solid var(--line-strong); background: var(--surface); border-radius: var(--radius-sm); padding: 6px 12px; font-size: 13px; cursor: pointer; }
+.btn:hover { border-color: var(--accent); color: var(--accent); }
+.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.btn.primary:hover { color: var(--accent-ink); filter: brightness(1.08); }
+.types { display: grid; gap: 8px; }
+.types div { display: grid; gap: 2px; padding-left: 12px; border-left: 2px solid var(--line-strong); }
+.types b { font-weight: 600; font-size: 14px; }
+.types span { color: var(--ink-2); font-size: 13.5px; }
+.tbl-wrap { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 13.5px; }
+th, td { text-align: left; vertical-align: top; padding: 7px 9px; border-bottom: 1px solid var(--line); }
+th { font-family: var(--font-mono); font-size: 11px; font-weight: 500; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); background: var(--surface-2); }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; font-family: var(--font-mono); }
+.findings { display: grid; gap: 8px; }
+.findings p { font-size: 13.5px; padding: 8px 10px; background: var(--high-bg); color: var(--ink); border-radius: var(--radius-sm); }
+.findings p b { color: var(--high-ink); font-family: var(--font-mono); font-size: 11px; letter-spacing: .05em; text-transform: uppercase; display: block; }
+
+.stages { display: flex; gap: 4px; flex-wrap: wrap; }
+.stages button { border: 1px solid var(--line-strong); background: var(--surface); border-radius: var(--radius-sm); padding: 5px 10px; font-family: var(--font-mono); font-size: 12.5px; font-weight: 500; cursor: pointer; display: inline-flex; gap: 6px; }
+.stages button small { color: var(--muted); font-size: 11px; }
+.stages button[aria-pressed="true"] { background: var(--band); color: var(--band-ink); border-color: var(--band); }
+.stages button[aria-pressed="true"] small { color: var(--band-muted); }
+.stage-q { font-size: 14px; color: var(--ink-2); padding: 10px 12px; background: var(--surface-2); border-radius: var(--radius-sm); }
+.stage-q b { font-family: var(--font-display); font-size: 15px; color: var(--ink); display: block; }
+.checks { list-style: none; margin: 0; padding: 0; display: grid; gap: 7px; }
+.checks li { display: grid; grid-template-columns: 18px minmax(0, 1fr); gap: 8px; font-size: 14px; }
+.checks li::before { content: ""; width: 12px; height: 12px; margin-top: 4px; border: 1.5px solid var(--line-strong); border-radius: 3px; }
+
+details.test { border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface); }
+details.test + details.test { margin-top: 8px; }
+details.test summary { list-style: none; cursor: pointer; padding: 10px 12px; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 10px; align-items: center; }
+details.test summary::-webkit-details-marker { display: none; }
+details.test summary:hover { background: var(--surface-2); }
+details.test[open] summary { border-bottom: 1px solid var(--line); }
+.tid { font-family: var(--font-mono); font-size: 11.5px; font-weight: 600; color: var(--accent); background: var(--accent-soft); padding: 2px 6px; border-radius: 4px; white-space: nowrap; }
+.tname { font-weight: 600; font-size: 14px; }
+.stg { display: flex; gap: 3px; }
+.stg i { font-style: normal; font-family: var(--font-mono); font-size: 10px; color: var(--muted); border: 1px solid var(--line); border-radius: 3px; padding: 0 4px; }
+.tbody { padding: 12px 14px 14px; display: grid; gap: 10px; font-size: 14px; }
+.tbody h5 { font-family: var(--font-mono); font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.tbody ul, .tbody ol { margin: 4px 0 0; padding-left: 20px; display: grid; gap: 4px; }
+.tcols { display: grid; gap: 12px; grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 560px) { .tcols { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
+.acc { background: var(--ok-bg); border-radius: var(--radius-sm); padding: 8px 10px 8px 28px !important; }
+.refs { font-size: 12.5px; color: var(--muted); }
+.refl { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.refl li { font-size: 13.5px; padding: 8px 10px; border: 1px solid var(--line); border-radius: var(--radius-sm); }
+.refl li b { font-family: var(--font-mono); font-size: 12px; font-weight: 600; display: block; }
+.pill { display: inline-block; font-size: 11.5px; font-weight: 600; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
+.pill.Low { background: var(--low-bg); color: var(--low-ink); }
+.pill.Medium { background: var(--medium-bg); color: var(--medium-ink); }
+.pill.High { background: var(--high-bg); color: var(--high-ink); }
+.pill.Critical { background: var(--critical-bg); color: var(--critical-ink); }
+.note { font-size: 13px; color: var(--muted); }
+
+/* lifecycle */
+.lc-rail { display: flex; gap: 0; overflow-x: auto; padding-bottom: 6px; }
+.lc-step { flex: 1 0 104px; border: 0; background: none; cursor: pointer; padding: 0 4px; display: grid; gap: 6px; justify-items: center; text-align: center; position: relative; }
+.lc-step::before { content: ""; position: absolute; top: 17px; left: 0; right: 0; height: 2px; background: var(--line-strong); z-index: 0; }
+.lc-step:first-child::before { left: 50%; }
+.lc-step:last-child::before { right: 50%; }
+.lc-step .dot { position: relative; z-index: 1; width: 36px; height: 36px; border-radius: 50%; border: 2px solid var(--line-strong); background: var(--surface); display: grid; place-items: center; font-family: var(--font-mono); font-size: 12px; font-weight: 600; }
+.lc-step.q .dot { border-color: var(--accent); }
+.lc-step[aria-pressed="true"] .dot { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.lc-step span { font-size: 12.5px; font-weight: 500; color: var(--ink-2); line-height: 1.25; }
+.lc-detail { margin-top: 14px; padding: 18px; display: grid; gap: 14px; grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 900px) { .lc-detail { grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); } }
+.lc-detail h3 { font-size: 21px; font-weight: 600; }
+.lc-detail ul { margin: 6px 0 0; padding-left: 18px; display: grid; gap: 4px; font-size: 14px; }
+.vmodel { margin-top: 14px; padding: 14px; overflow-x: auto; }
+.vmodel svg { display: block; min-width: 640px; width: 100%; height: auto; }
+.vm-box { fill: var(--surface-2); stroke: var(--line-strong); }
+.vm-q { fill: var(--accent-soft); stroke: var(--accent); }
+.vm-t { font-family: var(--font-display); font-size: 13px; font-weight: 600; fill: var(--ink); text-anchor: middle; }
+.vm-s { font-family: var(--font-body); font-size: 10.5px; fill: var(--muted); text-anchor: middle; }
+.vm-link { stroke: var(--accent); stroke-width: 1.2; stroke-dasharray: 4 3; fill: none; }
+.vm-arm { stroke: var(--line-strong); stroke-width: 2; fill: none; }
+
+/* grades */
+.seg { display: inline-flex; border: 1px solid var(--line-strong); border-radius: var(--radius-sm); overflow: hidden; }
+.seg button { border: 0; background: var(--surface); padding: 6px 12px; font-size: 13px; cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--band); color: var(--band-ink); }
+.grade-tag { display: inline-grid; place-items: center; width: 28px; height: 28px; border-radius: 6px; font-family: var(--font-display); font-weight: 700; font-size: 16px; color: var(--ink); }
+.grid-2 { display: grid; gap: 16px; grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 980px) { .grid-2 { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
+.card-pad { padding: 16px 18px; display: grid; gap: 12px; align-content: start; }
+.card-pad h3 { font-size: 18px; font-weight: 600; }
+.tagline { font-size: 12.5px; color: var(--muted); }
+
+/* test library */
+.lib-tools { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 12px; }
+.lib-tools input { flex: 1 1 220px; min-width: 0; border: 1px solid var(--line-strong); background: var(--surface); color: var(--ink); border-radius: var(--radius-sm); padding: 7px 10px; font: inherit; font-size: 14px; }
+.lib-grid { display: grid; gap: 8px; grid-template-columns: minmax(0, 1fr); align-items: start; }
+@media (min-width: 980px) { .lib-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
+.lib-grid details.test + details.test { margin-top: 0; }
+.lib-col { display: grid; gap: 8px; align-content: start; min-width: 0; }
+.empty { color: var(--muted); font-size: 14px; padding: 12px; }
+
+/* calculators */
+.calcs { display: grid; gap: 16px; grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 1100px) { .calcs { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+.form { display: grid; gap: 10px; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+.form label { display: grid; gap: 4px; font-size: 12.5px; color: var(--ink-2); font-weight: 500; }
+.form label.full { grid-column: 1 / -1; }
+.form input, .form select { border: 1px solid var(--line-strong); background: var(--surface); color: var(--ink); border-radius: var(--radius-sm); padding: 7px 9px; font: inherit; font-size: 14px; font-family: var(--font-mono); width: 100%; min-width: 0; }
+.form .chk { display: flex; gap: 8px; align-items: center; grid-column: 1 / -1; font-size: 13px; }
+.form .chk input { width: auto; }
+.out { display: grid; gap: 6px; background: var(--surface-2); border-radius: var(--radius-sm); padding: 12px; }
+.out .kv { display: flex; justify-content: space-between; gap: 10px; font-size: 13.5px; }
+.out .kv b { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-weight: 600; }
+.out .kv.big b { font-size: 20px; }
+.verdict { font-size: 13px; padding: 7px 10px; border-radius: var(--radius-sm); }
+.verdict.ok { background: var(--ok-bg); color: var(--low-ink); }
+.verdict.bad { background: var(--bad-bg); color: var(--critical-ink); }
+.formula { font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+
+/* quiz */
+.quiz { display: grid; gap: 12px; grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 980px) { .quiz { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
+.qcard { padding: 16px 18px; display: grid; gap: 10px; align-content: start; }
+.qcard .qn { font-family: var(--font-mono); font-size: 11.5px; color: var(--muted); }
+.qcard h3 { font-family: var(--font-body); font-size: 15px; font-weight: 600; line-height: 1.4; }
+.opts { display: grid; gap: 6px; }
+.opt { text-align: left; border: 1px solid var(--line-strong); background: var(--surface); border-radius: var(--radius-sm); padding: 8px 11px; font-size: 14px; cursor: pointer; }
+.opt:hover:not([disabled]) { border-color: var(--accent); }
+.opt[disabled] { cursor: default; }
+.opt.right { background: var(--ok-bg); border-color: var(--ok); }
+.opt.wrong { background: var(--bad-bg); border-color: var(--bad); }
+.expl { font-size: 13.5px; color: var(--ink-2); border-left: 3px solid var(--line-strong); padding-left: 10px; }
+.quiz-bar { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 12px; }
+.score { font-family: var(--font-mono); font-size: 14px; }
+
+footer { padding-block: 34px 40px; color: var(--muted); font-size: 13px; }
+footer .wrap { display: grid; gap: 8px; max-width: 1340px; }
+footer p { max-width: 95ch; }
+
+@media (prefers-reduced-motion: reduce) {
+  .sv-flow { animation: none; }
+  .meter i { transition: none; }
+  html { scroll-behavior: auto; }
+}
+</style>
+<style>body{margin:0}[hidden]{display:none!important}:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}</style>
+</head>
+<body>
+
+
+<header class="band">
+  <div class="wrap">
+    <div>
+      <div class="eyebrow">Master class · Pharmaceutical HVAC · Commissioning &amp; qualification</div>
+      <h1>HVAC Qualification Master Class</h1>
+      <p class="lede">Follow the air from the outdoor intake to the Grade A filling zone. Select any component on the schematic to see what it does, the types you will meet, its critical parameters, and how to qualify it at DQ, IQ, OQ, PQ and requalification, with step-by-step test methods and acceptance criteria.</p>
+    </div>
+    <div class="progress" aria-label="Your progress">
+      <div class="row"><span>Components studied</span><b id="pg-comp">0 / 14</b></div>
+      <div class="meter"><i id="pg-comp-bar"></i></div>
+      <div class="row"><span>Knowledge check</span><b id="pg-quiz">0 / 14 answered</b></div>
+      <div class="meter"><i id="pg-quiz-bar"></i></div>
+      <div class="row"><span>Saved in this browser only</span><button class="btn" id="reset" style="padding:2px 8px;font-size:12px;background:transparent;color:var(--band-ink);border-color:var(--band-line)">Reset progress</button></div>
+    </div>
+    <div class="regs" aria-label="Regulatory basis">
+      <span>EU GMP Annex 1 (2022)</span><span>EU GMP Annex 15 (2015)</span><span>ISO 14644-1/-2/-3/-4</span><span>ICH Q9(R1)</span><span>FDA Aseptic Processing Guidance (2004)</span><span>WHO TRS 1010 Annex 8</span><span>ISPE C&amp;Q Baseline Guide (2019)</span><span>ASTM E2500</span><span>GAMP 5 (2nd ed.)</span><span>EN 1822 / ISO 29463</span><span>ISO 16890</span>
+    </div>
+  </div>
+</header>
+
+<nav class="secnav" aria-label="Sections">
+  <div class="wrap">
+    <a href="#schematic">1 · Schematic</a>
+    <a href="#lifecycle">2 · Qualification lifecycle</a>
+    <a href="#grades">3 · Grades &amp; limits</a>
+    <a href="#tests">4 · Test method library</a>
+    <a href="#calculators">5 · Calculators</a>
+    <a href="#quiz">6 · Knowledge check</a>
+  </div>
+</nav>
+
+<main>
+<section id="schematic">
+  <div class="wrap">
+    <div class="sec-head">
+      <div class="eyebrow">Module 1</div>
+      <h2>Interactive system schematic</h2>
+      <p>A recirculating air handling unit serving an aseptic suite: Grade D corridor, Grade C preparation room, a personnel airlock and a Grade B filling room with a Grade A unidirectional airflow zone. Numbers follow the path of the air.</p>
+    </div>
+    <div class="bench">
+      <div class="card drawing">
+        <div class="drawing-tools">
+          <div class="toggles" role="group" aria-label="Overlays">
+            <button class="tog" id="t-flow" aria-pressed="true">Airflow</button>
+            <button class="tog" id="t-press" aria-pressed="true">Pressure cascade</button>
+            <button class="tog" id="t-grade" aria-pressed="true">Grade colours</button>
+          </div>
+          <span class="hint">Click a component or a numbered marker</span>
+        </div>
+        <div class="svg-scroll">
+<svg id="schem" viewBox="0 0 1200 700" role="group" aria-label="HVAC schematic of an aseptic suite">
+  <defs>
+    <marker id="arrowhead" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="var(--accent)"/></marker>
+  </defs>
+
+  <!-- ROOMS (cleanroom) -->
+  <g class="hs" data-id="cleanroom" tabindex="0" role="button" aria-label="11 Cleanroom envelope and classification">
+    <title>Cleanroom envelope &amp; classification</title>
+    <rect class="room-fill gD" x="130" y="360" width="200" height="260"/>
+    <rect class="room-fill gC" x="330" y="360" width="230" height="260"/>
+    <rect class="room-fill gB" x="680" y="360" width="490" height="260"/>
+    <text class="sv-grade" x="142" y="396">D</text><text class="sv-room" x="142" y="416">Corridor</text>
+    <text class="sv-grade" x="342" y="396">C</text><text class="sv-room" x="342" y="416">Preparation</text>
+    <text class="sv-grade" x="692" y="396">B</text><text class="sv-room" x="692" y="416">Aseptic filling room</text>
+    <g class="bdg"><circle cx="300" cy="560" r="10"/><text x="300" y="560">11</text></g>
+  </g>
+
+  <!-- AIRLOCK + CASCADE -->
+  <g class="hs" data-id="cascade" tabindex="0" role="button" aria-label="12 Pressure cascade and airlocks">
+    <title>Pressure cascade &amp; airlocks</title>
+    <rect class="room-fill gB" x="560" y="360" width="120" height="260"/>
+    <text class="sv-room" x="568" y="396">Airlock</text>
+    <text class="sv-small" x="568" y="412">PAL · B at rest</text>
+    <rect class="sv-door" x="127" y="532" width="6" height="86"/>
+    <rect class="sv-door" x="327" y="532" width="6" height="86"/>
+    <rect class="sv-door" x="557" y="532" width="6" height="86"/>
+    <rect class="sv-door" x="677" y="532" width="6" height="86"/>
+    <g>
+      <circle class="sv-equip" cx="130" cy="495" r="10"/><path class="sv-line" d="M130 495 L136 489"/>
+      <circle class="sv-equip" cx="330" cy="495" r="10"/><path class="sv-line" d="M330 495 L336 489"/>
+      <circle class="sv-equip" cx="560" cy="495" r="10"/><path class="sv-line" d="M560 495 L566 489"/>
+      <circle class="sv-equip" cx="680" cy="495" r="10"/><path class="sv-line" d="M680 495 L686 489"/>
+    </g>
+    <g class="press">
+      <rect x="142" y="426" width="58" height="18" rx="4"/><text x="171" y="439">+15 Pa</text>
+      <rect x="342" y="426" width="58" height="18" rx="4"/><text x="371" y="439">+30 Pa</text>
+      <rect x="568" y="426" width="58" height="18" rx="4"/><text x="597" y="439">+45 Pa</text>
+      <rect x="692" y="426" width="58" height="18" rx="4"/><text x="721" y="439">+60 Pa</text>
+      <path class="arr" d="M698 578 H662"/>
+      <path class="arr" d="M578 578 H542"/>
+      <path class="arr" d="M348 578 H312"/>
+      <path class="arr" d="M148 578 H112"/>
+      <text x="116" y="560" style="font-size:9.5px;font-weight:500;text-anchor:start;fill:var(--muted)">CNC 0 Pa</text>
+    </g>
+    <g class="bdg"><circle cx="620" cy="470" r="10"/><text x="620" y="470">12</text></g>
+  </g>
+
+  <!-- UDAF Grade A -->
+  <g class="hs" data-id="udaf" tabindex="0" role="button" aria-label="10 Grade A unidirectional airflow zone">
+    <title>Grade A unidirectional airflow (UDAF)</title>
+    <rect class="room-fill gA" x="820" y="378" width="240" height="242"/>
+    <rect class="sv-equip" x="820" y="360" width="240" height="18"/>
+    <path class="sv-line" d="M832 362 l6 14 l6 -14 l6 14 l6 -14 l6 14 l6 -14 l6 14 l6 -14 l6 14 l6 -14 l6 14 l6 -14 l6 14 l6 -14 l6 14 l6 -14 l6 14 l6 -14 l6 14 l6 -14 l6 14 l6 -14 l6 14 l6 -14 l6 14 l6 -14 l6 14 l6 -14 l6 14 l6 -14 l6 14 l6 -14 l6 14 l6 -14 l6 14 l6 -14 l6 14" style="stroke-width:1"/>
+    <path class="sv-door" d="M820 378 V522 M1060 378 V522"/>
+    <g>
+      <path class="sv-flow thin sa" d="M842 382 V532"/><path class="sv-flow thin sa" d="M866 382 V532"/><path class="sv-flow thin sa" d="M890 382 V532"/>
+      <path class="sv-flow thin sa" d="M914 382 V532"/><path class="sv-flow thin sa" d="M938 382 V532"/><path class="sv-flow thin sa" d="M962 382 V532"/>
+      <path class="sv-flow thin sa" d="M986 382 V532"/><path class="sv-flow thin sa" d="M1010 382 V532"/><path class="sv-flow thin sa" d="M1034 382 V532"/>
+    </g>
+    <rect class="sv-equip" x="850" y="540" width="180" height="14" rx="2"/>
+    <path class="sv-line" d="M862 554 V620 M1018 554 V620"/>
+    <g fill="var(--surface)" stroke="var(--ink-2)" stroke-width="1"><rect x="866" y="528" width="8" height="12"/><rect x="888" y="528" width="8" height="12"/><rect x="910" y="528" width="8" height="12"/><rect x="932" y="528" width="8" height="12"/><rect x="954" y="528" width="8" height="12"/><rect x="976" y="528" width="8" height="12"/></g>
+    <text class="sv-grade" x="878" y="606">A</text><text class="sv-room" x="902" y="604">UDAF zone · filling</text>
+    <g class="bdg"><circle cx="1046" cy="396" r="10"/><text x="1046" y="396">10</text></g>
+  </g>
+
+  <!-- walls (decoration) -->
+  <g class="deco">
+    <path class="sv-wall" d="M130 360 H1170 V620 H130 V532 M130 360 V532"/>
+    <path class="sv-wall" d="M330 360 V532 M560 360 V532 M680 360 V532"/>
+    <path class="sv-wall" d="M60 620 H130 M1170 620 H1190" style="stroke-width:1.5"/>
+    <g>
+      <path class="sv-flow thin sa" d="M230 374 C 230 470, 250 520, 250 594"/>
+      <path class="sv-flow thin sa" d="M445 374 C 430 470, 400 520, 400 594"/>
+      <path class="sv-flow thin sa" d="M445 374 C 470 470, 520 520, 520 594"/>
+      <path class="sv-flow thin sa" d="M620 374 C 610 430, 640 520, 620 594"/>
+      <path class="sv-flow thin sa" d="M740 374 C 735 470, 720 520, 720 594"/>
+      <path class="sv-flow thin sa" d="M1110 374 C 1115 470, 1120 520, 1120 594"/>
+    </g>
+  </g>
+
+  <!-- RETURNS & EXHAUST -->
+  <g class="hs" data-id="returns" tabindex="0" role="button" aria-label="13 Return air, return fan and exhaust">
+    <title>Return air, return fan &amp; exhaust</title>
+    <path class="sv-duct-e" d="M250 612 V660 M400 612 V660 M520 612 V660 M620 612 V660 M720 612 V660 M1120 612 V660 M1120 660 H80 V160 H150 M80 160 V28"/>
+    <path class="sv-duct" d="M250 612 V660 M400 612 V660 M520 612 V660 M620 612 V660 M720 612 V660 M1120 612 V660 M1120 660 H80 V160 H150 M80 160 V28"/>
+    <path class="sv-flow ra" d="M250 612 V656"/><path class="sv-flow ra" d="M400 612 V656"/><path class="sv-flow ra" d="M520 612 V656"/>
+    <path class="sv-flow ra" d="M620 612 V656"/><path class="sv-flow ra" d="M720 612 V656"/><path class="sv-flow ra" d="M1120 612 V656"/>
+    <path class="sv-flow ra" d="M1120 660 H80 V160 H146"/>
+    <path class="sv-flow ea" d="M80 160 V30"/>
+    <g fill="var(--surface)" stroke="var(--ink-2)" stroke-width="1.2">
+      <rect x="236" y="596" width="28" height="16"/><rect x="386" y="596" width="28" height="16"/><rect x="506" y="596" width="28" height="16"/>
+      <rect x="606" y="596" width="28" height="16"/><rect x="706" y="596" width="28" height="16"/><rect x="1106" y="596" width="28" height="16"/>
+    </g>
+    <path class="sv-line" d="M240 601 h20 M240 606 h20 M390 601 h20 M390 606 h20 M510 601 h20 M510 606 h20 M610 601 h20 M610 606 h20 M710 601 h20 M710 606 h20 M1110 601 h20 M1110 606 h20" style="stroke-width:1"/>
+    <circle class="sv-equip" cx="80" cy="430" r="20"/>
+    <path class="sv-line" d="M80 430 q8 -12 0 -18 M80 430 q12 8 18 0 M80 430 q-8 12 0 18 M80 430 q-12 -8 -18 0"/>
+    <rect class="sv-equip" x="64" y="40" width="32" height="26"/>
+    <text class="sv-sensor-t" x="80" y="56">BIBO</text>
+    <rect class="sv-equip" x="58" y="6" width="44" height="20"/>
+    <path class="sv-line" d="M62 12 h36 M62 18 h36" style="stroke-width:1"/>
+    <text class="sv-lbl" x="108" y="20">Exhaust</text>
+    <text class="sv-lbl" x="600" y="690" text-anchor="middle">Return air main (low-level returns)</text>
+    <g class="bdg"><circle cx="80" cy="500" r="10"/><text x="80" y="500">13</text></g>
+  </g>
+
+  <!-- OUTDOOR AIR -->
+  <g class="hs" data-id="oa" tabindex="0" role="button" aria-label="1 Outdoor air intake">
+    <title>Outdoor air intake</title>
+    <path class="sv-duct-e" d="M210 30 V92"/><path class="sv-duct" d="M210 30 V92"/>
+    <path class="sv-flow oa" d="M210 30 V90"/>
+    <rect class="sv-equip" x="186" y="6" width="48" height="24"/>
+    <path class="sv-line" d="M190 12 h40 M190 18 h40 M190 24 h40" style="stroke-width:1"/>
+    <text class="sv-lbl" x="242" y="20">Outdoor air</text>
+    <g class="bdg"><circle cx="242" cy="64" r="10"/><text x="242" y="64">1</text></g>
+  </g>
+
+  <!-- SUPPLY DUCTWORK -->
+  <g class="hs" data-id="ductwork" tabindex="0" role="button" aria-label="8 Supply ductwork and dampers">
+    <title>Supply ductwork, volume &amp; fire dampers</title>
+    <path class="sv-duct-e" d="M850 160 H1150 V290 H218 M230 290 V360 M445 290 V360 M620 290 V360 M740 290 V360 M940 290 V360 M1110 290 V360"/>
+    <path class="sv-duct" d="M850 160 H1150 V290 H218 M230 290 V360 M445 290 V360 M620 290 V360 M740 290 V360 M940 290 V360 M1110 290 V360"/>
+    <path class="sv-flow sa" d="M852 160 H1150 V290 H222"/>
+    <path class="sv-flow sa" d="M230 296 V356"/><path class="sv-flow sa" d="M445 296 V356"/><path class="sv-flow sa" d="M620 296 V356"/>
+    <path class="sv-flow sa" d="M740 296 V356"/><path class="sv-flow sa" d="M940 296 V356"/><path class="sv-flow sa" d="M1110 296 V356"/>
+    <g>
+      <circle class="sv-equip" cx="230" cy="322" r="7"/><path class="sv-line" d="M224 326 L236 318"/>
+      <circle class="sv-equip" cx="445" cy="322" r="7"/><path class="sv-line" d="M439 326 L451 318"/>
+      <circle class="sv-equip" cx="620" cy="322" r="7"/><path class="sv-line" d="M614 326 L626 318"/>
+      <circle class="sv-equip" cx="740" cy="322" r="7"/><path class="sv-line" d="M734 326 L746 318"/>
+      <circle class="sv-equip" cx="940" cy="322" r="7"/><path class="sv-line" d="M934 326 L946 318"/>
+      <circle class="sv-equip" cx="1110" cy="322" r="7"/><path class="sv-line" d="M1104 326 L1116 318"/>
+    </g>
+    <rect class="sv-equip" x="1140" y="208" width="20" height="16"/>
+    <text class="sv-sensor-t" x="1150" y="219">FD</text>
+    <text class="sv-lbl" x="660" y="270">Supply air main</text>
+    <g class="bdg"><circle cx="1000" cy="266" r="10"/><text x="1000" y="266">8</text></g>
+  </g>
+
+  <!-- TERMINAL HEPA -->
+  <g class="hs" data-id="hepa" tabindex="0" role="button" aria-label="9 Terminal HEPA filters">
+    <title>Terminal HEPA filters (H14)</title>
+    <g>
+      <rect class="sv-equip" x="206" y="358" width="48" height="12"/><path class="sv-line" d="M210 360 l4 8 l4 -8 l4 8 l4 -8 l4 8 l4 -8 l4 8 l4 -8 l4 8 l4 -8" style="stroke-width:.9"/>
+      <rect class="sv-equip" x="421" y="358" width="48" height="12"/><path class="sv-line" d="M425 360 l4 8 l4 -8 l4 8 l4 -8 l4 8 l4 -8 l4 8 l4 -8 l4 8 l4 -8" style="stroke-width:.9"/>
+      <rect class="sv-equip" x="596" y="358" width="48" height="12"/><path class="sv-line" d="M600 360 l4 8 l4 -8 l4 8 l4 -8 l4 8 l4 -8 l4 8 l4 -8 l4 8 l4 -8" style="stroke-width:.9"/>
+      <rect class="sv-equip" x="716" y="358" width="48" height="12"/><path class="sv-line" d="M720 360 l4 8 l4 -8 l4 8 l4 -8 l4 8 l4 -8 l4 8 l4 -8 l4 8 l4 -8" style="stroke-width:.9"/>
+      <rect class="sv-equip" x="1086" y="358" width="48" height="12"/><path class="sv-line" d="M1090 360 l4 8 l4 -8 l4 8 l4 -8 l4 8 l4 -8 l4 8 l4 -8 l4 8 l4 -8" style="stroke-width:.9"/>
+    </g>
+    <g class="bdg"><circle cx="276" cy="372" r="10"/><text x="276" y="372">9</text></g>
+  </g>
+
+  <!-- AHU casing (decoration) -->
+  <g class="deco">
+    <rect class="sv-casing" x="150" y="92" width="700" height="140" rx="4"/>
+    <path class="sv-div" d="M250 92 V232 M300 92 V232 M370 92 V232 M450 92 V232 M520 92 V232 M600 92 V232 M730 92 V232 M790 92 V232"/>
+    <text class="sv-sec" x="200" y="108">MIX</text><text class="sv-sec" x="275" y="108">G4</text><text class="sv-sec" x="335" y="108">F7</text>
+    <text class="sv-sec" x="410" y="108">CC</text><text class="sv-sec" x="485" y="108">HC</text><text class="sv-sec" x="560" y="108">HUM</text>
+    <text class="sv-sec" x="665" y="108">SUPPLY FAN</text><text class="sv-sec" x="760" y="108">F9</text><text class="sv-sec" x="820" y="108">DISCH</text>
+    <path class="sv-line" d="M800 128 V196 M812 128 V196 M824 128 V196 M836 128 V196" style="stroke-width:3;opacity:.35"/>
+    <text class="sv-lbl" x="610" y="84">AHU-01 · recirculating, ~20 % outdoor air</text>
+  </g>
+
+  <!-- MIXING BOX & DAMPERS -->
+  <g class="hs" data-id="mixing" tabindex="0" role="button" aria-label="2 Mixing box and dampers">
+    <title>Mixing box &amp; dampers</title>
+    <rect class="hit" x="150" y="92" width="100" height="140"/>
+    <path class="sv-flow thin ra" d="M154 160 C 185 160, 195 175, 240 170"/>
+    <path class="sv-flow thin oa" d="M210 96 C 210 130, 215 150, 240 160"/>
+    <circle class="sv-equip" cx="210" cy="62" r="9"/><path class="sv-line" d="M203 67 L217 57"/>
+    <circle class="sv-equip" cx="121" cy="160" r="9"/><path class="sv-line" d="M114 165 L128 155"/>
+    <circle class="sv-equip" cx="80" cy="100" r="9"/><path class="sv-line" d="M73 105 L87 95"/>
+    <g class="bdg"><circle cx="200" cy="232" r="10"/><text x="200" y="232">2</text></g>
+  </g>
+
+  <!-- FILTERS -->
+  <g class="hs" data-id="filters" tabindex="0" role="button" aria-label="3 AHU filtration stages">
+    <title>AHU filtration: G4 pre-filter, F7 bag filter, F9 final filter</title>
+    <rect class="hit" x="250" y="92" width="120" height="140"/>
+    <rect class="hit" x="730" y="92" width="60" height="140"/>
+    <path class="sv-line" d="M262 120 L288 132 L262 144 L288 156 L262 168 L288 180 L262 192 L288 204"/>
+    <path class="sv-line" d="M308 122 L360 132 L308 142 M308 150 L360 160 L308 170 M308 178 L360 188 L308 198"/>
+    <path class="sv-line" d="M746 120 L774 130 L746 140 L774 150 L746 160 L774 170 L746 180 L774 190 L746 200"/>
+    <text class="sv-small" x="275" y="222" text-anchor="middle">ΔP</text><text class="sv-small" x="335" y="222" text-anchor="middle">ΔP</text><text class="sv-small" x="760" y="222" text-anchor="middle">ΔP</text>
+    <g class="bdg"><circle cx="300" cy="232" r="10"/><text x="300" y="232">3</text></g>
+  </g>
+
+  <!-- COOLING COIL -->
+  <g class="hs" data-id="cooling" tabindex="0" role="button" aria-label="4 Cooling coil and dehumidification">
+    <title>Cooling coil &amp; dehumidification</title>
+    <rect class="hit" x="370" y="92" width="80" height="140"/>
+    <path class="sv-pipe" d="M396 50 V92 M424 50 V92"/>
+    <text class="sv-lbl c" x="410" y="44">CHW 6/12 °C</text>
+    <rect class="sv-equip" x="382" y="120" width="56" height="80"/>
+    <path class="sv-coil-c" d="M386 196 L434 124 M386 176 L420 124 M386 156 L407 124 M386 136 L394 124 M400 196 L434 146 M414 196 L434 166 M428 196 L434 186"/>
+    <path class="sv-line" d="M378 208 H442 V214 H378 Z" style="fill:var(--surface)"/>
+    <path class="sv-line" d="M436 214 V246 a6 6 0 0 0 12 0 V238"/>
+    <g class="bdg"><circle cx="410" cy="232" r="10"/><text x="410" y="232">4</text></g>
+  </g>
+
+  <!-- HEATING COIL -->
+  <g class="hs" data-id="heating" tabindex="0" role="button" aria-label="5 Heating and reheat coil">
+    <title>Heating / reheat coil</title>
+    <rect class="hit" x="450" y="92" width="70" height="140"/>
+    <path class="sv-pipe" d="M472 50 V92 M498 50 V92"/>
+    <text class="sv-lbl c" x="485" y="32">LPHW</text>
+    <rect class="sv-equip" x="462" y="120" width="46" height="80"/>
+    <path class="sv-coil-h" d="M466 196 L504 140 M466 172 L504 124 M466 148 L483 124 M480 196 L504 160 M494 196 L504 182"/>
+    <g class="bdg"><circle cx="485" cy="232" r="10"/><text x="485" y="232">5</text></g>
+  </g>
+
+  <!-- HUMIDIFIER -->
+  <g class="hs" data-id="humidifier" tabindex="0" role="button" aria-label="6 Steam humidifier">
+    <title>Clean-steam humidifier</title>
+    <rect class="hit" x="520" y="92" width="80" height="140"/>
+    <path class="sv-pipe" d="M560 50 V92"/>
+    <text class="sv-lbl c" x="568" y="44">Clean steam</text>
+    <path class="sv-line" d="M560 118 V202" style="stroke-width:3"/>
+    <g fill="var(--muted)"><circle cx="568" cy="128" r="2"/><circle cx="574" cy="138" r="1.6"/><circle cx="568" cy="150" r="2"/><circle cx="576" cy="160" r="1.6"/><circle cx="568" cy="172" r="2"/><circle cx="574" cy="184" r="1.6"/><circle cx="568" cy="194" r="2"/></g>
+    <g class="bdg"><circle cx="560" cy="232" r="10"/><text x="560" y="232">6</text></g>
+  </g>
+
+  <!-- SUPPLY FAN -->
+  <g class="hs" data-id="fan" tabindex="0" role="button" aria-label="7 Supply fan and variable speed drive">
+    <title>Supply fan &amp; VFD</title>
+    <rect class="hit" x="600" y="92" width="130" height="140"/>
+    <circle class="sv-equip" cx="660" cy="160" r="32"/>
+    <path class="sv-line" d="M660 160 q10 -16 2 -28 M660 160 q18 4 28 -4 M660 160 q-10 16 -2 28 M660 160 q-18 -4 -28 4 M660 160 q14 12 26 10 M660 160 q-14 -12 -26 -10"/>
+    <circle cx="660" cy="160" r="4" fill="var(--ink-2)"/>
+    <rect class="sv-equip" x="698" y="120" width="26" height="16"/><text class="sv-sensor-t" x="711" y="131">VFD</text>
+    <g class="bdg"><circle cx="665" cy="232" r="10"/><text x="665" y="232">7</text></g>
+  </g>
+
+  <!-- BMS / EMS -->
+  <g class="hs" data-id="bms" tabindex="0" role="button" aria-label="14 BMS and EMS controls and monitoring">
+    <title>BMS / EMS controls &amp; monitoring</title>
+    <path class="sv-sig" d="M1120 64 H1188 V345 H300 M300 345 V462 M530 345 V462 M790 345 V462 M1080 345 V516 H1008 M880 148 V64 H900"/>
+    <rect class="sv-equip" x="900" y="14" width="220" height="100" rx="4"/>
+    <text class="sv-room" x="912" y="34">BMS / EMS</text>
+    <rect x="912" y="44" width="120" height="58" rx="2" fill="var(--surface-2)" stroke="var(--line-strong)"/>
+    <polyline points="916,90 930,84 944,88 958,70 972,76 986,74 1000,80 1014,62 1028,66" fill="none" stroke="var(--sa)" stroke-width="1.5"/>
+    <path d="M916 60 H1028" stroke="var(--critical)" stroke-width="1" stroke-dasharray="3 2"/>
+    <text class="sv-small" x="1042" y="56">ΔP · T · RH</text><text class="sv-small" x="1042" y="72">particles</text><text class="sv-small" x="1042" y="88">alarms</text><text class="sv-small" x="1042" y="104">audit trail</text>
+    <rect class="sv-sensor" x="872" y="148" width="16" height="24"/><path class="sv-line" d="M872 156 h16 M872 164 h16" style="stroke-width:.8"/>
+    <rect class="sv-sensor" x="290" y="462" width="20" height="16" rx="2"/><text class="sv-sensor-t" x="300" y="473">TH</text>
+    <rect class="sv-sensor" x="520" y="462" width="20" height="16" rx="2"/><text class="sv-sensor-t" x="530" y="473">TH</text>
+    <rect class="sv-sensor" x="780" y="462" width="20" height="16" rx="2"/><text class="sv-sensor-t" x="790" y="473">TH</text>
+    <circle class="sv-sensor" cx="1000" cy="516" r="8"/><text class="sv-sensor-t" x="1000" y="519">PC</text>
+    <g class="bdg"><circle cx="1120" cy="16" r="10"/><text x="1120" y="16">14</text></g>
+  </g>
+</svg>
+        </div>
+        <div class="legend" aria-label="Legend">
+          <span><i style="background:var(--oa)"></i>Outdoor air</span>
+          <span><i style="background:var(--sa)"></i>Supply air</span>
+          <span><i style="background:var(--ra)"></i>Return air</span>
+          <span><i style="background:var(--ea)"></i>Exhaust</span>
+          <span><i style="background:repeating-linear-gradient(90deg,var(--sig) 0 4px,transparent 4px 7px)"></i>BMS/EMS signal</span>
+          <span><i style="background:var(--accent)"></i>Leakage direction at doors</span>
+          <span class="mono" style="font-size:11px">TH temp/RH · PC particle counter · FD fire damper · BIBO bag-in/bag-out</span>
+        </div>
+        <div class="chips" id="chips" aria-label="Components"></div>
+      </div>
+
+      <aside class="card panel" id="panel" aria-live="polite"></aside>
+    </div>
+  </div>
+</section>
+
+<section id="lifecycle">
+  <div class="wrap">
+    <div class="sec-head">
+      <div class="eyebrow">Module 2</div>
+      <h2>Qualification lifecycle</h2>
+      <p>From user requirements to periodic requalification. Annex 15 expects qualification to cover the whole life of the system; ICH Q9(R1), ASTM E2500 and the ISPE C&amp;Q Baseline Guide focus the testing on the aspects that are critical to product quality. Select a stage.</p>
+    </div>
+    <div class="card" style="padding:18px 12px 12px">
+      <div class="lc-rail" id="lc-rail" role="group" aria-label="Lifecycle stages"></div>
+    </div>
+    <div class="card lc-detail" id="lc-detail"></div>
+    <div class="card vmodel">
+      <div class="eyebrow" style="margin-bottom:8px">The V-model: each specification is verified by a matching test stage</div>
+      <svg viewBox="0 0 760 250" role="img" aria-label="V-model linking URS to PQ, functional specification to OQ, design specification to IQ">
+        <path class="vm-arm" d="M110 40 L300 205 L460 205 L650 40"/>
+        <rect class="vm-box" x="30" y="20" width="160" height="44" rx="6"/><text class="vm-t" x="110" y="40">URS</text><text class="vm-s" x="110" y="55">user requirements, RDS, CCS</text>
+        <rect class="vm-box" x="90" y="80" width="160" height="44" rx="6"/><text class="vm-t" x="170" y="100">Functional spec (FDS)</text><text class="vm-s" x="170" y="115">control, alarms, sequences</text>
+        <rect class="vm-box" x="150" y="140" width="160" height="44" rx="6"/><text class="vm-t" x="230" y="160">Design spec / drawings</text><text class="vm-s" x="230" y="175">P&amp;IDs, air balance, datasheets</text>
+        <rect class="vm-box" x="300" y="190" width="160" height="44" rx="6"/><text class="vm-t" x="380" y="210">Build · FAT · SAT</text><text class="vm-s" x="380" y="225">commissioning, TAB (GEP)</text>
+        <rect class="vm-q" x="450" y="140" width="160" height="44" rx="6"/><text class="vm-t" x="530" y="160">IQ</text><text class="vm-s" x="530" y="175">installed as designed</text>
+        <rect class="vm-q" x="510" y="80" width="160" height="44" rx="6"/><text class="vm-t" x="590" y="100">OQ</text><text class="vm-s" x="590" y="115">functions and limits, at rest</text>
+        <rect class="vm-q" x="570" y="20" width="160" height="44" rx="6"/><text class="vm-t" x="650" y="40">PQ</text><text class="vm-s" x="650" y="55">in operation, over time</text>
+        <path class="vm-link" d="M190 42 H570 M250 102 H510 M310 162 H450"/>
+        <text class="vm-s" x="380" y="36">DQ verifies the design against the URS</text>
+      </svg>
+    </div>
+  </div>
+</section>
+
+<section id="grades">
+  <div class="wrap">
+    <div class="sec-head">
+      <div class="eyebrow">Module 3</div>
+      <h2>Grades, ISO classes and limits</h2>
+      <p>EU GMP Annex 1 (2022) limits. Classification (Table 1) is the qualification test; monitoring limits (Table 5) apply to routine environmental monitoring. Values are particles per m³.</p>
+    </div>
+    <div class="grid-2">
+      <div class="card card-pad">
+        <div style="display:flex;flex-wrap:wrap;justify-content:space-between;gap:10px;align-items:center">
+          <h3>Total airborne particles</h3>
+          <div class="seg" role="group" aria-label="Table">
+            <button id="g-class" aria-pressed="true">Classification</button>
+            <button id="g-mon" aria-pressed="false">Monitoring</button>
+          </div>
+        </div>
+        <div class="tbl-wrap"><table id="grade-tbl"></table></div>
+        <p class="tagline" id="grade-foot"></p>
+      </div>
+      <div class="card card-pad">
+        <h3>Viable particles, in operation (Annex 1 Table 6)</h3>
+        <div class="tbl-wrap"><table id="micro-tbl"></table></div>
+        <p class="tagline">Grade A: any growth triggers an investigation. Settle plates are exposed for up to 4 h. Set alert levels from PQ and trend data.</p>
+      </div>
+      <div class="card card-pad" style="grid-column:1/-1">
+        <h3>Typical HVAC design values by grade</h3>
+        <p class="tagline">Industry design practice (ISPE, WHO), not regulatory limits. Your URS, room data sheets and recovery tests justify the actual values.</p>
+        <div class="tbl-wrap"><table id="design-tbl"></table></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="tests">
+  <div class="wrap">
+    <div class="sec-head">
+      <div class="eyebrow">Module 4</div>
+      <h2>Test method library</h2>
+      <p>Every test referenced from the schematic, with instruments, prerequisites, procedure, acceptance criteria and records. Use these as the skeleton for your protocols. Values marked typical are practice; your URS and SOPs set the actual criteria.</p>
+    </div>
+    <div class="lib-tools">
+      <div class="stages" id="lib-stages" role="group" aria-label="Filter by stage"></div>
+      <input id="lib-q" type="search" placeholder="Search tests, e.g. HEPA, smoke, recovery" aria-label="Search tests">
+    </div>
+    <div class="lib-grid" id="lib"></div>
+  </div>
+</section>
+
+<section id="calculators">
+  <div class="wrap">
+    <div class="sec-head">
+      <div class="eyebrow">Module 5</div>
+      <h2>Qualification calculators</h2>
+      <p>Working tools for protocol design. Check results against the current standard before you use them in an approved protocol.</p>
+    </div>
+    <div class="calcs">
+      <div class="card card-pad">
+        <h3>Classification sampling plan</h3>
+        <p class="tagline">ISO 14644-1:2015 Table A.1 and formula A.1, with Annex 1 limits.</p>
+        <div class="form">
+          <label>Room or zone area (m²)<input id="c1-area" type="number" min="0.5" step="0.5" value="30"></label>
+          <label>Grade and state<select id="c1-grade"></select></label>
+          <label>Counter flow rate (L/min)<select id="c1-flow"><option value="28.3">28.3</option><option value="50">50</option><option value="100" selected>100</option></select></label>
+          <label>Extra risk-based locations<input id="c1-extra" type="number" min="0" step="1" value="2"></label>
+          <label class="chk"><input id="c1-five" type="checkbox"> Include ≥5.0 µm for Grade A / B at rest (CCS decision)</label>
+        </div>
+        <div class="out" id="c1-out"></div>
+        <p class="formula">N<sub>L</sub> from Table A.1 (A &gt; 1000 m²: 27 × A/1000). V<sub>s</sub> = 20 / C<sub>n,m</sub> × 1000 L, at least 2 L and 1 min.</p>
+      </div>
+      <div class="card card-pad">
+        <h3>Air changes and recovery</h3>
+        <p class="tagline">Theoretical 100:1 recovery for a mixed room, corrected for mixing effectiveness.</p>
+        <div class="form">
+          <label>Length (m)<input id="c2-l" type="number" min="0.5" step="0.1" value="8"></label>
+          <label>Width (m)<input id="c2-w" type="number" min="0.5" step="0.1" value="6"></label>
+          <label>Ceiling height (m)<input id="c2-h" type="number" min="1" step="0.1" value="3"></label>
+          <label>Supply airflow (m³/h)<input id="c2-q" type="number" min="1" step="50" value="7200"></label>
+          <label class="full">Mixing effectiveness ε (1 = perfect)<input id="c2-e" type="number" min="0.3" max="1" step="0.05" value="0.7"></label>
+        </div>
+        <div class="out" id="c2-out"></div>
+        <p class="formula">ACH = Q / V. t<sub>100:1</sub> = ln(100) / (ACH × ε) h = 276 / (ACH × ε) min.</p>
+      </div>
+      <div class="card card-pad">
+        <h3>Door leakage for the air balance</h3>
+        <p class="tagline">Air needed through door gaps to hold a pressure difference. Use it at DQ to size supply/return offsets.</p>
+        <div class="form">
+          <label>Leakage gap area per door (m²)<input id="c3-a" type="number" min="0.001" step="0.001" value="0.015"></label>
+          <label>Pressure difference (Pa)<input id="c3-dp" type="number" min="1" step="1" value="15"></label>
+          <label>Number of doors<input id="c3-n" type="number" min="1" step="1" value="2"></label>
+          <label>Other leakage (m³/h)<input id="c3-o" type="number" min="0" step="10" value="50"></label>
+        </div>
+        <div class="out" id="c3-out"></div>
+        <p class="formula">Q = 0.83 × A × ΔP<sup>0.5</sup> m³/s per opening (orifice equation, Cd ≈ 0.61).</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="quiz">
+  <div class="wrap">
+    <div class="sec-head">
+      <div class="eyebrow">Module 6</div>
+      <h2>Knowledge check</h2>
+      <p>Fourteen questions across the master class. Each answer shows the reasoning and the source.</p>
+    </div>
+    <div class="quiz-bar"><span class="score" id="q-score"></span><button class="btn" id="q-reset">Clear answers</button></div>
+    <div class="quiz" id="q-list"></div>
+  </div>
+</section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <p><b>Training use.</b> This master class summarises EU GMP Annex 1 (2022) and Annex 15 (2015), ISO 14644 parts 1–4, ICH Q9(R1), FDA's 2004 aseptic processing guidance, WHO TRS 1010 Annex 8, the ISPE Baseline Guide on Commissioning &amp; Qualification (2nd ed.), ASTM E2500 and GAMP 5. Values labelled "typical" reflect common industry practice. Your site's URS, Contamination Control Strategy, SOPs and approved protocols set the actual acceptance criteria. Always check the current edition of each document before you quote it in a protocol.</p>
+    <p>Risk scores use the same FMEA rules as the Quality Risk Manager: RPN = S × O × D (1–125); level from S × O: Low 1–4, Medium 5–9, High 10–19, Critical 20–25.</p>
+  </div>
+</footer>
+
+<script>
+(function () {
+"use strict";
+
+/* ---------- Reference library ---------- */
+var REF = {
+  A1: ["EU GMP Annex 1 (2022)", "Manufacture of Sterile Medicinal Products: grades, CCS, UDAF, pressure, requalification, monitoring"],
+  A15: ["EU GMP Annex 15 (2015)", "Qualification and Validation: URS, DQ, FAT/SAT, IQ, OQ, PQ, requalification, change control"],
+  A11: ["EU GMP Annex 11 / 21 CFR Part 11", "Computerised systems, electronic records and signatures, audit trails"],
+  ISO1: ["ISO 14644-1:2015", "Classification of air cleanliness by particle concentration (sampling plan, Table A.1)"],
+  ISO2: ["ISO 14644-2:2015", "Monitoring to provide evidence of cleanroom performance"],
+  ISO3: ["ISO 14644-3:2019", "Test methods: airflow, pressure, filter leak, visualisation, recovery, containment"],
+  ISO4: ["ISO 14644-4:2022", "Design, construction and start-up of cleanrooms"],
+  Q9: ["ICH Q9(R1) (2023)", "Quality Risk Management: risk-based effort and documentation"],
+  FDA: ["FDA Guidance: Sterile Drug Products Produced by Aseptic Processing (2004)", "Section IV Buildings and Facilities: HEPA, pressure, airflow"],
+  WHO: ["WHO TRS 1010, Annex 8 (2018)", "HVAC systems for non-sterile pharmaceutical products"],
+  ISPE: ["ISPE Baseline Guide Vol. 5: Commissioning & Qualification, 2nd ed. (2019)", "Science and risk-based C&Q, CAs and CDEs"],
+  ISPEH: ["ISPE Good Practice Guide: HVAC", "Design and qualification practice for pharmaceutical HVAC"],
+  E2500: ["ASTM E2500", "Specification, design and verification of pharmaceutical manufacturing systems"],
+  GAMP: ["ISPE GAMP 5, 2nd ed. (2022)", "Risk-based approach to compliant GxP computerised systems"],
+  EN1822: ["EN 1822 / ISO 29463", "HEPA and ULPA filter classification and factory testing (MPPS)"],
+  ISO16890: ["ISO 16890", "General ventilation filters (ePM1, ePM2.5, ePM10, ISO Coarse); replaced EN 779 in 2018"],
+  EN1886: ["EN 1886", "AHU mechanical performance: casing leakage, filter bypass, thermal bridging"],
+  EN12237: ["EN 12237 / EN 1507", "Airtightness of circular and rectangular sheet-metal ducts (classes A–D)"],
+  IEST34: ["IEST-RP-CC034", "HEPA and ULPA filter leak tests (repair limits, scan practice)"],
+  IEST6: ["IEST-RP-CC006", "Testing cleanrooms"],
+  ISO21501: ["ISO 21501-4", "Calibration of light-scattering airborne particle counters"],
+  EN17141: ["EN 17141:2020", "Cleanrooms: biocontamination control"],
+  ASH62: ["ASHRAE 62.1", "Ventilation, outdoor air intake separation from exhaust sources"],
+  EN285: ["EN 285 / HTM 01-01", "Steam quality tests (relevant where clean steam is specified)"]
+};
+
+/* ---------- Test library ---------- */
+var TESTS = {
+  "T-DOCS": { name: "Documentation and as-built verification", stages: ["IQ"],
+    purpose: "Show that what was installed is what was approved, and that the documents needed to operate and maintain it exist.",
+    inst: ["Approved P&IDs, ductwork and control drawings", "Equipment datasheets and the component list", "Tape measure, torch, camera"],
+    pre: ["DQ approved", "Mechanical completion signed by engineering", "Turnover package received from the contractor"],
+    steps: ["Compile the turnover package: datasheets, material and filter certificates, FAT/SAT reports, pressure test and duct leak records, O&M manuals.", "Walk down the system against the P&ID and ductwork drawings. Tag and tick each component, damper, sensor and filter housing.", "Record nameplate data (model, serial, capacity, motor kW, voltage) and compare with the approved datasheet.", "Check materials of construction and finishes where specified (e.g. stainless drain pans, clean-steam pipework 316L).", "Confirm utility connections (chilled water, LPHW, clean steam, power) match drawings.", "Mark up deviations on drawings. Raise a deviation for any critical difference and assess impact before closure.", "Confirm SOPs, maintenance plan and spare-parts list exist in draft and that critical instruments are in the calibration program."],
+    acc: ["Every critical component installed as specified, or deviation closed with a documented impact assessment", "As-built drawings issued and controlled"],
+    rec: "IQ checklist, nameplate records, certificate index, red-lined drawings, deviation log.",
+    refs: ["A15", "ISPE", "E2500"] },
+
+  "T-CAL": { name: "Calibration of critical instruments", stages: ["IQ", "RQ"],
+    purpose: "Make sure every reading used to accept the system or monitor it in GMP use is traceable and accurate.",
+    inst: ["Reference micromanometer, reference T/RH probe or humidity generator", "Calibration certificates traceable to national standards"],
+    pre: ["List of critical instruments from the system impact assessment (DP transmitters, T/RH sensors, airflow stations, particle counters)"],
+    steps: ["List every critical instrument with tag, range, required accuracy and calibration interval.", "Check each certificate: traceable, in date, as-found data within tolerance, correct range.", "For DP transmitters, perform an in-situ check at zero, mid-range and the operating point against a reference micromanometer.", "For T/RH sensors, compare against a calibrated reference probe placed beside the sensor after stabilisation (e.g. 30 min).", "Confirm the instrument is entered in the calibration system with the right interval.", "Label each instrument with calibration status."],
+    acc: ["All critical instruments calibrated and in date", "Typical tolerances: DP ±1 Pa (or ±2 % of span), temperature ±0.5 °C, RH ±3 % RH. Define your own in the URS."],
+    rec: "Calibration certificates, in-situ check sheets, instrument list.",
+    refs: ["A15", "ISO21501"] },
+
+  "T-DUCT-LEAK": { name: "Ductwork leakage test", stages: ["IQ"],
+    purpose: "Show that ductwork leaks no more than its specified airtightness class, so design airflow reaches the rooms and ceiling voids are not contaminated.",
+    inst: ["Duct leakage test rig: fan, calibrated orifice or flow meter, manometer", "Blanking plates and sealing tape"],
+    pre: ["Ductwork section complete, before insulation and ceiling closure", "Test pressure and leakage class from the specification"],
+    steps: ["Select the test sections (all ductwork downstream of the final AHU filter at minimum; other sections by risk).", "Blank off the open ends and connect the rig.", "Raise the pressure to the test pressure (normally the design operating pressure for that section).", "Hold until stable, then record leakage flow and pressure.", "Calculate the duct surface area and the leakage rate in L/(s·m²).", "Compare with the class limit: f = c × p^0.65 with c = 0.027 (A), 0.009 (B), 0.003 (C), 0.001 (D).", "Seal leaks found by sound, smoke or soap solution and retest."],
+    acc: ["Leakage at or below the specified class. Class C or better is typical for clean supply ductwork."],
+    rec: "Test sheet per section with drawing reference, area, pressure, measured leakage, class result.",
+    refs: ["EN12237", "ISO4"] },
+
+  "T-FILTER-DP": { name: "Filter differential pressure baseline", stages: ["IQ", "OQ"],
+    purpose: "Record the clean-filter pressure drop at design airflow, verify the gauges, and set the change-out and alarm points.",
+    inst: ["Calibrated micromanometer", "Filter manufacturer data (initial and recommended final ΔP)"],
+    pre: ["Design airflow established by TAB", "New filters installed"],
+    steps: ["With the AHU at design airflow, read ΔP across each filter stage with the reference micromanometer.", "Compare with the installed gauge or transmitter reading.", "Compare the clean ΔP with the manufacturer's initial ΔP at that face velocity.", "Set and document the change-out ΔP and high-ΔP alarm for each stage.", "Label each gauge with the clean value and change-out value."],
+    acc: ["Installed gauge within ±10 % or ±10 Pa of the reference (typical)", "Clean ΔP consistent with manufacturer data (e.g. ±15 %)", "Change-out points documented"],
+    rec: "Filter schedule with class, size, clean ΔP, change ΔP, gauge ID.",
+    refs: ["ISO16890", "EN1886", "WHO"] },
+
+  "T-AIRVOL": { name: "Airflow volume and air change rate", stages: ["OQ", "RQ"],
+    purpose: "Show each terminal delivers its design airflow and each room achieves its design air change rate.",
+    inst: ["Capture hood (balometer) with back-pressure compensation, calibrated", "Thermal anemometer or pitot traverse for duct measurement", "Room dimensions"],
+    pre: ["TAB complete", "Filters and diffusers installed", "Doors closed, system at normal operating set points"],
+    steps: ["Fit the capture hood over the terminal filter or diffuser so that no air bypasses the skirt.", "Take readings per the instrument instructions (average of at least 3 readings or a timed average). Apply back-pressure correction where needed.", "Where a hood cannot be used, measure velocity across the filter face with an anemometer grid ~150 mm from the face and multiply by the effective area, or traverse the branch duct (log-Tchebycheff).", "Sum supply per room. Calculate ACH = total supply (m³/h) / room volume (m³).", "Measure return and exhaust airflows to confirm the offsets that hold the pressure cascade.", "Compare each terminal and room total with the design."],
+    acc: ["Each terminal within ±10 % of design (typical)", "Room ACH at or above the room data sheet value", "Offsets consistent with the air balance"],
+    rec: "Airflow data sheet per room with terminal IDs, instrument ID and calibration date, calculated ACH.",
+    refs: ["ISO3", "A1", "WHO"] },
+
+  "T-VEL": { name: "UDAF velocity and uniformity", stages: ["OQ", "RQ"],
+    purpose: "Show the Grade A unidirectional airflow has the velocity and uniformity to sweep particles away from the critical zone.",
+    inst: ["Thermal or vane anemometer, calibrated", "Stand or jig to fix probe height", "Grid layout drawing"],
+    pre: ["Terminal filters leak-tested", "Equipment in place (machine, curtains or RABS)"],
+    steps: ["Divide the UDAF area into a grid with at least one point per filter, or one point per ~0.6 × 0.6 m cell.", "Measure at 150–300 mm below the filter face (filter performance).", "Measure again at the working position, the height of open product and critical surfaces. Annex 1 applies its guidance here.", "At each point, hold the probe still facing into the flow for at least 10 s and record the average.", "Calculate mean velocity and the deviation of each point from the mean.", "Investigate low points with smoke: look for obstructions or induction at the edges."],
+    acc: ["Annex 1 guidance: 0.36–0.54 m/s at the working position, unless scientifically justified in the CCS", "Uniformity: each point within ±20 % of the mean (typical, site-defined)"],
+    rec: "Grid map with readings, mean, uniformity, probe height, instrument ID.",
+    refs: ["A1", "ISO3", "FDA"] },
+
+  "T-HEPA": { name: "Installed HEPA filter leak test (scan)", stages: ["OQ", "RQ"],
+    purpose: "Prove that the installed filter, its gasket or gel seal and its housing have no leaks that could let unfiltered air into the room.",
+    inst: ["Aerosol generator (Laskin nozzle) with PAO or DEHS", "Aerosol photometer, calibrated", "Upstream sampling port on the housing (or duct)", "Alternative: discrete particle counter method (ISO 14644-3)"],
+    pre: ["Airflow at normal operating value", "Filter certificate (EN 1822 / ISO 29463 class, serial number) checked at IQ", "Room protected; plan the clean-down of aerosol residue in aseptic areas"],
+    steps: ["Introduce aerosol upstream far enough to mix evenly across the filter.", "Measure the upstream concentration through the upstream port. Target 20–80 µg/L (ISO range 10–100 µg/L). Set this as 100 % on the photometer.", "Scan the whole downstream face with the probe about 25 mm from the media, in slightly overlapping strokes at no more than 5 cm/s.", "Scan the full perimeter: media-to-frame joint, gasket or gel seal, and housing-to-ceiling joint.", "Where the reading exceeds 0.01 %, stop and hold the probe stationary to confirm and locate the leak.", "Repair (approved sealant) or replace. Typical repair limits: total repairs ≤ 3 % of the face area and no single repair larger than 3.8 cm in any dimension.", "Retest after repair. Record upstream concentration and the highest penetration for each filter."],
+    acc: ["No penetration above 0.01 % of the upstream concentration (photometer method)", "Upstream concentration within the method range throughout the test"],
+    rec: "Filter-by-filter report: filter ID, location, upstream concentration, maximum penetration, repairs, instrument IDs.",
+    refs: ["ISO3", "IEST34", "EN1822", "A1"] },
+
+  "T-DP": { name: "Room pressure differential and cascade", stages: ["OQ", "PQ", "RQ"],
+    purpose: "Show air flows from cleaner to less clean areas, that the differences meet the design, and that the cascade recovers after doors open.",
+    inst: ["Calibrated electronic micromanometer with tubing", "Stopwatch or data-logging manometer", "Pressure map drawing"],
+    pre: ["Airflow balanced", "All doors closed and door closers adjusted", "DP transmitters calibrated"],
+    steps: ["At rest, measure ΔP across every door or partition between adjacent rooms. Pass the tube under the door or use the pressure port.", "Record each room against its reference (adjacent room or the corridor) and compare with the transmitter/EMS value.", "Open each door for a typical duration (e.g. 10–20 s), close it, and record the time until ΔP returns within limits.", "Try to open both doors of each interlocked airlock together: this must be prevented.", "Repeat key readings in operation (PQ) with people moving and equipment running.", "Record the direction of flow at each door with smoke if the ΔP is close to the limit."],
+    acc: ["≥10 Pa between adjacent rooms of different grades (Annex 1 guidance; 10–15 Pa typical design)", "Correct direction everywhere, from higher grade to lower grade", "Recovery after door closing within the time used to justify the alarm delay", "Installed instrument within ±1–2 Pa of the reference"],
+    rec: "Pressure map with measured values, door-open recovery times, instrument comparison.",
+    refs: ["A1", "ISO3", "FDA"] },
+
+  "T-SMOKE": { name: "Airflow visualisation (smoke study)", stages: ["OQ", "PQ"],
+    purpose: "Show on video that air moves as intended: unidirectional over the critical zone, away from product, and out of the cleaner room at doors.",
+    inst: ["Fog generator using WFI or ultrapure water (no glycol residue in Grade A)", "HD video camera on a tripod, good lighting, location labels", "Storyboard (protocol annex)"],
+    pre: ["Velocity and HEPA tests passed", "Storyboard approved: each location, each intervention, camera angles", "Operators trained for the in-operation part"],
+    steps: ["At rest (OQ): release fog at the filter face and follow it down to the critical surfaces, at UDAF edges, at doors and at return grilles.", "Film continuously with the location label in frame. Keep the full path of the fog visible.", "In operation (PQ): repeat with the line running and operators performing the routine and corrective interventions listed in the batch record (e.g. stopper bowl refill, fallen vial removal, aseptic connections).", "Check for turbulence, reverse flow or eddies over open product, and for fog moving from operators toward product.", "Assess every observation, change the intervention technique or layout where needed, and refilm.", "Use the videos in operator training and in the design of the aseptic process simulation."],
+    acc: ["Unidirectional, sweeping flow over the critical zone with no reflux onto open product", "Air leaves the clean zone toward lower grades at openings and doors", "All observations assessed and closed"],
+    rec: "Annotated video files, observation log, assessment report, links to the CCS.",
+    refs: ["A1", "ISO3", "FDA"] },
+
+  "T-RECOV": { name: "Recovery (clean-up) test", stages: ["OQ"],
+    purpose: "Show the room returns to its at-rest cleanliness quickly after a particle challenge, which confirms air change and mixing are adequate.",
+    inst: ["Particle counter (ISO 21501-4 calibrated)", "Aerosol generator"],
+    pre: ["Classification at rest passed", "Not applicable to UDAF zones"],
+    steps: ["Record the baseline concentration at a representative location (usually near the centre, away from supply diffusers).", "Generate aerosol until the concentration is at least 100 times the target class limit for ≥0.5 µm.", "Stop the generator and start timing.", "Sample at short intervals (e.g. every minute) at the same location.", "Determine the time for a 100:1 reduction, or the time to return to the class limit.", "Compare with the theoretical value from the air change rate (see calculator)."],
+    acc: ["Typical acceptance: 100:1 recovery within 15–20 min, consistent with Annex 1 guidance for the clean-up period between in-operation and at-rest states"],
+    rec: "Concentration-versus-time table and plot, calculated recovery time.",
+    refs: ["ISO3", "A1"] },
+
+  "T-CLASS": { name: "Cleanroom classification (total particles)", stages: ["OQ", "PQ", "RQ"],
+    purpose: "Classify each room or zone against ISO 14644-1 and the Annex 1 grade, at rest (OQ) and in operation (PQ).",
+    inst: ["Light-scattering particle counter calibrated to ISO 21501-4 (28.3, 50 or 100 L/min)", "Isokinetic probe for UDAF; short sample tubing", "Location map"],
+    pre: ["HEPA integrity, airflow and pressure tests passed", "Cleaning and disinfection done", "At rest: equipment running, no people, after the clean-up period", "In operation: real or simulated operations with the maximum number of people"],
+    steps: ["Find the minimum number of locations N_L from the area using ISO 14644-1 Table A.1 (calculator in Module 5).", "Spread the locations over the area on a grid, then add locations chosen by risk: near critical zones, interventions, doors and areas flagged in smoke studies.", "Calculate the minimum sample volume V_s = 20 / C_n,m × 1000 L for the largest particle size considered (at least 2 L and 1 min).", "Place the probe at working height. In UDAF, point it into the airflow.", "Sample each location and record counts per m³ for each size.", "Compare every location with the limit. ISO 14644-1:2015 no longer uses a 95 % UCL: every location must comply.", "If a location fails, investigate the cause. Do not discard results as outliers."],
+    acc: ["Every location within the Annex 1 Table 1 / ISO class limit for the state tested", "Requalification at most every 6 months (A/B) or 12 months (C/D)"],
+    rec: "Location map, raw count data per location and size, counter calibration, room state, number of people present.",
+    refs: ["ISO1", "A1", "ISO21501"] },
+
+  "T-TRH": { name: "Temperature and humidity performance", stages: ["OQ", "PQ"],
+    purpose: "Show each room holds its temperature and RH range and that the installed sensor represents the room.",
+    inst: ["Calibrated data loggers (T/RH)", "Mapping plan"],
+    pre: ["Control loops tuned", "Room data sheet ranges approved"],
+    steps: ["Place loggers at work height in the centre, near heat sources, near supply and return, and in corners.", "OQ: log at 1-minute intervals for at least 24 h at rest; include a step change in set point to check control response.", "PQ: log over the PQ period in operation (commonly 3–7 days or longer) and include shift changes and peak load.", "Compare logger data with the installed EMS sensor at the same times.", "Review humidity control against the outdoor conditions during the test."],
+    acc: ["All readings within room data sheet limits (e.g. 20 ± 2 °C, 45 ± 10 % RH, or product-specific)", "Installed sensor within the agreed tolerance of the mapped mean"],
+    rec: "Logger positions, trend plots, statistics per logger, sensor comparison.",
+    refs: ["ISO3", "WHO", "A15"] },
+
+  "T-EM": { name: "Microbial environmental monitoring (PQ)", stages: ["PQ"],
+    purpose: "Confirm the HVAC system and the room controls hold viable contamination within Annex 1 limits in operation, and build the baseline for alert levels.",
+    inst: ["Active air sampler (calibrated; 1 m³ samples in Grade A)", "90 mm settle plates (≤4 h exposure)", "55 mm contact plates, swabs", "TSA with neutralisers; validated incubation regime"],
+    pre: ["Particle classification passed", "Cleaning and disinfection program in place", "Sample locations chosen by risk and agreed with QA"],
+    steps: ["Define locations from the risk assessment: critical zones, interventions, smoke-study findings, door and transfer points.", "Sample at rest and in operation across the PQ period. A common minimum is 3 consecutive production days per state; many sites use 10–20 sessions to build a meaningful baseline.", "Grade A: monitor continuously during critical processing (settle plates and active air sampling).", "Incubate per the validated regime and count colonies.", "Identify isolates: to species for Grade A and B.", "Trend the data, investigate excursions and set alert levels from the PQ data."],
+    acc: ["Annex 1 Table 6 limits (Module 3); Grade A no growth", "Alert levels derived and documented"],
+    rec: "Sample plan, results per location and session, identifications, trend report.",
+    refs: ["A1", "EN17141", "FDA"] },
+
+  "T-ALARM": { name: "Alarm and interlock challenge", stages: ["OQ"],
+    purpose: "Show each GMP alarm and safety interlock triggers at its set point, after its delay, and is recorded.",
+    inst: ["Alarm list from the FDS with set points and delays", "Calibrated signal source or physical means to create the condition", "Stopwatch"],
+    pre: ["BMS/EMS IQ complete", "Alarm philosophy approved, including justification for each delay"],
+    steps: ["For each alarm, create the real condition where possible (open a door, reduce fan speed, warm the sensor). Otherwise inject a calibrated signal at the transmitter. Avoid forcing values only in software.", "Record the value and time when the alarm appears on the EMS, local beacon and remote notification.", "Acknowledge the alarm and confirm the audit trail shows who, when and what.", "Remove the condition and confirm the alarm clears.", "For interlocks (electric heater without airflow, humidifier high limit, supply/exhaust fan interlock), confirm the protected device stops."],
+    acc: ["Every alarm triggers at set point ± instrument tolerance, after the configured delay", "Audit trail entries complete", "Every interlock acts as specified"],
+    rec: "Alarm challenge matrix with measured trigger values, times and screenshots.",
+    refs: ["A11", "GAMP", "A15"] },
+
+  "T-PWR": { name: "Power failure and restart", stages: ["OQ"],
+    purpose: "Show the system fails safe, restarts automatically and does not reverse the pressure cascade, and that no GMP data is lost.",
+    inst: ["Data-logging micromanometers at critical doors (1 s logging)", "EMS trend", "Stopwatch"],
+    pre: ["Restart sequence defined in the FDS (e.g. supply before exhaust for positive suites; exhaust first for containment)", "Production not running; QA informed"],
+    steps: ["With the system at normal conditions, cut power at the main supply or transfer to generator as specified.", "Record damper fail positions, fan run-down and EMS behaviour on UPS.", "Restore power and record the restart sequence and timing.", "Watch ΔP at critical doors throughout. Record any reversal and its duration.", "Record the time to recover set points for ΔP, T and RH.", "Check the EMS for data gaps, time stamps and alarm records."],
+    acc: ["No reversal across Grade A/B boundaries, or reversal assessed and handled by a documented recovery procedure", "System returns to automatic control within the defined time", "No loss of GMP data"],
+    rec: "Event timeline, ΔP traces, EMS screenshots, recovery times.",
+    refs: ["A15", "A1"] },
+
+  "T-DOOR": { name: "Airlock door interlock and function", stages: ["OQ"],
+    purpose: "Show airlock doors cannot both be open at once and that emergency release works and is alarmed.",
+    inst: ["Interlock logic description", "Stopwatch"],
+    pre: ["Doors, closers and seals installed"],
+    steps: ["Open door 1, try to open door 2: it must stay locked. Repeat in the other direction.", "Check the status lights at each door.", "Operate the emergency release: both doors must open and an alarm must be raised and recorded.", "Check the behaviour on power failure against the fire strategy.", "Check door closer timing so the door closes fully on its own."],
+    acc: ["Interlocks prevent simultaneous opening", "Emergency release works and raises an alarm", "Doors close fully without help"],
+    rec: "Checklist per airlock.",
+    refs: ["A1", "FDA"] },
+
+  "T-CONT": { name: "Exhaust filter (BIBO) test and containment leak", stages: ["OQ", "RQ"],
+    purpose: "For containment and potent-product areas: show exhaust filters are intact and the room envelope does not leak.",
+    inst: ["Aerosol generator and photometer or particle counter", "BIBO housing with injection and downstream scan or sampling ports"],
+    pre: ["Exhaust airflow at design", "Bag-change procedure written"],
+    steps: ["Inject aerosol upstream of the exhaust filter through the housing port and verify upstream concentration.", "Scan the downstream face with the housing's scan mechanism; if the housing cannot be scanned, perform an overall efficiency test at the downstream port.", "Envelope leak (ISO 14644-3): with the room at its normal pressure, scan joints, penetrations and door frames from the lower-pressure side with a particle counter to find infiltration paths.", "Dry-run the bag-in/bag-out change procedure.", "For potent compounds, consider surrogate powder testing (SMEPAC) of the containment equipment."],
+    acc: ["No leak above 0.01 % (scan) or efficiency meets the filter class", "No significant infiltration at envelope joints", "Change procedure works without breaking containment"],
+    rec: "Test report per housing and room.",
+    refs: ["ISO3", "WHO", "EN1822"] },
+
+  "T-CSV": { name: "BMS/EMS computerised system validation", stages: ["IQ", "OQ", "PQ"],
+    purpose: "Show the system that records GMP data (pressure, T, RH, particles) is fit for use and its records are reliable (ALCOA+).",
+    inst: ["URS, functional and configuration specifications", "Traceability matrix", "Test scripts"],
+    pre: ["GAMP 5 category set (often category 4, configured product)", "Risk assessment of functions"],
+    steps: ["IQ: record hardware, software and firmware versions, server and network set-up, licences, time synchronisation; check each sensor is wired to the correct input (point-to-point).", "OQ: test each input from sensor to display and stored record; scaling and units; calculations.", "OQ: test alarm handling, audit trail (create, change, delete captured with user, time, old and new value, reason), user roles, password rules and lockout, electronic signatures.", "OQ: test backup and restore, archiving and retrieval, report accuracy, behaviour on network loss (local buffering).", "PQ: run in the live environment for the defined period; review alarm handling and data completeness.", "Set up periodic review and audit-trail review procedures."],
+    acc: ["All test scripts pass or deviations closed", "Traceability matrix complete from URS to tests", "Data integrity controls proven"],
+    rec: "Validation plan, test scripts with evidence, traceability matrix, summary report.",
+    refs: ["GAMP", "A11"] },
+
+  "T-COIL": { name: "Cooling coil and dehumidification performance", stages: ["OQ"],
+    purpose: "Show the coil removes enough moisture to hold room RH at design conditions, and drains without standing water or carry-over.",
+    inst: ["Calibrated T/RH probes (or dew-point meter) on and off coil", "Chilled water flow and temperature readings"],
+    pre: ["Chilled water plant commissioned", "Coil cleaned, pan and trap installed"],
+    steps: ["At the highest achievable load, measure entering and leaving air dry-bulb and dew point, and chilled water flow and temperatures.", "Calculate sensible and latent capacity and compare with design. If the test season is mild, extrapolate and confirm in the seasonal PQ.", "Check face velocity (≤2.5 m/s typical) and look downstream for water droplets at maximum airflow.", "Stop the fan and check the drain pan empties within 30 min, with no pooling.", "Check the trap holds its seal at full fan pressure."],
+    acc: ["Leaving dew point at or below design (e.g. ≤ 9 °C for 45 % RH at 20 °C)", "No carry-over", "Pan drains fully"],
+    rec: "Psychrometric data sheet, photos of pan and downstream section.",
+    refs: ["ISPEH", "WHO"] },
+
+  "T-FAN": { name: "Fan performance and airflow control", stages: ["OQ"],
+    purpose: "Show the fan delivers design airflow and the VFD keeps airflow constant as filters load.",
+    inst: ["Airflow station readout verified by duct traverse", "Clamp meter", "Vibration meter"],
+    pre: ["Rotation checked at IQ", "TAB complete"],
+    steps: ["Check the airflow station against a pitot or anemometer traverse.", "At design airflow, record fan speed, static pressure, motor current against full-load amps.", "Measure bearing vibration and compare with the manufacturer or ISO limits.", "Simulate filter loading (partly close a test damper or blank filter area) and confirm the VFD raises speed and holds airflow.", "For fan arrays or duty/standby fans, fail one fan and record airflow and room ΔP during changeover."],
+    acc: ["Airflow within ±5–10 % of design", "Constant-airflow control holds within ±5 % across simulated loading (typical)", "Vibration within limits", "Changeover without loss of the cascade"],
+    rec: "Fan test sheet, traverse data, changeover trend.",
+    refs: ["ISPEH", "A15"] },
+
+  "T-STEAM": { name: "Humidifier steam quality", stages: ["OQ"],
+    purpose: "Show the steam used to humidify clean areas adds nothing harmful to the air (boiler additives, particles, microbes).",
+    inst: ["Condensate sampling cooler", "Conductivity, TOC and chemical analysis by QC"],
+    pre: ["Steam source defined at DQ (clean steam generator or self-contained generator on purified/RO water)"],
+    steps: ["Collect condensate at the humidifier inlet using a clean sampling cooler.", "Test conductivity and TOC; screen for volatile boiler additives (e.g. amines) where plant steam could be involved.", "For sterile suites, many sites require condensate to meet the chemical attributes of WFI.", "EN 285 physical tests (non-condensable gases, dryness, superheat) belong to sterilizer steam. Apply them to humidifier steam only if your specification requires it."],
+    acc: ["Condensate meets the specification set at DQ", "No volatile treatment chemicals detected"],
+    rec: "Sample records and QC results.",
+    refs: ["EN285", "ISPEH"] },
+
+  "T-SEASON": { name: "Seasonal performance verification", stages: ["PQ"],
+    purpose: "Show the system holds T, RH and pressure through summer and winter extremes, which a short PQ may not cover.",
+    inst: ["EMS trend data", "Local climate design data and weather records"],
+    pre: ["PQ complete; seasonal follow-up defined in the PQ protocol"],
+    steps: ["Identify the hot-humid and cold-dry periods from local climate design data.", "Review EMS trends for those periods: T, RH, ΔP, and the position of chilled water, heating and humidifier valves.", "Flag periods where valves are at 100 %: the plant is at its limit even if rooms are in range.", "Write a seasonal performance report and act on any shortfall through change control."],
+    acc: ["Critical parameters within limits in both seasonal extremes", "Spare capacity available (valves not saturated)"],
+    rec: "Seasonal performance report covering the first year.",
+    refs: ["WHO", "A15"] }
+};
+
+/* ---------- Components ---------- */
+var COMPS = [
+{ id: "oa", name: "Outdoor air intake", area: "Air intake",
+  role: "Brings in fresh air to pressurise the suite, replace exhausted air and ventilate occupants.",
+  fn: ["Outdoor air is the make-up that keeps the clean suite positive to its surroundings. It replaces the air lost through door gaps, envelope leakage and process exhaust. Recirculating pharmaceutical systems typically take 10–30 % outdoor air; once-through (100 % outdoor air) systems are used for solvent, potent or containment suites.", "The intake carries the full outdoor load: dust, pollen, vehicle fumes, humidity and temperature swings. Its location decides how much of that load, and how much of the plant's own exhaust, the AHU has to deal with."],
+  types: [["Weather louvre with bird screen", "Rain-defence class per specification; drained plenum behind it."], ["Dedicated outdoor air unit (DOAS / make-up air unit)", "Pre-conditions outdoor air (filters, dehumidifies) before it reaches several recirculating AHUs."], ["Fixed minimum outdoor air", "Damper set to a minimum position or controlled by an airflow station; the usual GMP choice."], ["Energy recovery", "Run-around coils are preferred. Thermal wheels carry a cross-leakage risk and need a documented assessment."]],
+  params: [["Minimum outdoor air flow", "Sum of pressurisation leakage, exhaust and occupancy needs (m³/h)"], ["Separation from exhausts", "Distance or dispersion study; ASHRAE 62.1 gives minimum distances"], ["Pre-filtration", "ISO Coarse / ePM10 at the intake (typical)"]],
+  stages: {
+    DQ: ["Intake location reviewed against exhaust stacks, dust collectors, cooling towers, loading bays and prevailing wind; separation documented.", "Minimum outdoor air calculated from the air balance (pressurisation + exhaust + occupancy).", "Louvre rain class, bird screen and frost/snow protection specified.", "Energy-recovery choice justified with cross-contamination risk assessment."],
+    IQ: ["@T-DOCS", "Louvre, bird screen and drain installed per drawing; intake height and separation measured.", "Outdoor air damper actuator, fail position and position feedback wired per the I/O list.", "Access door provided for screen inspection and cleaning."],
+    OQ: ["Outdoor air flow measured at minimum and design damper positions and compared with the air balance.", "@T-AIRVOL", "@T-ALARM"],
+    PQ: ["Room pressures and RH stay in limits on hot-humid and cold-dry days.", "@T-SEASON"],
+    RQ: ["Outdoor air flow verified at each rebalance or annually.", "Bird screen and louvre inspected on the PM schedule (e.g. quarterly)."]
+  },
+  risks: [["Bird screen or louvre blocked by debris, snow or ice", "Outdoor air falls; room pressures drop", "PM inspection; room ΔP alarm", 4, 2, 2], ["Exhaust or vehicle fumes re-entrained", "Chemical or particulate contamination of supply air", "Siting review at DQ; dispersion study", 4, 2, 4]],
+  finds: ["Intake a few metres from a dust collector discharge, with no risk assessment."],
+  refs: ["WHO", "ASH62", "ISPEH"] },
+
+{ id: "mixing", name: "Mixing box and dampers", area: "AHU section 1",
+  role: "Blends return air with outdoor air and sets how much air is exhausted.",
+  fn: ["The mixing box combines recirculated return air with outdoor air in a controlled ratio. Three dampers work together: outdoor air, return (recirculation) and exhaust/relief. Their positions set the outdoor air fraction and, with the fans, the building pressure.", "Recirculation saves energy but must be justified. Where cross-contamination is possible (multi-product dust, potent compounds, solvents) WHO and EU GMP expect either 100 % outdoor air or HEPA filtration of the return air."],
+  types: [["Opposed-blade dampers", "Better flow control; preferred for modulating service."], ["Parallel-blade dampers", "Used for two-position (open/closed) service."], ["Low-leakage dampers", "EN 1751 class 3–4 where tight shut-off matters."], ["Spring-return actuators", "Drive the damper to a defined fail position on power loss."]],
+  params: [["Outdoor/return ratio", "From the air balance"], ["Fail positions", "Defined in the FDS for each damper"], ["Damper leakage class", "Per specification"]],
+  stages: {
+    DQ: ["Recirculation strategy decided and justified by a cross-contamination risk assessment.", "Damper leakage class and fail positions defined in the FDS.", "Mixing arrangement avoids stratification (cold outdoor air reaching the coils unmixed)."],
+    IQ: ["@T-DOCS", "Damper model, size and blade orientation checked; linkage tight; actuator wired; spring-return verified.", "@T-CAL"],
+    OQ: ["Stroke each damper 0–100 % from the BMS. Confirm the blades actually move (look) and the feedback matches.", "@T-PWR", "@T-ALARM"],
+    PQ: ["Covered at system level: stable pressures and humidity in operation."],
+    RQ: ["Annual stroke test with visual blade check."]
+  },
+  risks: [["Damper seized or linkage slipped", "Wrong outdoor air ratio; pressure or RH drift", "Shaft-mounted feedback; annual stroke test", 4, 3, 3], ["Wrong fail position on power loss", "Pressure reversal on restart", "Fail-position test in OQ", 4, 2, 2]],
+  finds: ["Damper positions on the BMS screen differed from the blade positions found on the walk-down."],
+  refs: ["WHO", "ISPEH", "A15"] },
+
+{ id: "filters", name: "AHU filtration stages", area: "AHU sections 2, 3 and 8",
+  role: "Removes coarse and fine particles before the coils, fan and terminal HEPA filters.",
+  fn: ["The AHU filters protect the coils and fan from dirt and reduce the load on the terminal HEPA filters, which are expensive to change and must be leak-tested after replacement. A common arrangement is a pre-filter (ISO Coarse ~60 %, formerly G4), a bag filter (ePM1 50–70 %, formerly F7) and a final filter after the fan (ePM1 ≥ 80 %, formerly F9).", "Filters load with dust over time, so their pressure drop rises and airflow falls unless the fan compensates. Pressure-drop monitoring on each stage is the main control."],
+  types: [["Pleated panel pre-filter", "ISO Coarse / ePM10 (G4 under the withdrawn EN 779)."], ["Bag filter", "ePM2.5 / ePM1 (F7)."], ["Rigid box or V-cell filter", "ePM1 ≥ 80 % (F9) as the final AHU stage."], ["HEPA in the AHU or return", "H13/H14 where return air is recirculated from multi-product areas."]],
+  params: [["Filter class", "ISO 16890 (ePM1, ePM2.5, ePM10, Coarse); HEPA per EN 1822"], ["Initial and final ΔP", "Change-out typically at 2–3 × initial, or the manufacturer value (e.g. 250 Pa G4, 300–450 Pa F7/F9)"], ["Frame bypass", "EN 1886 filter bypass class F9 for the casing"]],
+  stages: {
+    DQ: ["Filter classes chosen for the outdoor air quality and the room grades served.", "ΔP measurement on each stage, with alarms on the final stage.", "Access for safe filter change; EN 1886 casing and filter-bypass class specified."],
+    IQ: ["Filter class labels and certificates match the specification.", "Airflow direction correct; frames, clamps and seals tight.", "@T-CAL", "@T-FILTER-DP"],
+    OQ: ["High-ΔP alarm tested.", "@T-ALARM", "Frame seals checked by visual or light test."],
+    PQ: ["ΔP trended over the PQ period; no unexplained rise."],
+    RQ: ["Filters changed at the defined ΔP or time; airflow rechecked after change."]
+  },
+  risks: [["Bypass at frame or clamp", "More dust reaches coils and HEPA filters", "IQ seal check; ΔP trend", 3, 3, 3], ["Filter overloaded beyond final ΔP", "Airflow and ACH fall; cascade weakens", "ΔP alarms; VFD compensation", 4, 3, 2]],
+  finds: ["No defined change-out ΔP; gauges uncalibrated and unlabelled."],
+  refs: ["ISO16890", "EN1886", "WHO"] },
+
+{ id: "cooling", name: "Cooling coil and dehumidification", area: "AHU section 4",
+  role: "Removes heat and moisture so the rooms stay at temperature and humidity.",
+  fn: ["The cooling coil removes sensible heat (temperature) and latent heat (moisture). It dehumidifies by cooling the air below its dew point so water condenses on the fins and drains away. To hold ~45 % RH at 20 °C, the air usually leaves the coil at about 9–11 °C and is then reheated.", "The coil is the wettest part of the AHU, so it is a microbial risk. The drain pan must slope, drain fully and have a trap that holds its seal against the fan pressure. For very dry rooms (e.g. below 30 % RH for hygroscopic products) a desiccant dehumidifier is added."],
+  types: [["Chilled water coil", "Most common; typically 6/12 °C water."], ["Direct expansion (DX) coil", "Smaller systems; refrigerant in the coil."], ["Desiccant wheel dehumidifier", "Low dew points for hygroscopic or effervescent products."]],
+  params: [["Off-coil dew point", "Set by the room RH limit (e.g. ≤ 9 °C dp)"], ["Coil face velocity", "≤ 2.5 m/s typical to avoid carry-over"], ["Drain pan and trap", "Stainless, double-sloped; trap height greater than fan static pressure"]],
+  stages: {
+    DQ: ["Psychrometric calculation at the summer design day, including latent loads from people and processes.", "Face velocity, eliminators, stainless double-sloped pan, trap height specified.", "Off-coil T/RH sensor location defined."],
+    IQ: ["Coil rows, fins and materials match the datasheet; pressure-test certificate present.", "Pan slope verified by pouring water; trap installed and primed.", "Control valve and actuator installed; insulation complete.", "@T-CAL"],
+    OQ: ["@T-COIL", "Control loop tuned with step changes; valve strokes fully.", "High-RH alarm tested. @T-ALARM"],
+    PQ: ["@T-TRH", "@T-SEASON"],
+    RQ: ["Coil and pan inspection and cleaning on the PM schedule."]
+  },
+  risks: [["Standing water in the pan or dry trap", "Microbial growth; bioaerosol downstream", "Sloped pan; correct trap; PM inspection", 4, 3, 3], ["Not enough latent capacity on humid days", "RH above limit", "Design-day sizing; seasonal PQ", 3, 3, 2], ["Moisture carry-over", "Wet filters downstream; grow-through", "Face velocity limit; eliminators", 4, 2, 3]],
+  finds: ["Rust and standing water in the drain pan; pan not in the PM plan."],
+  refs: ["ISPEH", "WHO"] },
+
+{ id: "heating", name: "Heating and reheat coil", area: "AHU section 5",
+  role: "Warms the air in winter and reheats it after dehumidification.",
+  fn: ["The heating coil protects the coils from frost (preheat), keeps rooms warm in winter, and reheats air that the cooling coil has overcooled to remove moisture. Terminal reheat coils in branch ducts let rooms on one AHU hold different temperatures.", "Electric heaters need safety interlocks so they cannot run without airflow."],
+  types: [["Hot water (LPHW) coil", "Most common; frost protection needed on the coil."], ["Steam coil", "Where plant steam is available."], ["Electric heater", "Needs an airflow switch interlock and a manual-reset high-limit cut-out."], ["Terminal reheat", "Small coils in branch ducts for room-by-room temperature."]],
+  params: [["Supply air set point", "From room loads"], ["Frost protection", "e.g. trip at 5 °C"], ["Heater interlocks", "Airflow switch and high-limit thermostat"]],
+  stages: {
+    DQ: ["Capacity at the winter design day; frost protection specified.", "Electric heater safety interlocks specified.", "Heating and cooling sequenced so they do not fight."],
+    IQ: ["Nameplate, wiring, interlocks and sensor positions checked.", "@T-DOCS"],
+    OQ: ["Stop the fan: the electric heater must switch off. Trip the high limit. @T-ALARM", "Frost thermostat tested.", "Temperature loop response to set-point steps."],
+    PQ: ["@T-TRH", "@T-SEASON"],
+    RQ: ["Interlocks retested on the PM schedule."]
+  },
+  risks: [["Electric heater runs without airflow", "Overheating, fire, duct damage", "Airflow interlock; high limit", 5, 1, 2], ["Heating and cooling fight", "Temperature hunting; energy waste", "Sequenced control; loop tuning", 2, 3, 3]],
+  finds: ["Electric heater interlock never challenged in OQ."],
+  refs: ["ISPEH", "A15"] },
+
+{ id: "humidifier", name: "Clean-steam humidifier", area: "AHU section 6",
+  role: "Adds moisture in dry weather without adding contamination.",
+  fn: ["The humidifier raises RH when outdoor air is dry, mostly in winter. Low RH increases static electricity, dries operators' skin (more skin shedding) and can make some products such as gelatin capsules brittle.", "The steam must be absorbed before it reaches filters or duct surfaces, otherwise it wets them and microbes can grow. Steam from boilers treated with amines must not be used in clean areas without assessment."],
+  types: [["Clean-steam injection", "From a clean-steam generator; preferred for sterile suites."], ["Self-contained electrode or resistive steam generator", "Uses purified or RO water."], ["Adiabatic (spray, ultrasonic, wetted media)", "Usually avoided in GMP because standing water can grow microbes."]],
+  params: [["RH set point", "e.g. 45 ± 10 %, or product-specific"], ["Absorption distance", "No wetting downstream"], ["High-limit humidistat", "Duct RH limit (e.g. 85–90 %) interlock"]],
+  stages: {
+    DQ: ["Steam source defined (clean steam or self-contained generator).", "Absorption distance calculated; downstream clearance to filters confirmed.", "High-limit humidistat and airflow interlock specified."],
+    IQ: ["Dispersion tube orientation, drain and trap checked; 316L materials for clean steam.", "High-limit sensor placed beyond the absorption distance.", "@T-CAL"],
+    OQ: ["@T-STEAM", "Humidity loop step test.", "High-limit and airflow interlock tested. @T-ALARM", "At maximum output, inspect downstream: no wet surfaces."],
+    PQ: ["@T-TRH", "@T-SEASON"],
+    RQ: ["Annual inspection of the dispersion section and steam trap."]
+  },
+  risks: [["Steam not absorbed; wetting downstream", "Microbial growth on filters or duct", "Absorption distance; high-limit humidistat", 4, 2, 3], ["Boiler additives carried in steam", "Chemical contamination of room air", "Clean-steam generator; condensate testing", 4, 2, 4]],
+  finds: ["Amine-treated plant steam used to humidify a Grade C area with no assessment."],
+  refs: ["ISPEH", "EN285", "WHO"] },
+
+{ id: "fan", name: "Supply fan and variable-speed drive", area: "AHU section 7",
+  role: "Moves the air and keeps the airflow constant as filters load.",
+  fn: ["The supply fan creates the airflow that every other function depends on: air changes, pressure cascade, UDAF velocity and recovery. A variable-speed drive (VFD) controlled from an airflow measuring station keeps the airflow constant as filters load.", "Critical areas often use fan arrays or duty/standby fans so one fan failure does not stop the supply."],
+  types: [["Plenum (plug) fan", "Direct drive; no belt dust; common in pharma AHUs."], ["EC fan array", "Several small fans; one can fail while the others carry the load."], ["Belt-driven centrifugal fan", "Belt dust needs a final filter downstream."], ["Control mode", "Constant airflow (preferred) or constant duct static pressure."]],
+  params: [["Design airflow and pressure", "Sized for the dirty-filter condition plus margin (10–15 %)"], ["Airflow control", "±5 % of set point (typical)"], ["Redundancy", "N+1 for Grade A/B areas (by risk)"]],
+  stages: {
+    DQ: ["Fan sized for dirty filters plus margin; redundancy decided by risk.", "Airflow measuring method chosen; restart sequence written in the FDS."],
+    IQ: ["Nameplate, rotation, alignment or belt tension, anti-vibration mounts, flexible connections checked.", "VFD parameters recorded and backed up.", "@T-DOCS"],
+    OQ: ["@T-FAN", "@T-PWR", "Fan failure alarm and duty/standby changeover. @T-ALARM"],
+    PQ: ["Airflow stable over the PQ period (trend)."],
+    RQ: ["Vibration and bearing checks on PM; airflow verified at requalification."]
+  },
+  risks: [["Supply fan trips", "Cascade lost; lower-grade air enters", "Fan-fail alarm; N+1; restart sequence", 5, 2, 1], ["Airflow drifts down", "ACH and recovery degrade unnoticed", "Constant-airflow control; trend", 4, 3, 3]],
+  finds: ["Restart after power failure never tested; pressure reversal visible in EMS data after a site outage."],
+  refs: ["ISPEH", "A15", "A1"] },
+
+{ id: "ductwork", name: "Supply ductwork and dampers", area: "Distribution",
+  role: "Carries conditioned air to each room and sets each room's share.",
+  fn: ["Supply ducts carry air from the AHU to the terminal filters. Volume control dampers, constant air volume (CAV) regulators or venturi valves set each room's airflow, which with the return airflow sets the room pressure. Fire dampers close on a fire signal.", "Ducts downstream of the final filter must be clean and airtight. Internal acoustic lining is not used there, because it sheds fibres and cannot be cleaned."],
+  types: [["Galvanised steel", "General supply ductwork."], ["Stainless steel", "Corrosive exhausts and some clean applications."], ["CAV regulators / venturi valves", "Hold room airflow constant regardless of duct pressure."], ["Motorised room-pressure dampers", "Active room pressure control."], ["Fire and smoke dampers", "Close on fire alarm; status should go to the BMS."]],
+  params: [["Airtightness class", "EN 12237/1507 class C or better downstream of the final filter (typical)"], ["Balancing tolerance", "±10 % per terminal (typical)"], ["Cleanliness", "Clean-build: ends capped, wiped before installation"]],
+  stages: {
+    DQ: ["Airtightness class and test sections specified.", "No internal lining downstream of the final filter; access panels at dampers.", "Room pressure strategy (fixed CAV or active control) chosen and justified."],
+    IQ: ["@T-DUCT-LEAK", "@T-DOCS", "Cleanliness inspection: end caps, internal wipe check.", "Fire damper certificates and access checked."],
+    OQ: ["Balancing (TAB) report reviewed.", "@T-AIRVOL", "Fire damper drop test, with its effect on the cascade recorded."],
+    PQ: ["Covered at system level."],
+    RQ: ["Damper positions locked and marked; changes only through change control."]
+  },
+  risks: [["Duct leakage above class", "Room airflow below design", "Leak test at IQ", 3, 3, 3], ["Fire damper closes unexpectedly", "Room loses supply; pressure reversal", "Damper status to BMS; drop test", 4, 2, 2], ["Dirty or uncapped duct installed", "Debris blown into the cleanroom", "Clean-build protocol", 3, 3, 3]],
+  finds: ["Volume dampers moved after balancing with no change control."],
+  refs: ["EN12237", "ISO4", "WHO"] },
+
+{ id: "hepa", name: "Terminal HEPA filters", area: "Room ceiling",
+  role: "The last barrier: removes particles and microbes from the air just before it enters the room.",
+  fn: ["Terminal HEPA filters sit in the ceiling so that the air entering the room has just been filtered, and nothing downstream can add contamination. H14 filters capture at least 99.995 % of particles at the most penetrating particle size (MPPS); H13 at least 99.95 %.", "Each filter is scan-tested at the factory (EN 1822), but installation can damage it or leave a gap at the seal. That is why every installed filter is leak-tested in OQ and at each requalification."],
+  types: [["Room-side replaceable housing with gel seal", "Knife-edge into gel; the most reliable seal."], ["Gasket-sealed housing", "Neoprene or PU gasket; check compression."], ["Housing with swirl or perforated diffuser", "Mixing rooms (Grades B, C, D)."], ["Fan filter units (FFU)", "Self-contained fan plus HEPA."], ["Class", "H14 for Grades A/B; H13 or H14 for C/D (typical)."]],
+  params: [["Integrity", "No leak > 0.01 % of upstream (photometer)"], ["Airflow per filter", "Design ±10 % (typical)"], ["Certificate", "Serial number, class, MPPS efficiency"]],
+  stages: {
+    DQ: ["Filter class chosen per grade; housings have upstream aerosol injection and sampling ports.", "Room-side replaceable housings where possible; diffuser type chosen for the room's airflow pattern."],
+    IQ: ["Certificate checked for every filter (serial, class, efficiency); filter IDs mapped to the ceiling plan.", "No visible damage on unpacking; gel seal fully seated or gasket evenly compressed.", "Initial ΔP recorded."],
+    OQ: ["@T-HEPA", "@T-AIRVOL", "@T-VEL"],
+    PQ: ["Shown indirectly by particle and microbial results in operation."],
+    RQ: ["Leak test at least every 6 months (A/B) or 12 months (C/D), and after any filter change or repair."]
+  },
+  risks: [["Pinhole or media damage", "Unfiltered particles enter the room", "Scan test in OQ and requalification", 5, 2, 2], ["Gasket or gel-seal bypass", "Leak at the frame", "Scan of the frame and seal", 5, 2, 2], ["Filter loaded; low airflow", "Lower ACH and slower recovery", "Airflow measurement; ΔP monitoring", 4, 3, 2]],
+  finds: ["Upstream concentration not verified before scanning; frame seal not scanned."],
+  refs: ["ISO3", "EN1822", "IEST34", "A1"] },
+
+{ id: "udaf", name: "Grade A unidirectional airflow zone", area: "Critical zone",
+  role: "Sweeps a uniform column of HEPA-filtered air over open product and sterile surfaces.",
+  fn: ["In the Grade A zone, air moves in parallel streams at a steady velocity from the HEPA filter bank down past the critical surfaces: open vials, stopper bowls, filling needles. Any particle released is carried away from product rather than mixing back into it. Annex 1 gives 0.36–0.54 m/s at the working position as guidance.", "The zone can be open (UDAF in a Grade B room), within a restricted access barrier system (RABS), or inside an isolator. Operators' arms and interventions are the biggest threat to the airflow, which is why smoke studies with real interventions are required."],
+  types: [["Open UDAF in a Grade B room", "Traditional aseptic filling; Grade B background required."], ["Open or closed RABS", "Rigid walls and glove ports; Grade B background."], ["Isolator", "Sealed and decontaminated; background at least Grade D."], ["UDAF workbench / mobile UDAF trolley", "Small operations and transfers."]],
+  params: [["Velocity at working position", "0.36–0.54 m/s (Annex 1 guidance)"], ["Uniformity", "±20 % of mean (typical)"], ["Particle monitoring", "Continuous during critical processing"], ["Filters", "H14, leak-tested"]],
+  stages: {
+    DQ: ["UDAF covers every critical zone; interventions reviewed for ergonomics and airflow.", "Positions of particle monitoring probes and microbial samplers defined close to the critical zone.", "For isolators: glove integrity testing and decontamination designed in."],
+    IQ: ["HEPA bank certificates; curtains or panels installed per drawing; probe locations per drawing.", "@T-DOCS"],
+    OQ: ["@T-VEL", "@T-HEPA", "@T-SMOKE", "@T-CLASS"],
+    PQ: ["Dynamic smoke study with interventions. @T-SMOKE", "Classification in operation. @T-CLASS", "@T-EM", "Aseptic process simulation (media fill) depends on qualified HVAC; run it after HVAC PQ."],
+    RQ: ["Velocity, HEPA leak test and classification every 6 months.", "Repeat smoke studies after changes to equipment, layout or interventions."]
+  },
+  risks: [["Intervention disrupts the airflow", "Particles carried over open product", "Smoke studies; intervention design; training", 5, 3, 3], ["Velocity drifts below range", "Weak sweep; turbulence", "6-monthly velocity test; monitoring", 4, 3, 2], ["Obstruction under the HEPA bank", "Dead zones and eddies", "Layout change control; smoke", 4, 2, 3]],
+  finds: ["Smoke videos showed turbulence over open vials with no assessment or action.", "Velocity measured only at the filter face, not at the working position."],
+  refs: ["A1", "FDA", "ISO3"] },
+
+{ id: "cleanroom", name: "Cleanroom envelope and classification", area: "Rooms",
+  role: "Provides sealed, cleanable rooms whose air cleanliness is classified for their grade.",
+  fn: ["The room itself is part of the HVAC system: walls, ceiling, floor, doors and penetrations must be sealed so that the air goes only where the design sends it. Surfaces must be smooth and cleanable, without ledges or gaps.", "Each room is classified for the Annex 1 grade (A–D) and the ISO class in the at-rest and in-operation states. Classification is the qualification test; routine monitoring then shows the room stays in control."],
+  types: [["Grade A", "Critical zone: ISO 5 at rest and in operation."], ["Grade B", "Background for Grade A in aseptic processing: ISO 5 at rest, ISO 7 in operation."], ["Grade C", "ISO 7 at rest, ISO 8 in operation."], ["Grade D", "ISO 8 at rest; in-operation limits set by the site."], ["CNC", "Controlled not classified: filtered and monitored, no grade."]],
+  params: [["Particle limits", "Annex 1 Table 1 (see Module 3)"], ["Air change rate", "Set by heat load and recovery (typical 20–60 ACH for B/C)"], ["Recovery", "100:1 in ≤ 15–20 min (typical)"], ["States", "As-built, at rest, in operation"]],
+  stages: {
+    DQ: ["Room data sheets define grade, ISO class, ACH, pressure, T/RH and finishes.", "Contamination control strategy (Annex 1) linked to the HVAC design.", "People and material flows reviewed; ceiling and penetrations designed to be airtight."],
+    IQ: ["Finishes inspected: coving, sealed joints, no ledges, sealed light fittings and penetrations.", "Room dimensions checked to confirm volume for ACH.", "@T-DOCS"],
+    OQ: ["@T-CLASS", "@T-RECOV", "@T-SMOKE", "@T-TRH", "@T-DP", "@T-CONT"],
+    PQ: ["Classification in operation with the maximum number of people. @T-CLASS", "@T-EM", "@T-TRH"],
+    RQ: ["Classification at least every 6 months (A/B) or 12 months (C/D).", "Requalify after changes to layout, airflow or use; review EM trends annually."]
+  },
+  risks: [["Unsealed ceiling or wall penetrations", "Unfiltered air drawn in from the void", "Envelope inspection; leak test", 4, 3, 3], ["ACH too low for the load", "Slow recovery; in-operation counts fail", "Recovery test; in-operation classification", 3, 3, 3]],
+  finds: ["Sample locations chosen for convenience, not risk.", "In-operation classification done with fewer people than the maximum."],
+  refs: ["A1", "ISO1", "ISO2", "ISO4"] },
+
+{ id: "cascade", name: "Pressure cascade and airlocks", area: "Room boundaries",
+  role: "Makes air flow from cleaner rooms to less clean rooms, so contamination cannot flow back.",
+  fn: ["Each room is held at a pressure set by the difference between the air supplied and the air returned. Cleaner rooms are held higher, so air leaks outward through door gaps toward less clean areas. Annex 1 gives at least 10 Pa between adjacent rooms of different grades as guidance; 10–15 Pa is common.", "Airlocks separate grades. Their doors are interlocked so they cannot both be open, and they flush with clean air between uses. The last stage of an airlock into a Grade B area should be Grade B at rest."],
+  types: [["Cascade airlock", "Pressure between the two rooms it connects; the usual choice for sterile suites."], ["Bubble airlock", "Higher than both sides; protects both, used between a contained area and a clean corridor."], ["Sink airlock", "Lower than both sides; draws air in from both, used for potent or biological containment."], ["Personnel (PAL) and material (MAL) airlocks; pass boxes", "Pass boxes can be static or ventilated with HEPA."]],
+  params: [["ΔP between grades", "≥ 10 Pa (Annex 1 guidance)"], ["Alarm delay", "Justified from door-opening recovery data"], ["Door interlocks", "No simultaneous opening"]],
+  stages: {
+    DQ: ["Pressure map drawing with values and tolerances.", "Door leakage and offsets calculated (calculator in Module 5).", "Interlock logic and alarm philosophy in the FDS."],
+    IQ: ["DP sensors installed with the correct reference rooms, labelled with limits.", "Door closers, seals and interlock hardware installed.", "@T-CAL"],
+    OQ: ["@T-DP", "@T-DOOR", "Smoke at doors during opening. @T-SMOKE", "@T-ALARM", "@T-PWR"],
+    PQ: ["ΔP trended in operation, including shift changes and peak door traffic."],
+    RQ: ["ΔP verification every 6 months (A/B) or 12 months (C/D)."]
+  },
+  risks: [["Door held open or interlock bypassed", "Pressure reversal; lower-grade air enters", "Interlocks; alarms; training", 5, 3, 2], ["DP sensor reference port blocked or drifting", "False in-limit reading", "Calibration; independent checks", 4, 2, 4]],
+  finds: ["Alarm delays of several minutes with no data to justify them."],
+  refs: ["A1", "FDA", "ISO3"] },
+
+{ id: "returns", name: "Return air, return fan and exhaust", area: "Return and exhaust",
+  role: "Draws air out at low level, controls building pressure and removes contaminated air.",
+  fn: ["Low-level return grilles pull air down through the room, so particles released by people and processes move toward the floor and out, rather than circulating at working height. The difference between supply and return airflow sets each room's pressure.", "The return fan brings air back to the mixing box or sends it out as exhaust. Exhaust from potent or toxic processes passes through HEPA filters in bag-in/bag-out (BIBO) housings so filters can be changed without exposing staff."],
+  types: [["Low-level wall returns", "Standard for Grades A/B and C; about 300 mm above floor."], ["High-level returns", "Acceptable in Grade D or CNC when justified."], ["Return HEPA", "For recirculation from multi-product areas."], ["Local exhaust (dust collectors)", "Capture dust at source."], ["BIBO exhaust HEPA", "Safe change for potent compounds."]],
+  params: [["Return location", "Low level, spread to avoid dead zones"], ["Supply–return offset", "Sets room pressure"], ["Supply/exhaust interlock", "Start and stop order defined in the FDS"]],
+  stages: {
+    DQ: ["Return positions per room data sheet; exhaust treatment matched to the compound's exposure band.", "Start-up and shut-down order defined (supply first for positive suites, exhaust first for containment)."],
+    IQ: ["Grille positions match drawings and are not obstructed.", "BIBO housings installed; exhaust stack height and position checked.", "@T-DUCT-LEAK"],
+    OQ: ["@T-AIRVOL", "Fan interlocks tested. @T-ALARM", "@T-CONT", "@T-PWR"],
+    PQ: ["Covered at system level: pressures and classification in operation."],
+    RQ: ["Returns checked for obstruction at each requalification; BIBO filters tested on the defined interval."]
+  },
+  risks: [["Return grille blocked by equipment", "Dead zone; room pressure rises", "Layout control; visual checks", 3, 4, 3], ["Exhaust fan fails while supply runs (containment)", "Potent material escapes", "Supply/exhaust interlock; sink airlock; alarm", 5, 2, 2]],
+  finds: ["Low-level returns blocked by stored equipment and carts."],
+  refs: ["WHO", "A1", "ISO3"] },
+
+{ id: "bms", name: "BMS and EMS controls and monitoring", area: "Controls",
+  role: "Controls the plant (BMS) and records the GMP data and alarms (EMS).",
+  fn: ["The building management system (BMS) runs the plant: set points, control loops, fan speeds, damper positions. The environmental monitoring system (EMS) independently measures and records the GMP parameters (room ΔP, T, RH, particle counts), raises alarms and keeps the audit trail.", "Many sites keep the BMS under good engineering practice and validate only the EMS, using separate sensors. Whatever the split, the system that holds GMP records must meet Annex 11 / Part 11 and data integrity (ALCOA+) expectations."],
+  types: [["BMS", "Plant control; GEP unless it holds GMP records."], ["EMS", "Validated monitoring; typically GAMP 5 category 4."], ["Continuous particle monitoring system", "Grade A and B, with alarms during processing."], ["Standalone data loggers", "Mapping and temporary studies."]],
+  params: [["Alert and action limits", "Per parameter and room"], ["Alarm delays", "Justified by data"], ["Logging interval", "e.g. 1 min for ΔP, T, RH"], ["Audit trail, access, backup", "Annex 11 / Part 11"]],
+  stages: {
+    DQ: ["URS for GMP functions; GAMP 5 category and risk assessment.", "Data flow diagram from sensor to archive.", "Alarm philosophy: limits, delays, escalation."],
+    IQ: ["@T-CSV", "@T-CAL", "Point-to-point I/O check for every GMP sensor."],
+    OQ: ["@T-CSV", "@T-ALARM", "@T-PWR"],
+    PQ: ["Alarm handling and data completeness reviewed over the PQ period."],
+    RQ: ["Periodic review (typically annual); audit-trail review; calibration program."]
+  },
+  risks: [["Alarm limits changed without control", "Excursions missed", "Access roles; audit-trail review", 5, 2, 4], ["Sensor drift", "Decisions based on wrong data", "Calibration; dual sensors", 4, 3, 3], ["Data loss on power or network failure", "Gaps in the GMP record", "UPS; buffering; tested backup", 4, 2, 3]],
+  finds: ["GMP data taken from a non-validated BMS; audit trail never reviewed."],
+  refs: ["GAMP", "A11", "A1", "ISO2"] }
+];
+
+var STAGES = [
+  ["DQ", "Design qualification", "Is the design right? Verify the design against the URS and GMP before building."],
+  ["IQ", "Installation qualification", "Is it installed as designed? Verify installation, documents and calibration."],
+  ["OQ", "Operational qualification", "Does it work across its operating ranges? Test functions, alarms, and cleanroom performance at rest."],
+  ["PQ", "Performance qualification", "Does it perform consistently in real operation? Test in operation, with people and process, over time."],
+  ["RQ", "Requalification", "Does it still perform? Periodic requalification (Annex 1: max 6 months A/B, 12 months C/D) and change-triggered tests."]
+];
+
+var LIFE = [
+  { k: "URS", t: "User requirements", q: false, what: "Defines what the HVAC must achieve: grades and ISO classes per room, at-rest and in-operation states, pressure cascade, T/RH ranges, air change or recovery targets, filtration, containment, monitoring, alarms and data integrity. It links to the site's Contamination Control Strategy (Annex 1).", out: ["URS approved by user, engineering and QA", "Room data sheets per room", "Zoning, pressure and people/material flow drawings"], who: "User department, engineering, QA", refs: ["A15", "A1"] },
+  { k: "RA", t: "Impact and risk assessment", q: false, what: "Classify systems and components as direct, indirect or no impact. Identify the critical aspects (room ΔP, particles, T/RH, UDAF velocity) and the critical design elements that deliver them (terminal HEPA, fan, pressure control, EMS). Focus qualification on these. Score failure modes with FMEA, as in the Quality Risk Manager.", out: ["System impact assessment", "Component criticality list (CAs and CDEs)", "FMEA and test strategy", "Requirements traceability matrix started"], who: "Engineering, QA, SMEs", refs: ["Q9", "ISPE", "E2500"] },
+  { k: "DQ", t: "Design qualification", q: true, what: "Documented verification that the proposed design is suitable for its intended purpose and meets the URS and GMP. Review drawings, air balance, psychrometrics, filter schedule, control philosophy and the FDS against each requirement.", out: ["DQ report with design review records", "Traceability matrix: URS item → design document", "Open design issues closed"], who: "Engineering, QA approval", refs: ["A15", "ISPE"] },
+  { k: "FAT", t: "Factory acceptance test", q: false, what: "Testing the AHU and control panels at the manufacturer before shipment: casing leakage and filter bypass (EN 1886), fan run and vibration, control panel I/O, documentation. Annex 15 allows FAT results to support IQ/OQ when the testing is documented and not affected by transport and installation.", out: ["FAT protocol and report", "Punch list"], who: "Vendor, engineering; QA where leveraged", refs: ["A15", "EN1886"] },
+  { k: "SAT", t: "Commissioning and SAT", q: false, what: "Installation checks, duct leakage tests, start-up, testing, adjusting and balancing (TAB), and control loop tuning under good engineering practice. Well-documented commissioning reduces what IQ and OQ need to repeat.", out: ["Commissioning records and TAB report", "Duct leakage records", "SAT report"], who: "Contractor, engineering", refs: ["ISPE", "E2500", "ISO4"] },
+  { k: "IQ", t: "Installation qualification", q: true, what: "Documented verification that the system is installed according to approved design and manufacturer recommendations.", out: ["As-built and component verification", "Certificates (filters, materials, pressure tests)", "Calibration of critical instruments", "Duct leakage results", "SOPs and maintenance plan in draft"], who: "Validation, engineering; QA approval", refs: ["A15"] },
+  { k: "OQ", t: "Operational qualification", q: true, what: "Documented verification that the system operates as intended across its operating ranges, including alarms and worst cases such as door opening and power failure. Cleanroom performance is tested at rest.", out: ["Airflow and ACH; UDAF velocity", "HEPA leak tests", "Pressure cascade and door tests", "Smoke studies at rest; recovery", "Classification at rest; T/RH", "Alarms, interlocks, power failure, EMS functions"], who: "Validation, certified test contractor; QA approval", refs: ["A15", "A1", "ISO3"] },
+  { k: "PQ", t: "Performance qualification", q: true, what: "Documented verification that the system performs consistently in real operation, with people and processes, over a defined period. Includes the seasonal follow-up.", out: ["Classification in operation", "Microbial EM baseline; alert levels", "Dynamic smoke studies with interventions", "T/RH and ΔP trends in operation", "Seasonal performance report"], who: "Validation, production, QC micro; QA approval", refs: ["A15", "A1", "EN17141"] },
+  { k: "REL", t: "Report and release", q: false, what: "Qualification summary report: every test result, every deviation and its closure, and a clear statement that the system is fit for GMP use. QA releases the system and routine monitoring begins.", out: ["Summary report approved by QA", "Alert and action limits issued", "Monitoring program in force"], who: "Validation, QA", refs: ["A15"] },
+  { k: "OPS", t: "Monitoring and maintenance", q: false, what: "Environmental monitoring per ISO 14644-2 and Annex 1, preventive maintenance (filters, coils, drains, dampers), calibration, and trend review. Periodic review confirms the system remains in a qualified state.", out: ["EM program and trend reports", "PM records; calibration records", "Periodic review report"], who: "Engineering, QC, QA", refs: ["ISO2", "A1"] },
+  { k: "RQ", t: "Requalification and change control", q: true, what: "Periodic requalification at Annex 1 intervals (6 months A/B, 12 months C/D): classification, filter integrity, airflow volume, pressure differences and UDAF velocity. Changes such as filter replacement, layout or airflow changes, adverse trends or long shutdowns trigger an impact assessment and targeted requalification.", out: ["Requalification reports", "Change control records with impact assessment"], who: "Validation, engineering, QA", refs: ["A1", "A15"] }
+];
+
+var GRADES = {
+  rows: ["A", "B", "C", "D"],
+  iso: { A: ["ISO 5", "ISO 5"], B: ["ISO 5", "ISO 7"], C: ["ISO 7", "ISO 8"], D: ["ISO 8", "–"] },
+  cls: { A: [3520, null, 3520, null], B: [3520, null, 352000, 2930], C: [352000, 2930, 3520000, 29300], D: [3520000, 29300, "np", "np"] },
+  mon: { A: [3520, 29, 3520, 29], B: [3520, 29, 352000, 2930], C: [352000, 2930, 3520000, 29300], D: [3520000, 29300, "np", "np"] },
+  micro: { A: ["No growth", "No growth", "No growth", "No growth"], B: [10, 5, 5, 5], C: [100, 50, 25, "–"], D: [200, 100, 50, "–"] },
+  design: {
+    A: ["UDAF 0.36–0.54 m/s at working position", "Inside Grade B (or isolator in ≥ D)", "H14", "Aseptic filling, stoppering, open sterile components, aseptic connections"],
+    B: ["40–60 ACH (justify by recovery)", "≥ 10 Pa to Grade C", "H14", "Background for Grade A aseptic work"],
+    C: ["20–40 ACH", "≥ 10 Pa to Grade D", "H13–H14", "Solution preparation before sterile filtration; filling of terminally sterilised products"],
+    D: ["10–20 ACH", "≥ 10 Pa to CNC", "H13–H14", "Handling cleaned components; background for isolators"]
+  }
+};
+
+var QUIZ = [
+  { q: "Annex 1 (2022) guidance for the pressure difference between adjacent rooms of different grades is at least:", o: ["5 Pa", "10 Pa", "25 Pa", "50 Pa"], a: 1, e: "Annex 1 gives at least 10 Pa as guidance; 10–15 Pa is common design. Much higher values make doors hard to open and do not add much protection." },
+  { q: "What air velocity does Annex 1 give as guidance for Grade A unidirectional airflow?", o: ["0.20–0.30 m/s at the filter face", "0.36–0.54 m/s at the working position", "0.45 m/s ± 20 % at the filter face only", "0.60–0.90 m/s at the working position"], a: 1, e: "0.36–0.54 m/s at the working position, unless scientifically justified in the CCS. Readings at the filter face alone do not show what the product sees." },
+  { q: "Maximum requalification interval for Grade A and B areas under Annex 1:", o: ["3 months", "6 months", "12 months", "24 months"], a: 1, e: "6 months for Grade A and B, 12 months for Grade C and D. Requalification covers classification, filter integrity, airflow volume, pressure differences and, for UDAF, velocity." },
+  { q: "During an installed HEPA scan with a photometer, which reading counts as a leak (ISO 14644-3)?", o: ["> 0.001 % of upstream", "> 0.01 % of upstream", "> 0.1 % of upstream", "> 1 % of upstream"], a: 1, e: "A penetration above 0.01 % of the upstream concentration is a leak. Confirm it with a stationary probe, then repair within limits or replace the filter." },
+  { q: "A Grade C room has a floor area of 30 m². How many sampling locations does ISO 14644-1:2015 Table A.1 require at minimum?", o: ["5", "6", "8", "30"], a: 2, e: "Areas above 28 m² and up to 32 m² need 8 locations. Annex 1 also expects extra locations chosen by risk." },
+  { q: "The Annex 1 classification limit for ≥ 0.5 µm particles in a Grade B room in operation is:", o: ["3 520 /m³", "35 200 /m³", "352 000 /m³", "3 520 000 /m³"], a: 2, e: "352 000 /m³ (ISO 7). At rest, Grade B must meet 3 520 /m³ (ISO 5)." },
+  { q: "An airlock held at a higher pressure than both rooms it connects is a:", o: ["Cascade airlock", "Sink airlock", "Bubble airlock", "Pass box"], a: 2, e: "A bubble airlock pushes air into both sides, protecting both. A sink airlock is lower than both sides and draws air in from both." },
+  { q: "The ISO 14644-3 recovery test measures:", o: ["Time for particle concentration to fall 100:1 after a challenge", "Time for room pressure to return after a door opens", "Time for temperature to return after a heat load", "Time for HEPA ΔP to settle after a filter change"], a: 0, e: "Recovery is the time for a 100:1 reduction (or return to the class limit) after an aerosol challenge. It shows whether air changes and mixing are adequate." },
+  { q: "Smoke studies with operators performing interventions on the running line belong to:", o: ["DQ", "IQ", "OQ at rest", "PQ / in-operation qualification"], a: 3, e: "At-rest smoke studies are done in OQ. Studies with real interventions in operation are part of PQ and feed operator training and the aseptic process simulation." },
+  { q: "Why are adiabatic (spray or wetted-media) humidifiers usually avoided in GMP air handlers?", o: ["They cannot reach 45 % RH", "Standing water and wet surfaces can grow microorganisms", "They use too much electricity", "They cannot be controlled by a BMS"], a: 1, e: "Water reservoirs and wetted media can grow microbes and release bioaerosols. Clean-steam humidification avoids this." },
+  { q: "What changed for classification in ISO 14644-1:2015 compared with the 1999 edition?", o: ["A 95 % UCL is required when fewer than 10 locations are used", "The 95 % UCL calculation was removed; every location must meet the limit", "The highest location can be discarded as an outlier", "5 µm counts are required for ISO 5"], a: 1, e: "The 2015 edition removed the 95 % UCL. Each location's result must be within the limit, and locations come from Table A.1 based on area." },
+  { q: "Theoretical time for a 100:1 particle reduction in a perfectly mixed room with 20 air changes per hour:", o: ["About 4 minutes", "About 14 minutes", "About 30 minutes", "About 60 minutes"], a: 1, e: "t = ln(100) / N = 4.6 / 20 h ≈ 0.23 h ≈ 14 min. Real rooms mix less well, so measured recovery is usually longer." },
+  { q: "Which system normally holds the GMP record for room pressure, temperature and humidity and needs a validated audit trail?", o: ["The BMS used for plant control", "A qualified EMS", "The fan's variable-speed drive", "The balancing contractor's report"], a: 1, e: "The EMS is validated (often GAMP 5 category 4) and meets Annex 11 / Part 11. A BMS used only for control can stay under good engineering practice." },
+  { q: "Under ICH Q9(R1), ASTM E2500 and the ISPE C&Q guide, what gets formal qualification testing?", o: ["Every component, regardless of impact", "Critical aspects and the critical design elements that deliver them", "Only parts from approved suppliers", "Only items on the AHU datasheet"], a: 1, e: "Risk-based C&Q focuses verification on what affects product quality: critical aspects (e.g. ΔP, particles) and the design elements that control them. Other items are covered by good engineering practice." }
+];
+
+/* ---------- Helpers ---------- */
+function $(s, r) { return (r || document).querySelector(s); }
+function $$(s, r) { return Array.prototype.slice.call((r || document).querySelectorAll(s)); }
+function esc(s) { return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
+function fmt(n, d) { return Number(n).toLocaleString("en-GB", { maximumFractionDigits: d == null ? 0 : d, minimumFractionDigits: d == null ? 0 : d }); }
+function level(s, o) { var m = s * o; return m >= 20 ? "Critical" : m >= 10 ? "High" : m >= 5 ? "Medium" : "Low"; }
+var reduceMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+var KEY = "hvac-masterclass-v1";
+var state = { studied: [], quiz: {} };
+try { var raw = localStorage.getItem(KEY); if (raw) { var p = JSON.parse(raw); state.studied = p.studied || []; state.quiz = p.quiz || {}; } } catch (e) {}
+function save() { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {} }
+
+var byId = {}; COMPS.forEach(function (c, i) { c.n = i + 1; byId[c.id] = c; });
+
+/* ---------- Test rendering ---------- */
+function testBlock(id, open) {
+  var t = TESTS[id]; if (!t) return "";
+  var li = function (a) { return a.map(function (x) { return "<li>" + esc(x) + "</li>"; }).join(""); };
+  return '<details class="test"' + (open ? " open" : "") + ' data-test="' + id + '"><summary><span class="tid">' + id + '</span><span class="tname">' + esc(t.name) + '</span><span class="stg">' + t.stages.map(function (s) { return "<i>" + s + "</i>"; }).join("") + '</span></summary>' +
+    '<div class="tbody"><p>' + esc(t.purpose) + '</p>' +
+    '<div class="tcols"><div><h5>Instruments and materials</h5><ul>' + li(t.inst) + '</ul></div><div><h5>Before you start</h5><ul>' + li(t.pre) + '</ul></div></div>' +
+    '<div><h5>Procedure</h5><ol>' + li(t.steps) + '</ol></div>' +
+    '<div><h5>Acceptance criteria</h5><ul class="acc">' + li(t.acc) + '</ul></div>' +
+    '<p style="font-size:13.5px"><b>Records:</b> ' + esc(t.rec) + '</p>' +
+    '<p class="refs">Sources: ' + t.refs.map(function (r) { return esc(REF[r][0]); }).join(" · ") + '</p></div></details>';
+}
+
+/* ---------- Schematic + panel ---------- */
+var svg = $("#schem");
+var panel = $("#panel");
+var sel = null, tab = "overview", stage = "DQ";
+
+function buildChips() {
+  $("#chips").innerHTML = COMPS.map(function (c) {
+    return '<button class="chip" data-id="' + c.id + '"><span class="n">' + c.n + '</span>' + esc(c.name) + '</button>';
+  }).join("");
+}
+
+function refreshMarks() {
+  $$(".hs", svg).forEach(function (g) { g.classList.toggle("sel", g.getAttribute("data-id") === sel); g.setAttribute("aria-pressed", g.getAttribute("data-id") === sel ? "true" : "false"); });
+  svg.classList.toggle("has-sel", !!sel);
+  $$(".chip").forEach(function (b) {
+    var id = b.getAttribute("data-id");
+    b.classList.toggle("sel", id === sel);
+    b.classList.toggle("done", state.studied.indexOf(id) >= 0);
+  });
+  var n = state.studied.length;
+  $("#pg-comp").textContent = n + " / " + COMPS.length;
+  $("#pg-comp-bar").style.width = (n / COMPS.length * 100) + "%";
+}
+
+function renderPanel() {
+  var c = byId[sel];
+  if (!c) {
+    panel.innerHTML = '<div class="p-head"><div class="eyebrow">Inspector</div><h3>Select a component</h3><p class="role">Click any part of the schematic or a numbered marker. The inspector shows its function, types, critical parameters, qualification tests by stage, failure modes and sources.</p></div>' +
+      '<div class="p-body"><h4>Suggested route</h4><ol style="margin:0;padding-left:20px;display:grid;gap:4px">' + COMPS.map(function (x) { return '<li><a href="#' + x.id + '" data-go="' + x.id + '" style="color:var(--accent)">' + esc(x.name) + '</a></li>'; }).join("") + '</ol></div>';
+    return;
+  }
+  var tabs = [["overview", "Overview"], ["qual", "Qualification"], ["risk", "Risks"], ["refs", "Sources"]];
+  var h = '<div class="p-head"><div class="eyebrow">Component ' + String(c.n).padStart(2, "0") + ' of 14 · ' + esc(c.area) + '</div><h3>' + esc(c.name) + '</h3><p class="role">' + esc(c.role) + '</p></div>';
+  h += '<div class="p-tabs" role="tablist">' + tabs.map(function (t) { return '<button role="tab" data-tab="' + t[0] + '" aria-selected="' + (tab === t[0]) + '">' + t[1] + '</button>'; }).join("") + '</div>';
+  h += '<div class="p-body" id="p-body">';
+  if (tab === "overview") {
+    h += '<div style="display:grid;gap:8px"><h4>Function</h4>' + c.fn.map(function (p) { return "<p>" + esc(p) + "</p>"; }).join("") + '</div>';
+    h += '<div style="display:grid;gap:8px"><h4>Types</h4><div class="types">' + c.types.map(function (t) { return "<div><b>" + esc(t[0]) + "</b><span>" + esc(t[1]) + "</span></div>"; }).join("") + '</div></div>';
+    h += '<div style="display:grid;gap:8px"><h4>Critical parameters</h4><div class="tbl-wrap"><table><thead><tr><th>Parameter</th><th>Typical value or criterion</th></tr></thead><tbody>' + c.params.map(function (p) { return "<tr><td><b>" + esc(p[0]) + "</b></td><td>" + esc(p[1]) + "</td></tr>"; }).join("") + '</tbody></table></div></div>';
+    h += '<div class="findings"><h4>Seen in inspections</h4>' + c.finds.map(function (f) { return "<p><b>Typical observation</b>" + esc(f) + "</p>"; }).join("") + '</div>';
+  } else if (tab === "qual") {
+    h += '<div class="stages" role="group" aria-label="Qualification stage">' + STAGES.map(function (s) { return '<button data-stage="' + s[0] + '" aria-pressed="' + (stage === s[0]) + '">' + (s[0] === "RQ" ? "Requal" : s[0]) + ' <small>' + c.stages[s[0]].length + '</small></button>'; }).join("") + '</div>';
+    var st = STAGES.filter(function (s) { return s[0] === stage; })[0];
+    h += '<p class="stage-q"><b>' + st[1] + '</b>' + esc(st[2]) + '</p>';
+    var items = c.stages[stage];
+    var checks = items.filter(function (x) { return x.charAt(0) !== "@"; });
+    var tests = [];
+    items.forEach(function (x) { var m = x.match(/@(T-[A-Z-]+)/g); if (m) m.forEach(function (k) { k = k.slice(1); if (tests.indexOf(k) < 0) tests.push(k); }); });
+    if (checks.length) h += '<div style="display:grid;gap:8px"><h4>Checks</h4><ul class="checks">' + checks.map(function (x) { return "<li><span>" + esc(x.replace(/\s*@T-[A-Z-]+/g, "")) + "</span></li>"; }).join("") + '</ul></div>';
+    if (tests.length) h += '<div><h4 style="margin-bottom:8px">Test methods</h4>' + tests.map(function (k, i) { return testBlock(k, i === 0 && tests.length === 1); }).join("") + '</div>';
+  } else if (tab === "risk") {
+    h += '<p class="note">Failure modes scored with the same FMEA rules as the Quality Risk Manager: RPN = S × O × D; level from S × O. Use them as a starting point for your own assessment.</p>';
+    h += '<div class="tbl-wrap"><table><thead><tr><th>Failure mode → effect</th><th>Controls</th><th class="num">S</th><th class="num">O</th><th class="num">D</th><th class="num">RPN</th><th>Level</th></tr></thead><tbody>' +
+      c.risks.map(function (r) { var lv = level(r[3], r[4]); return '<tr><td><b>' + esc(r[0]) + '</b><br><span style="color:var(--ink-2)">' + esc(r[1]) + '</span></td><td>' + esc(r[2]) + '</td><td class="num">' + r[3] + '</td><td class="num">' + r[4] + '</td><td class="num">' + r[5] + '</td><td class="num"><b>' + (r[3] * r[4] * r[5]) + '</b></td><td><span class="pill ' + lv + '">' + lv + '</span></td></tr>'; }).join("") +
+      '</tbody></table></div>';
+  } else {
+    h += '<ul class="refl">' + c.refs.map(function (r) { return "<li><b>" + esc(REF[r][0]) + "</b>" + esc(REF[r][1]) + "</li>"; }).join("") + '</ul>';
+  }
+  h += '</div>';
+  var i = c.n - 1;
+  h += '<div class="p-foot"><button class="btn" data-go="' + (i > 0 ? COMPS[i - 1].id : "") + '"' + (i > 0 ? "" : " disabled") + '>← ' + (i > 0 ? esc(COMPS[i - 1].name) : "Start") + '</button>' +
+    (i < COMPS.length - 1 ? '<button class="btn primary" data-go="' + COMPS[i + 1].id + '">Next: ' + esc(COMPS[i + 1].name) + ' →</button>' : '<a class="btn primary" href="#lifecycle" style="text-decoration:none">Continue to the lifecycle →</a>') + '</div>';
+  panel.innerHTML = h;
+}
+
+function select(id, opts) {
+  if (!byId[id]) return;
+  sel = id;
+  if (state.studied.indexOf(id) < 0) { state.studied.push(id); save(); }
+  refreshMarks(); renderPanel();
+  try { history.replaceState(null, "", "#" + id); } catch (e) {}
+  if (opts && opts.scroll && window.innerWidth < 1120) panel.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "start" });
+}
+
+svg.addEventListener("click", function (e) { var g = e.target.closest(".hs"); if (g) select(g.getAttribute("data-id"), { scroll: true }); });
+svg.addEventListener("keydown", function (e) { if (e.key === "Enter" || e.key === " ") { var g = e.target.closest(".hs"); if (g) { e.preventDefault(); select(g.getAttribute("data-id"), { scroll: true }); } } });
+$("#chips").addEventListener("click", function (e) { var b = e.target.closest(".chip"); if (b) select(b.getAttribute("data-id"), { scroll: true }); });
+panel.addEventListener("click", function (e) {
+  var t = e.target.closest("[data-tab]"); if (t) { tab = t.getAttribute("data-tab"); renderPanel(); return; }
+  var s = e.target.closest("[data-stage]"); if (s) { stage = s.getAttribute("data-stage"); renderPanel(); return; }
+  var g = e.target.closest("[data-go]"); if (g && g.getAttribute("data-go")) { e.preventDefault(); select(g.getAttribute("data-go")); var b = $("#p-body"); if (b) b.scrollTop = 0; }
+});
+
+function toggle(btnId, cls) {
+  var b = $(btnId);
+  b.addEventListener("click", function () { var on = b.getAttribute("aria-pressed") !== "true"; b.setAttribute("aria-pressed", on); svg.classList.toggle(cls, !on); });
+}
+toggle("#t-flow", "no-flow"); toggle("#t-press", "no-press"); toggle("#t-grade", "no-grade");
+
+/* ---------- Lifecycle ---------- */
+var lcSel = "OQ";
+function renderLife() {
+  $("#lc-rail").innerHTML = LIFE.map(function (s, i) { return '<button class="lc-step' + (s.q ? " q" : "") + '" data-lc="' + s.k + '" aria-pressed="' + (lcSel === s.k) + '"><span class="dot">' + (i + 1) + '</span><span>' + esc(s.t) + '</span></button>'; }).join("");
+  var s = LIFE.filter(function (x) { return x.k === lcSel; })[0];
+  var stageKey = { DQ: "DQ", IQ: "IQ", OQ: "OQ", PQ: "PQ", RQ: "RQ" }[s.k];
+  var testsHere = stageKey ? Object.keys(TESTS).filter(function (k) { return TESTS[k].stages.indexOf(stageKey) >= 0; }) : [];
+  $("#lc-detail").innerHTML = '<div style="display:grid;gap:10px"><div class="eyebrow">' + (s.q ? "Formal qualification stage" : "Supporting stage") + ' · ' + esc(s.who) + '</div><h3>' + esc(s.t) + '</h3><p>' + esc(s.what) + '</p><p class="refs">Sources: ' + s.refs.map(function (r) { return esc(REF[r][0]); }).join(" · ") + '</p></div>' +
+    '<div style="display:grid;gap:12px;align-content:start"><div><h4 class="eyebrow">Deliverables</h4><ul>' + s.out.map(function (o) { return "<li>" + esc(o) + "</li>"; }).join("") + '</ul></div>' +
+    (testsHere.length ? '<div><h4 class="eyebrow">Tests used at this stage</h4><div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px">' + testsHere.map(function (k) { return '<a class="tid" style="text-decoration:none" href="#tests" data-jump="' + k + '">' + k + '</a>'; }).join("") + '</div></div>' : "") + '</div>';
+}
+$("#lc-rail").addEventListener("click", function (e) { var b = e.target.closest("[data-lc]"); if (b) { lcSel = b.getAttribute("data-lc"); renderLife(); } });
+document.addEventListener("click", function (e) {
+  var j = e.target.closest("[data-jump]"); if (!j) return;
+  var k = j.getAttribute("data-jump"); libStage = "All"; $("#lib-q").value = k; renderLib();
+  setTimeout(function () { var d = document.querySelector('#lib details[data-test="' + k + '"]'); if (d) { d.open = true; } }, 0);
+});
+
+/* ---------- Grades ---------- */
+var gMode = "cls";
+function cell(v) { return v === null ? '<span style="color:var(--muted)">not specified</span>' : v === "np" ? '<span style="color:var(--muted)">not predetermined</span>' : fmt(v); }
+function renderGrades() {
+  var d = GRADES[gMode];
+  $("#grade-tbl").innerHTML = '<thead><tr><th>Grade</th><th>ISO class<br>rest / op</th><th class="num">At rest<br>≥0.5 µm</th><th class="num">At rest<br>≥5.0 µm</th><th class="num">In operation<br>≥0.5 µm</th><th class="num">In operation<br>≥5.0 µm</th></tr></thead><tbody>' +
+    GRADES.rows.map(function (g) { return '<tr><td><span class="grade-tag g' + g + '-bg" style="background:var(--g' + g + ')">' + g + '</span></td><td class="mono" style="font-size:12.5px">' + GRADES.iso[g].join(" / ") + '</td>' + d[g].map(function (v) { return '<td class="num">' + cell(v) + '</td>'; }).join("") + '</tr>'; }).join("") + '</tbody>';
+  $("#grade-foot").textContent = gMode === "cls"
+    ? "Table 1 (classification). Grade A and B at rest: ≥5.0 µm may be included where the CCS or trends show a need. Grade D in operation: the site sets limits based on risk."
+    : "Table 5 (monitoring). Grade A ≥5.0 µm: 29 /m³; repeated low-level counts of ≥5.0 µm particles should be investigated as a possible sign of contamination.";
+  $("#g-class").setAttribute("aria-pressed", gMode === "cls"); $("#g-mon").setAttribute("aria-pressed", gMode === "mon");
+}
+$("#g-class").addEventListener("click", function () { gMode = "cls"; renderGrades(); });
+$("#g-mon").addEventListener("click", function () { gMode = "mon"; renderGrades(); });
+$("#micro-tbl").innerHTML = '<thead><tr><th>Grade</th><th class="num">Air sample<br>cfu/m³</th><th class="num">Settle plate 90 mm<br>cfu/4 h</th><th class="num">Contact plate 55 mm<br>cfu/plate</th><th class="num">Glove print<br>cfu/glove</th></tr></thead><tbody>' +
+  GRADES.rows.map(function (g) { return '<tr><td><span class="grade-tag" style="background:var(--g' + g + ')">' + g + '</span></td>' + GRADES.micro[g].map(function (v) { return '<td class="num">' + (typeof v === "number" ? v : esc(v)) + '</td>'; }).join("") + '</tr>'; }).join("") + '</tbody>';
+$("#design-tbl").innerHTML = '<thead><tr><th>Grade</th><th>Airflow</th><th>Pressure</th><th>Terminal filter</th><th>Example operations (Annex 1)</th></tr></thead><tbody>' +
+  GRADES.rows.map(function (g) { var r = GRADES.design[g]; return '<tr><td><span class="grade-tag" style="background:var(--g' + g + ')">' + g + '</span></td><td>' + esc(r[0]) + '</td><td>' + esc(r[1]) + '</td><td class="mono">' + esc(r[2]) + '</td><td>' + esc(r[3]) + '</td></tr>'; }).join("") + '</tbody>';
+
+/* ---------- Test library ---------- */
+var libStage = "All";
+function renderLib() {
+  var opts = ["All", "IQ", "OQ", "PQ", "RQ"];
+  $("#lib-stages").innerHTML = opts.map(function (s) { var n = s === "All" ? Object.keys(TESTS).length : Object.keys(TESTS).filter(function (k) { return TESTS[k].stages.indexOf(s) >= 0; }).length; return '<button data-ls="' + s + '" aria-pressed="' + (libStage === s) + '">' + (s === "RQ" ? "Requal" : s) + ' <small>' + n + '</small></button>'; }).join("");
+  var q = $("#lib-q").value.trim().toLowerCase();
+  var keys = Object.keys(TESTS).filter(function (k) {
+    var t = TESTS[k];
+    if (libStage !== "All" && t.stages.indexOf(libStage) < 0) return false;
+    if (!q) return true;
+    return (k + " " + t.name + " " + t.purpose + " " + t.steps.join(" ")).toLowerCase().indexOf(q) >= 0;
+  });
+  if (!keys.length) { $("#lib").innerHTML = '<p class="empty">No test matches “' + esc(q) + '”. Try HEPA, pressure, smoke, recovery or alarm.</p>'; return; }
+  var half = Math.ceil(keys.length / 2);
+  var cols = [keys.slice(0, half), keys.slice(half)];
+  $("#lib").innerHTML = cols.map(function (c) { return '<div class="lib-col">' + c.map(function (k) { return testBlock(k, keys.length === 1); }).join("") + '</div>'; }).join("");
+}
+$("#lib-stages").addEventListener("click", function (e) { var b = e.target.closest("[data-ls]"); if (b) { libStage = b.getAttribute("data-ls"); renderLib(); } });
+$("#lib-q").addEventListener("input", renderLib);
+
+/* ---------- Calculators ---------- */
+var TA1 = [[2,1],[4,2],[6,3],[8,4],[10,5],[24,6],[28,7],[32,8],[36,9],[52,10],[56,11],[64,12],[68,13],[72,14],[76,15],[104,16],[108,17],[116,18],[148,19],[156,20],[192,21],[232,22],[276,23],[352,24],[436,25],[636,26],[1000,27]];
+function nl(A) { for (var i = 0; i < TA1.length; i++) if (A <= TA1[i][0]) return TA1[i][1]; return Math.ceil(27 * A / 1000); }
+var CG = [
+  ["A", "Grade A (at rest or in operation) · ISO 5", 3520, null, true],
+  ["B0", "Grade B at rest · ISO 5", 3520, null, true],
+  ["B1", "Grade B in operation · ISO 7", 352000, 2930, false],
+  ["C0", "Grade C at rest · ISO 7", 352000, 2930, false],
+  ["C1", "Grade C in operation · ISO 8", 3520000, 29300, false],
+  ["D0", "Grade D at rest · ISO 8", 3520000, 29300, false]
+];
+$("#c1-grade").innerHTML = CG.map(function (g) { return '<option value="' + g[0] + '"' + (g[0] === "C0" ? " selected" : "") + '>' + g[1] + '</option>'; }).join("");
+function calc1() {
+  var A = parseFloat($("#c1-area").value), flow = parseFloat($("#c1-flow").value), extra = Math.max(0, parseInt($("#c1-extra").value, 10) || 0);
+  var g = CG.filter(function (x) { return x[0] === $("#c1-grade").value; })[0];
+  $("#c1-five").disabled = !g[4];
+  if (!(A > 0)) { $("#c1-out").innerHTML = '<p class="verdict bad">Enter an area greater than 0 m².</p>'; return; }
+  var lim5 = g[3] !== null ? g[3] : ($("#c1-five").checked && g[4] ? 29 : null);
+  var cmin = lim5 !== null ? lim5 : g[2];
+  var vs = Math.max(2, 20 / cmin * 1000);
+  var tmin = Math.max(1, vs / flow);
+  var n = nl(A), tot = n + extra;
+  $("#c1-out").innerHTML =
+    '<div class="kv big"><span>Minimum locations (Table A.1)</span><b>' + n + '</b></div>' +
+    '<div class="kv"><span>Total with risk-based locations</span><b>' + tot + '</b></div>' +
+    '<div class="kv"><span>Sizes considered</span><b>≥0.5 µm' + (lim5 !== null ? " + ≥5.0 µm" : "") + '</b></div>' +
+    '<div class="kv"><span>Limit driving the volume</span><b>' + fmt(cmin) + ' /m³</b></div>' +
+    '<div class="kv"><span>Minimum sample volume per location</span><b>' + fmt(vs, vs < 100 ? 1 : 0) + ' L</b></div>' +
+    '<div class="kv"><span>Sampling time per location</span><b>' + fmt(tmin, 1) + ' min</b></div>' +
+    '<div class="kv"><span>Total sampling time</span><b>' + fmt(tmin * tot, 0) + ' min</b></div>';
+}
+["#c1-area", "#c1-grade", "#c1-flow", "#c1-extra", "#c1-five"].forEach(function (s) { $(s).addEventListener("input", calc1); $(s).addEventListener("change", calc1); });
+
+function calc2() {
+  var L = parseFloat($("#c2-l").value), W = parseFloat($("#c2-w").value), H = parseFloat($("#c2-h").value), Q = parseFloat($("#c2-q").value), e = parseFloat($("#c2-e").value);
+  if (!(L > 0 && W > 0 && H > 0 && Q > 0 && e > 0 && e <= 1)) { $("#c2-out").innerHTML = '<p class="verdict bad">Enter positive dimensions and airflow, and ε between 0.3 and 1.</p>'; return; }
+  var V = L * W * H, ach = Q / V, ideal = 276.3 / ach, real = ideal / e;
+  var need = 276.3 / (15 * e);
+  var ok = real <= 15, near = real <= 20;
+  $("#c2-out").innerHTML =
+    '<div class="kv"><span>Room volume</span><b>' + fmt(V, 1) + ' m³</b></div>' +
+    '<div class="kv big"><span>Air change rate</span><b>' + fmt(ach, 1) + ' /h</b></div>' +
+    '<div class="kv"><span>100:1 recovery, perfect mixing</span><b>' + fmt(ideal, 1) + ' min</b></div>' +
+    '<div class="kv"><span>100:1 recovery at ε = ' + fmt(e, 2) + '</span><b>' + fmt(real, 1) + ' min</b></div>' +
+    '<div class="kv"><span>ACH needed for 15 min at this ε</span><b>' + fmt(need, 1) + ' /h</b></div>' +
+    '<p class="verdict ' + (near ? "ok" : "bad") + '">' + (ok ? "Expected recovery is within 15 min. Confirm with the recovery test in OQ." : near ? "Expected recovery is 15–20 min: within Annex 1 guidance but with little margin." : "Expected recovery exceeds 20 min. Increase airflow or improve mixing, then confirm by test.") + '</p>';
+}
+["#c2-l", "#c2-w", "#c2-h", "#c2-q", "#c2-e"].forEach(function (s) { $(s).addEventListener("input", calc2); });
+
+function calc3() {
+  var A = parseFloat($("#c3-a").value), dp = parseFloat($("#c3-dp").value), n = parseInt($("#c3-n").value, 10), o = parseFloat($("#c3-o").value) || 0;
+  if (!(A > 0 && dp > 0 && n > 0)) { $("#c3-out").innerHTML = '<p class="verdict bad">Enter a gap area, pressure difference and at least one door.</p>'; return; }
+  var q1 = 0.83 * A * Math.sqrt(dp) * 3600, tot = q1 * n + o;
+  $("#c3-out").innerHTML =
+    '<div class="kv"><span>Leakage per door</span><b>' + fmt(q1) + ' m³/h</b></div>' +
+    '<div class="kv"><span>Doors × ' + n + ' + other leakage</span><b>' + fmt(q1 * n) + ' + ' + fmt(o) + '</b></div>' +
+    '<div class="kv big"><span>Supply surplus to hold ' + fmt(dp) + ' Pa</span><b>' + fmt(tot) + ' m³/h</b></div>' +
+    '<div class="kv"><span>At ' + fmt(dp * 2) + ' Pa the surplus becomes</span><b>' + fmt((0.83 * A * Math.sqrt(dp * 2) * 3600) * n + o) + ' m³/h</b></div>' +
+    '<p class="note">Doubling the pressure difference needs only about 41 % more air, which is why the cascade is held by the offset, not by brute force.</p>';
+}
+["#c3-a", "#c3-dp", "#c3-n", "#c3-o"].forEach(function (s) { $(s).addEventListener("input", calc3); });
+
+/* ---------- Quiz ---------- */
+function renderQuiz() {
+  var answered = 0, right = 0;
+  $("#q-list").innerHTML = QUIZ.map(function (q, i) {
+    var a = state.quiz[i];
+    var done = a !== undefined;
+    if (done) { answered++; if (a === q.a) right++; }
+    return '<div class="card qcard"><div class="qn">Question ' + (i + 1) + ' of ' + QUIZ.length + '</div><h3>' + esc(q.q) + '</h3><div class="opts">' +
+      q.o.map(function (o, j) { var cls = done ? (j === q.a ? " right" : (j === a ? " wrong" : "")) : ""; return '<button class="opt' + cls + '" data-q="' + i + '" data-a="' + j + '"' + (done ? " disabled" : "") + '>' + esc(o) + '</button>'; }).join("") +
+      '</div>' + (done ? '<p class="expl"><b>' + (a === q.a ? "Correct." : "Not quite.") + '</b> ' + esc(q.e) + '</p>' : "") + '</div>';
+  }).join("");
+  $("#q-score").textContent = "Score " + right + " / " + answered + " answered · " + QUIZ.length + " questions";
+  $("#pg-quiz").textContent = answered === 0 ? "0 / " + QUIZ.length + " answered" : right + " correct · " + answered + " / " + QUIZ.length;
+  $("#pg-quiz-bar").style.width = (answered / QUIZ.length * 100) + "%";
+}
+$("#q-list").addEventListener("click", function (e) { var b = e.target.closest(".opt"); if (!b || b.disabled) return; state.quiz[b.getAttribute("data-q")] = parseInt(b.getAttribute("data-a"), 10); save(); renderQuiz(); });
+$("#q-reset").addEventListener("click", function () { state.quiz = {}; save(); renderQuiz(); });
+$("#reset").addEventListener("click", function () { state = { studied: [], quiz: {} }; save(); refreshMarks(); renderQuiz(); });
+
+/* ---------- Boot ---------- */
+buildChips();
+var h0 = (location.hash || "").slice(1);
+if (byId[h0]) { sel = h0; if (state.studied.indexOf(h0) < 0) { state.studied.push(h0); save(); } } else { sel = "hepa"; }
+refreshMarks(); renderPanel(); renderLife(); renderGrades(); renderLib(); calc1(); calc2(); calc3(); renderQuiz();
+window.addEventListener("hashchange", function () { var h = location.hash.slice(1); if (byId[h] && h !== sel) select(h); });
+})();
+</script>
+
+</body>
+</html>
