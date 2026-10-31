@@ -52,6 +52,13 @@ same rules as this app. It also covers the qualification lifecycle, Annex 1 limi
 recovery and door-leakage calculators, and a knowledge check. Open it directly in a browser,
 or at `/training/hvac-qualification-masterclass.html` once the site is hosted.
 
+`training/oncology-containment-masterclass.html` applies the same format to the oncology
+high-potent facility. It has four linked drawings: the FFO floor plan with pressure cascade, people and
+material flows, the mezzanine air system with BIBO exhaust, the dispensing isolator EQ0939 and the press
+negative pressure enclosure. It uses site SOP criteria (SOPGS0023E, SOPVL0102E, SOPVL0011E,
+SOPQC0119E/Onc), and includes isolator leak-rate, OEL/PDE, door-leakage and recovery calculators. The floor
+plan arranges the registered rooms schematically; pressure values are illustrative.
+
 ## Running locally
 
 Requires Node.js 18 or later. There are no dependencies to install.

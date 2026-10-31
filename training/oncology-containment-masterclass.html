@@ -1,0 +1,1943 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Oncology Containment Master Class</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@500;600;700&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap">
+<style>
+/* Layout: petrol header band, then a schematic workbench (drawing left, inspector panel right),
+   followed by reference sections on a mineral-grey ground. Same visual family as the
+   Quality Risk Manager app: condensed Plex for headings, mono for test IDs and limits. */
+:root {
+  --ground: #e9eeec;
+  --surface: #ffffff;
+  --surface-2: #f3f6f5;
+  --ink: #12201e;
+  --ink-2: #3a4a47;
+  --muted: #5d6e69;
+  --line: #d6dedb;
+  --line-strong: #bdc8c4;
+  --band: #0e2326;
+  --band-ink: #e3eeec;
+  --band-muted: #93b1ac;
+  --band-line: #22403f;
+  --accent: #2f4fd9;
+  --accent-ink: #ffffff;
+  --accent-soft: #e4e9fc;
+  /* air streams */
+  --sa: #2a78d6;
+  --ra: #c27f0e;
+  --oa: #1d9a60;
+  --ea: #9b4f8c;
+  --sig: #7c8a87;
+  /* equipment drawing */
+  --casing: #f7faf9;
+  --casing-line: #7d8e8a;
+  --duct: #eef3f2;
+  --duct-edge: #a9b7b3;
+  --coil-c: #2a78d6;
+  --coil-h: #d0504a;
+  /* grades */
+  --gA: #c9dcfb;
+  --gB: #dbe7f8;
+  --gC: #e5eff0;
+  --gD: #eef3ee;
+  /* semantic (risk levels, same as the Quality Risk Manager) */
+  --low: #1d9a60; --low-bg: #ddf3e8; --low-ink: #136b42;
+  --medium: #d29300; --medium-bg: #fbf0cf; --medium-ink: #8a6100;
+  --high: #e3601a; --high-bg: #fde4d4; --high-ink: #a9440f;
+  --critical: #d0263a; --critical-bg: #fbdde1; --critical-ink: #a8172a;
+  --ok: #1d9a60; --ok-bg: #ddf3e8; --bad: #c0283a; --bad-bg: #fbdde1;
+  --shadow-1: 0 1px 0 rgba(18,32,30,.04), 0 1px 3px rgba(18,32,30,.07);
+  --font-display: "IBM Plex Sans Condensed", "Arial Narrow", "Roboto Condensed", system-ui, sans-serif;
+  --font-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --radius: 10px;
+  --radius-sm: 6px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --ground: #0a1113; --surface: #121b1e; --surface-2: #172427;
+    --ink: #e4edeb; --ink-2: #bccbc7; --muted: #8b9e9a; --line: #24343a; --line-strong: #34494f;
+    --band: #060d0f; --band-ink: #e3eeec; --band-muted: #7d9893; --band-line: #172a2d;
+    --accent: #8098ff; --accent-ink: #0a1113; --accent-soft: #1c2550;
+    --sa: #5aa2f0; --ra: #e0a43a; --oa: #4cc48a; --ea: #c886ba; --sig: #75878a;
+    --casing: #162225; --casing-line: #6f8580; --duct: #1b2a2e; --duct-edge: #3d5459;
+    --coil-c: #5aa2f0; --coil-h: #ec7a72;
+    --gA: #1d3358; --gB: #182a40; --gC: #172b2e; --gD: #16241f;
+    --low-bg: #13352a; --low-ink: #5fd39b; --medium-bg: #3a2f0f; --medium-ink: #f0c25a;
+    --high-bg: #43240f; --high-ink: #f59a63; --critical-bg: #47141c; --critical-ink: #ff8592;
+    --ok-bg: #13352a; --bad-bg: #47141c;
+    --shadow-1: 0 1px 0 rgba(0,0,0,.3), 0 1px 3px rgba(0,0,0,.35);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --ground: #0a1113; --surface: #121b1e; --surface-2: #172427;
+  --ink: #e4edeb; --ink-2: #bccbc7; --muted: #8b9e9a; --line: #24343a; --line-strong: #34494f;
+  --band: #060d0f; --band-ink: #e3eeec; --band-muted: #7d9893; --band-line: #172a2d;
+  --accent: #8098ff; --accent-ink: #0a1113; --accent-soft: #1c2550;
+  --sa: #5aa2f0; --ra: #e0a43a; --oa: #4cc48a; --ea: #c886ba; --sig: #75878a;
+  --casing: #162225; --casing-line: #6f8580; --duct: #1b2a2e; --duct-edge: #3d5459;
+  --coil-c: #5aa2f0; --coil-h: #ec7a72;
+  --gA: #1d3358; --gB: #182a40; --gC: #172b2e; --gD: #16241f;
+  --low-bg: #13352a; --low-ink: #5fd39b; --medium-bg: #3a2f0f; --medium-ink: #f0c25a;
+  --high-bg: #43240f; --high-ink: #f59a63; --critical-bg: #47141c; --critical-ink: #ff8592;
+  --ok-bg: #13352a; --bad-bg: #47141c;
+  --shadow-1: 0 1px 0 rgba(0,0,0,.3), 0 1px 3px rgba(0,0,0,.35);
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body { background: var(--ground); color: var(--ink); font-family: var(--font-body); font-size: 15px; line-height: 1.5; }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--band); }
+h1, h2, h3, h4, h5 { font-family: var(--font-display); text-wrap: balance; margin: 0; line-height: 1.15; }
+p { margin: 0; }
+button { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.wrap { max-width: 1340px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+.mono { font-family: var(--font-mono); }
+.eyebrow { font-family: var(--font-mono); font-size: 11.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+
+/* header */
+.band { background: var(--band); color: var(--band-ink); }
+.band .wrap { padding-block: 28px 22px; display: grid; gap: 18px; grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 900px) { .band .wrap { grid-template-columns: minmax(0, 1.5fr) minmax(280px, 1fr); align-items: end; } }
+.band .eyebrow { color: var(--band-muted); }
+.band h1 { font-size: clamp(30px, 4.4vw, 46px); font-weight: 700; letter-spacing: -.01em; margin-top: 6px; }
+.band .lede { color: var(--band-ink); opacity: .86; max-width: 64ch; margin-top: 10px; font-size: 15.5px; }
+.progress { border: 1px solid var(--band-line); border-radius: var(--radius); padding: 14px 16px; display: grid; gap: 10px; }
+.progress .row { display: flex; justify-content: space-between; gap: 12px; font-size: 13px; color: var(--band-muted); }
+.progress .row b { color: var(--band-ink); font-family: var(--font-mono); font-weight: 500; }
+.meter { height: 6px; background: var(--band-line); border-radius: 3px; overflow: hidden; }
+.meter i { display: block; height: 100%; width: 0; background: var(--oa); transition: width .4s; }
+.regs { display: flex; flex-wrap: wrap; gap: 6px; grid-column: 1 / -1; }
+.regs span { font-family: var(--font-mono); font-size: 11px; color: var(--band-muted); border: 1px solid var(--band-line); border-radius: 4px; padding: 2px 7px; }
+
+/* section nav */
+.secnav { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--surface); border-bottom: 1px solid var(--line); }
+.secnav .wrap { display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; }
+.secnav a { flex: none; padding: 12px 12px; font-size: 13.5px; font-weight: 500; color: var(--ink-2); text-decoration: none; border-bottom: 2px solid transparent; }
+.secnav a:hover { color: var(--accent); border-bottom-color: var(--accent); }
+
+section { padding-block: 34px 8px; }
+.sec-head { display: grid; gap: 6px; margin-bottom: 16px; max-width: 80ch; }
+.sec-head h2 { font-size: clamp(22px, 2.6vw, 28px); font-weight: 600; }
+.sec-head p { color: var(--ink-2); }
+
+/* schematic workbench */
+.bench { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; align-items: start; }
+@media (min-width: 1120px) { .bench { grid-template-columns: minmax(0, 1.55fr) minmax(370px, 1fr); } }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow-1); }
+.drawing { min-width: 0; }
+.drawing-tools { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 10px; padding: 12px 14px; border-bottom: 1px solid var(--line); }
+.toggles { display: flex; flex-wrap: wrap; gap: 6px; }
+.tog { border: 1px solid var(--line-strong); background: var(--surface); border-radius: 999px; padding: 4px 11px; font-size: 12.5px; cursor: pointer; display: inline-flex; gap: 6px; align-items: center; }
+.tog[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--ink); }
+.tog::before { content: ""; width: 8px; height: 8px; border-radius: 50%; border: 1.5px solid var(--muted); }
+.tog[aria-pressed="true"]::before { background: var(--accent); border-color: var(--accent); }
+.hint { font-size: 12.5px; color: var(--muted); align-self: center; }
+.svg-scroll { overflow-x: auto; }
+#schem { display: block; width: 100%; min-width: 820px; height: auto; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; padding: 12px 14px; border-top: 1px solid var(--line); }
+.chip { border: 1px solid var(--line); background: var(--surface-2); border-radius: 6px; padding: 4px 9px 4px 5px; font-size: 12.5px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+.chip .n { font-family: var(--font-mono); font-size: 11px; width: 20px; height: 20px; border-radius: 50%; display: inline-grid; place-items: center; background: var(--surface); border: 1px solid var(--line-strong); }
+.chip.done .n { background: var(--ok-bg); border-color: var(--ok); color: var(--low-ink); }
+.chip.sel { border-color: var(--accent); background: var(--accent-soft); }
+.chip.sel .n { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.legend { display: flex; flex-wrap: wrap; gap: 14px; padding: 10px 14px; border-top: 1px solid var(--line); font-size: 12px; color: var(--muted); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.legend i { width: 22px; height: 3px; border-radius: 2px; display: inline-block; }
+
+/* svg styling */
+.sv-casing { fill: var(--casing); stroke: var(--casing-line); stroke-width: 1.5; }
+.sv-div { stroke: var(--casing-line); stroke-width: 1; stroke-dasharray: 3 3; }
+.sv-sec { font-family: var(--font-mono); font-size: 10px; fill: var(--muted); text-anchor: middle; letter-spacing: .06em; }
+.sv-lbl { font-family: var(--font-mono); font-size: 10.5px; fill: var(--muted); }
+.sv-lbl.c { text-anchor: middle; }
+.sv-duct-e { fill: none; stroke: var(--duct-edge); stroke-width: 24; stroke-linejoin: round; }
+.sv-duct { fill: none; stroke: var(--duct); stroke-width: 21; stroke-linejoin: round; }
+.sv-pipe { fill: none; stroke: var(--casing-line); stroke-width: 2.5; }
+.sv-flow { fill: none; stroke-width: 2.6; stroke-linecap: round; stroke-dasharray: 2 12; animation: flow 1.1s linear infinite; }
+.sv-flow.thin { stroke-width: 1.6; stroke-dasharray: 2 9; opacity: .8; }
+.sa { stroke: var(--sa); } .ra { stroke: var(--ra); } .oa { stroke: var(--oa); } .ea { stroke: var(--ea); }
+@keyframes flow { to { stroke-dashoffset: -14; } }
+.sv-equip { fill: var(--surface); stroke: var(--ink-2); stroke-width: 1.4; }
+.sv-line { fill: none; stroke: var(--ink-2); stroke-width: 1.4; }
+.sv-coil-c { fill: none; stroke: var(--coil-c); stroke-width: 1.3; }
+.sv-coil-h { fill: none; stroke: var(--coil-h); stroke-width: 1.3; }
+.sv-wall { fill: none; stroke: var(--ink-2); stroke-width: 3; }
+.sv-door { fill: none; stroke: var(--muted); stroke-width: 1; stroke-dasharray: 3 3; }
+.room-fill { stroke: none; transition: fill .3s; }
+.gA { fill: var(--gA); } .gB { fill: var(--gB); } .gC { fill: var(--gC); } .gD { fill: var(--gD); }
+.no-grade .room-fill { fill: var(--surface); }
+.sv-grade { font-family: var(--font-display); font-weight: 700; font-size: 30px; fill: var(--ink-2); opacity: .55; }
+.sv-room { font-family: var(--font-body); font-size: 12px; font-weight: 600; fill: var(--ink-2); }
+.sv-small { font-family: var(--font-mono); font-size: 9.5px; fill: var(--muted); }
+.press rect { fill: var(--surface); stroke: var(--ink-2); stroke-width: 1; }
+.press text { font-family: var(--font-mono); font-size: 10.5px; font-weight: 600; fill: var(--ink); text-anchor: middle; }
+.press .arr { fill: none; stroke: var(--accent); stroke-width: 2; marker-end: url(#arrowhead); }
+.no-press .press { display: none; }
+.no-flow .sv-flow { display: none; }
+.sv-sig { fill: none; stroke: var(--sig); stroke-width: 1.2; stroke-dasharray: 4 3; }
+.sv-sensor { fill: var(--surface); stroke: var(--sig); stroke-width: 1.4; }
+.sv-sensor-t { font-family: var(--font-mono); font-size: 7.5px; font-weight: 600; fill: var(--ink-2); text-anchor: middle; }
+.hs { cursor: pointer; outline: none; transition: opacity .2s; }
+.hs .hit { fill: transparent; }
+.hs:hover .hit, .hs:focus-visible .hit { fill: var(--accent-soft); }
+.hs.sel .hit { fill: var(--accent-soft); }
+.hs:hover, .hs:focus-visible { filter: drop-shadow(0 0 2px var(--accent)); }
+.hs.sel { filter: drop-shadow(0 0 2.5px var(--accent)) drop-shadow(0 0 1px var(--accent)); }
+.has-sel .hs:not(.sel) { opacity: .62; }
+.has-sel .hs:not(.sel):hover { opacity: 1; }
+.bdg circle { fill: var(--surface); stroke: var(--ink-2); stroke-width: 1.3; }
+.bdg text { font-family: var(--font-mono); font-size: 10.5px; font-weight: 600; fill: var(--ink); text-anchor: middle; dominant-baseline: central; }
+.hs.sel .bdg circle { fill: var(--accent); stroke: var(--accent); }
+.hs.sel .bdg text { fill: var(--accent-ink); }
+.deco { pointer-events: none; }
+
+/* inspector panel */
+.panel { min-width: 0; display: flex; flex-direction: column; }
+@media (min-width: 1120px) { .panel { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 58px); max-height: calc(100vh - 74px); } }
+.p-head { padding: 16px 18px 12px; border-bottom: 1px solid var(--line); display: grid; gap: 4px; }
+.p-head h3 { font-size: 23px; font-weight: 600; }
+.p-head .role { color: var(--ink-2); font-size: 14px; }
+.p-tabs { display: flex; gap: 2px; padding: 0 12px; border-bottom: 1px solid var(--line); overflow-x: auto; scrollbar-width: none; }
+.p-tabs button { flex: none; background: none; border: 0; border-bottom: 2px solid transparent; padding: 10px 8px; font-size: 13.5px; font-weight: 500; color: var(--muted); cursor: pointer; }
+.p-tabs button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent); }
+.p-body { padding: 16px 18px 18px; overflow-y: auto; display: grid; gap: 16px; align-content: start; min-height: 0; }
+.p-body h4 { font-size: 15px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+.p-body p { max-width: 70ch; }
+.p-foot { display: flex; justify-content: space-between; gap: 8px; padding: 10px 14px; border-top: 1px solid var(--line); }
+.btn { border: 1px solid var(--line-strong); background: var(--surface); border-radius: var(--radius-sm); padding: 6px 12px; font-size: 13px; cursor: pointer; }
+.btn:hover { border-color: var(--accent); color: var(--accent); }
+.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.btn.primary:hover { color: var(--accent-ink); filter: brightness(1.08); }
+.types { display: grid; gap: 8px; }
+.types div { display: grid; gap: 2px; padding-left: 12px; border-left: 2px solid var(--line-strong); }
+.types b { font-weight: 600; font-size: 14px; }
+.types span { color: var(--ink-2); font-size: 13.5px; }
+.tbl-wrap { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 13.5px; }
+th, td { text-align: left; vertical-align: top; padding: 7px 9px; border-bottom: 1px solid var(--line); }
+th { font-family: var(--font-mono); font-size: 11px; font-weight: 500; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); background: var(--surface-2); }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; font-family: var(--font-mono); }
+.findings { display: grid; gap: 8px; }
+.findings p { font-size: 13.5px; padding: 8px 10px; background: var(--high-bg); color: var(--ink); border-radius: var(--radius-sm); }
+.findings p b { color: var(--high-ink); font-family: var(--font-mono); font-size: 11px; letter-spacing: .05em; text-transform: uppercase; display: block; }
+
+.stages { display: flex; gap: 4px; flex-wrap: wrap; }
+.stages button { border: 1px solid var(--line-strong); background: var(--surface); border-radius: var(--radius-sm); padding: 5px 10px; font-family: var(--font-mono); font-size: 12.5px; font-weight: 500; cursor: pointer; display: inline-flex; gap: 6px; }
+.stages button small { color: var(--muted); font-size: 11px; }
+.stages button[aria-pressed="true"] { background: var(--band); color: var(--band-ink); border-color: var(--band); }
+.stages button[aria-pressed="true"] small { color: var(--band-muted); }
+.stage-q { font-size: 14px; color: var(--ink-2); padding: 10px 12px; background: var(--surface-2); border-radius: var(--radius-sm); }
+.stage-q b { font-family: var(--font-display); font-size: 15px; color: var(--ink); display: block; }
+.checks { list-style: none; margin: 0; padding: 0; display: grid; gap: 7px; }
+.checks li { display: grid; grid-template-columns: 18px minmax(0, 1fr); gap: 8px; font-size: 14px; }
+.checks li::before { content: ""; width: 12px; height: 12px; margin-top: 4px; border: 1.5px solid var(--line-strong); border-radius: 3px; }
+
+details.test { border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface); }
+details.test + details.test { margin-top: 8px; }
+details.test summary { list-style: none; cursor: pointer; padding: 10px 12px; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 10px; align-items: center; }
+details.test summary::-webkit-details-marker { display: none; }
+details.test summary:hover { background: var(--surface-2); }
+details.test[open] summary { border-bottom: 1px solid var(--line); }
+.tid { font-family: var(--font-mono); font-size: 11.5px; font-weight: 600; color: var(--accent); background: var(--accent-soft); padding: 2px 6px; border-radius: 4px; white-space: nowrap; }
+.tname { font-weight: 600; font-size: 14px; }
+.stg { display: flex; gap: 3px; }
+.stg i { font-style: normal; font-family: var(--font-mono); font-size: 10px; color: var(--muted); border: 1px solid var(--line); border-radius: 3px; padding: 0 4px; }
+.tbody { padding: 12px 14px 14px; display: grid; gap: 10px; font-size: 14px; }
+.tbody h5 { font-family: var(--font-mono); font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.tbody ul, .tbody ol { margin: 4px 0 0; padding-left: 20px; display: grid; gap: 4px; }
+.tcols { display: grid; gap: 12px; grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 560px) { .tcols { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
+.acc { background: var(--ok-bg); border-radius: var(--radius-sm); padding: 8px 10px 8px 28px !important; }
+.refs { font-size: 12.5px; color: var(--muted); }
+.refl { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.refl li { font-size: 13.5px; padding: 8px 10px; border: 1px solid var(--line); border-radius: var(--radius-sm); }
+.refl li b { font-family: var(--font-mono); font-size: 12px; font-weight: 600; display: block; }
+.pill { display: inline-block; font-size: 11.5px; font-weight: 600; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
+.pill.Low { background: var(--low-bg); color: var(--low-ink); }
+.pill.Medium { background: var(--medium-bg); color: var(--medium-ink); }
+.pill.High { background: var(--high-bg); color: var(--high-ink); }
+.pill.Critical { background: var(--critical-bg); color: var(--critical-ink); }
+.note { font-size: 13px; color: var(--muted); }
+
+/* lifecycle */
+.lc-rail { display: flex; gap: 0; overflow-x: auto; padding-bottom: 6px; }
+.lc-step { flex: 1 0 104px; border: 0; background: none; cursor: pointer; padding: 0 4px; display: grid; gap: 6px; justify-items: center; text-align: center; position: relative; }
+.lc-step::before { content: ""; position: absolute; top: 17px; left: 0; right: 0; height: 2px; background: var(--line-strong); z-index: 0; }
+.lc-step:first-child::before { left: 50%; }
+.lc-step:last-child::before { right: 50%; }
+.lc-step .dot { position: relative; z-index: 1; width: 36px; height: 36px; border-radius: 50%; border: 2px solid var(--line-strong); background: var(--surface); display: grid; place-items: center; font-family: var(--font-mono); font-size: 12px; font-weight: 600; }
+.lc-step.q .dot { border-color: var(--accent); }
+.lc-step[aria-pressed="true"] .dot { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.lc-step span { font-size: 12.5px; font-weight: 500; color: var(--ink-2); line-height: 1.25; }
+.lc-detail { margin-top: 14px; padding: 18px; display: grid; gap: 14px; grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 900px) { .lc-detail { grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); } }
+.lc-detail h3 { font-size: 21px; font-weight: 600; }
+.lc-detail ul { margin: 6px 0 0; padding-left: 18px; display: grid; gap: 4px; font-size: 14px; }
+.vmodel { margin-top: 14px; padding: 14px; overflow-x: auto; }
+.vmodel svg { display: block; min-width: 640px; width: 100%; height: auto; }
+.vm-box { fill: var(--surface-2); stroke: var(--line-strong); }
+.vm-q { fill: var(--accent-soft); stroke: var(--accent); }
+.vm-t { font-family: var(--font-display); font-size: 13px; font-weight: 600; fill: var(--ink); text-anchor: middle; }
+.vm-s { font-family: var(--font-body); font-size: 10.5px; fill: var(--muted); text-anchor: middle; }
+.vm-link { stroke: var(--accent); stroke-width: 1.2; stroke-dasharray: 4 3; fill: none; }
+.vm-arm { stroke: var(--line-strong); stroke-width: 2; fill: none; }
+
+/* grades */
+.seg { display: inline-flex; border: 1px solid var(--line-strong); border-radius: var(--radius-sm); overflow: hidden; }
+.seg button { border: 0; background: var(--surface); padding: 6px 12px; font-size: 13px; cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--band); color: var(--band-ink); }
+.grade-tag { display: inline-grid; place-items: center; width: 28px; height: 28px; border-radius: 6px; font-family: var(--font-display); font-weight: 700; font-size: 16px; color: var(--ink); }
+.grid-2 { display: grid; gap: 16px; grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 980px) { .grid-2 { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
+.card-pad { padding: 16px 18px; display: grid; gap: 12px; align-content: start; }
+.card-pad h3 { font-size: 18px; font-weight: 600; }
+.tagline { font-size: 12.5px; color: var(--muted); }
+
+/* test library */
+.lib-tools { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 12px; }
+.lib-tools input { flex: 1 1 220px; min-width: 0; border: 1px solid var(--line-strong); background: var(--surface); color: var(--ink); border-radius: var(--radius-sm); padding: 7px 10px; font: inherit; font-size: 14px; }
+.lib-grid { display: grid; gap: 8px; grid-template-columns: minmax(0, 1fr); align-items: start; }
+@media (min-width: 980px) { .lib-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
+.lib-grid details.test + details.test { margin-top: 0; }
+.lib-col { display: grid; gap: 8px; align-content: start; min-width: 0; }
+.empty { color: var(--muted); font-size: 14px; padding: 12px; }
+
+/* calculators */
+.calcs { display: grid; gap: 16px; grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 1100px) { .calcs { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+.form { display: grid; gap: 10px; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+.form label { display: grid; gap: 4px; font-size: 12.5px; color: var(--ink-2); font-weight: 500; }
+.form label.full { grid-column: 1 / -1; }
+.form input, .form select { border: 1px solid var(--line-strong); background: var(--surface); color: var(--ink); border-radius: var(--radius-sm); padding: 7px 9px; font: inherit; font-size: 14px; font-family: var(--font-mono); width: 100%; min-width: 0; }
+.form .chk { display: flex; gap: 8px; align-items: center; grid-column: 1 / -1; font-size: 13px; }
+.form .chk input { width: auto; }
+.out { display: grid; gap: 6px; background: var(--surface-2); border-radius: var(--radius-sm); padding: 12px; }
+.out .kv { display: flex; justify-content: space-between; gap: 10px; font-size: 13.5px; }
+.out .kv b { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-weight: 600; }
+.out .kv.big b { font-size: 20px; }
+.verdict { font-size: 13px; padding: 7px 10px; border-radius: var(--radius-sm); }
+.verdict.ok { background: var(--ok-bg); color: var(--low-ink); }
+.verdict.bad { background: var(--bad-bg); color: var(--critical-ink); }
+.formula { font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+
+/* quiz */
+.quiz { display: grid; gap: 12px; grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 980px) { .quiz { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
+.qcard { padding: 16px 18px; display: grid; gap: 10px; align-content: start; }
+.qcard .qn { font-family: var(--font-mono); font-size: 11.5px; color: var(--muted); }
+.qcard h3 { font-family: var(--font-body); font-size: 15px; font-weight: 600; line-height: 1.4; }
+.opts { display: grid; gap: 6px; }
+.opt { text-align: left; border: 1px solid var(--line-strong); background: var(--surface); border-radius: var(--radius-sm); padding: 8px 11px; font-size: 14px; cursor: pointer; }
+.opt:hover:not([disabled]) { border-color: var(--accent); }
+.opt[disabled] { cursor: default; }
+.opt.right { background: var(--ok-bg); border-color: var(--ok); }
+.opt.wrong { background: var(--bad-bg); border-color: var(--bad); }
+.expl { font-size: 13.5px; color: var(--ink-2); border-left: 3px solid var(--line-strong); padding-left: 10px; }
+.quiz-bar { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 12px; }
+.score { font-family: var(--font-mono); font-size: 14px; }
+
+footer { padding-block: 34px 40px; color: var(--muted); font-size: 13px; }
+footer .wrap { display: grid; gap: 8px; max-width: 1340px; }
+footer p { max-width: 95ch; }
+
+@media (prefers-reduced-motion: reduce) {
+  .sv-flow { animation: none; }
+  .meter i { transition: none; }
+  html { scroll-behavior: auto; }
+}
+
+/* Oncology containment additions: cytotoxic violet for negative pressure and containment,
+   teal for positive pressure, green/orange for people/material flows. */
+:root {
+  --hz: #7a3a9e;
+  --hz-soft: #f1e6f7;
+  --neg: #7a3a9e;
+  --pos: #0f8a86;
+  --people: #1d9a60;
+  --material: #d0700f;
+  --waste: #9a4a2a;
+  --wall: #26332f;
+  --floor: #fbfcfc;
+  --nc-hatch: #c9d1ce;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --hz: #c08ae0; --hz-soft: #2a1838; --neg: #b57ee0; --pos: #3cc3bd;
+    --people: #4cc48a; --material: #f0a24a; --waste: #e08a6a; --wall: #c9d6d2; --floor: #111a1c; --nc-hatch: #34464b;
+  }
+}
+:root[data-theme="dark"] {
+  --hz: #c08ae0; --hz-soft: #2a1838; --neg: #b57ee0; --pos: #3cc3bd;
+  --people: #4cc48a; --material: #f0a24a; --waste: #e08a6a; --wall: #c9d6d2; --floor: #111a1c; --nc-hatch: #34464b;
+}
+.band .eyebrow b { color: var(--band-ink); font-weight: 500; }
+.views { display: flex; gap: 4px; flex-wrap: wrap; }
+.views button { border: 1px solid var(--line-strong); background: var(--surface); border-radius: var(--radius-sm); padding: 6px 12px; font-size: 13px; font-weight: 500; cursor: pointer; display: inline-flex; align-items: center; gap: 7px; }
+.views button i { font-style: normal; font-family: var(--font-mono); font-size: 11px; color: var(--muted); }
+.views button[aria-selected="true"] { background: var(--band); color: var(--band-ink); border-color: var(--band); }
+.views button[aria-selected="true"] i { color: var(--band-muted); }
+.view-cap { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 16px; padding: 10px 14px 0; font-size: 12.5px; color: var(--muted); }
+.view-cap b { color: var(--ink); font-family: var(--font-display); font-size: 15px; font-weight: 600; }
+.sv { display: block; width: 100%; min-width: 860px; height: auto; }
+.sv-room-r { fill: var(--floor); stroke: var(--wall); stroke-width: 2.2; }
+.sv-room-p { stroke: none; pointer-events: none; transition: fill-opacity .3s; }
+.sv-hatch { fill: url(#nc-hatch); pointer-events: none; }
+.sv-code { font-family: var(--font-mono); font-size: 10.5px; font-weight: 600; fill: var(--ink); pointer-events: none; }
+.sv-rname { font-family: var(--font-body); font-size: 11px; fill: var(--ink-2); pointer-events: none; }
+.sv-pa { font-family: var(--font-mono); font-size: 10.5px; font-weight: 600; pointer-events: none; }
+.pa-chip rect { stroke-width: 1; }
+.pa-chip.neg rect { fill: var(--surface); stroke: var(--neg); }
+.pa-chip.pos rect { fill: var(--surface); stroke: var(--pos); }
+.pa-chip.neg text { fill: var(--neg); }
+.pa-chip.pos text { fill: var(--pos); }
+.pa-chip.zero rect { fill: var(--surface); stroke: var(--muted); }
+.pa-chip.zero text { fill: var(--muted); }
+.door-gap { stroke: var(--floor); stroke-width: 5; }
+.door-leaf { fill: none; stroke: var(--muted); stroke-width: 1; }
+.leak { fill: none; stroke-width: 2; stroke-linecap: round; }
+.leak.toneg { stroke: var(--neg); marker-end: url(#ah-neg); }
+.leak.topos { stroke: var(--pos); marker-end: url(#ah-pos); }
+.flowp { fill: none; stroke: var(--people); stroke-width: 2.4; stroke-dasharray: 7 5; marker-end: url(#ah-people); }
+.flowm { fill: none; stroke: var(--material); stroke-width: 2.4; stroke-dasharray: 2 5; stroke-linecap: round; marker-end: url(#ah-mat); }
+.no-flows .flowp, .no-flows .flowm, .no-flows .flow-lbl { display: none; }
+.no-press .pa-chip, .no-press .leak { display: none; }
+.no-press .sv-room-p { fill-opacity: 0 !important; }
+.contain-line { fill: none; stroke: var(--hz); stroke-width: 2; stroke-dasharray: 10 4 2 4; pointer-events: none; }
+.no-contain .contain-line, .no-contain .contain-lbl { display: none; }
+.contain-lbl { font-family: var(--font-mono); font-size: 10px; fill: var(--hz); letter-spacing: .06em; }
+.eq { fill: var(--surface); stroke: var(--ink-2); stroke-width: 1.3; }
+.eq-hz { fill: var(--hz-soft); stroke: var(--hz); stroke-width: 1.5; }
+.eq-npe { fill: none; stroke: var(--hz); stroke-width: 1.6; stroke-dasharray: 5 3; }
+.eq-t { font-family: var(--font-mono); font-size: 8.5px; fill: var(--ink-2); text-anchor: middle; pointer-events: none; }
+.eq-t.hz { fill: var(--hz); font-weight: 600; }
+.sv-glass { fill: var(--accent-soft); fill-opacity: .35; stroke: var(--ink-2); stroke-width: 1.4; }
+.sv-glove { fill: var(--surface); stroke: var(--ink-2); stroke-width: 2; }
+.sv-filter { fill: var(--surface); stroke: var(--ink-2); stroke-width: 1.3; }
+.sv-gauge { fill: var(--surface); stroke: var(--ink-2); stroke-width: 1.3; }
+.callout { font-family: var(--font-mono); font-size: 10px; fill: var(--muted); }
+.callout.k { fill: var(--ink-2); font-weight: 600; }
+.lead { fill: none; stroke: var(--muted); stroke-width: .8; }
+.swirl { fill: none; stroke: var(--sa); stroke-width: 1.4; opacity: .7; }
+.inflow { fill: none; stroke: var(--hz); stroke-width: 2; marker-end: url(#ah-neg2); }
+.sv-band-lbl { font-family: var(--font-mono); font-size: 10.5px; letter-spacing: .08em; fill: var(--muted); }
+.sv-band { fill: var(--surface-2); stroke: var(--line); }
+.tip { position: fixed; z-index: 20; pointer-events: none; background: var(--band); color: var(--band-ink); border-radius: 8px; padding: 8px 10px; font-size: 12.5px; line-height: 1.4; max-width: 260px; box-shadow: 0 8px 24px rgba(0,0,0,.25); }
+.tip b { font-family: var(--font-mono); font-weight: 600; }
+.tip span { color: var(--band-muted); }
+.site { display: grid; gap: 6px; padding: 12px 14px; border: 1px solid var(--hz); border-radius: var(--radius-sm); background: var(--hz-soft); }
+.site h4 { color: var(--hz) !important; }
+.site ul { margin: 0; padding-left: 18px; display: grid; gap: 4px; font-size: 13.5px; }
+.chip-group { display: contents; }
+.chip-h { width: 100%; font-family: var(--font-mono); font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-top: 4px; }
+.ladder svg { display: block; width: 100%; height: auto; }
+.ld-bar.neg { fill: var(--neg); }
+.ld-bar.pos { fill: var(--pos); }
+.ld-bar.zero { fill: var(--muted); }
+.ld-t { font-family: var(--font-mono); font-size: 10.5px; fill: var(--ink-2); }
+.ld-v { font-family: var(--font-mono); font-size: 10.5px; font-weight: 600; fill: var(--ink); }
+.ld-ax { stroke: var(--line-strong); stroke-width: 1; }
+.ld-zero { stroke: var(--ink-2); stroke-width: 1.5; }
+.calcs.four { grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 900px) { .calcs.four { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.oeb td:first-child { font-family: var(--font-mono); font-weight: 600; }
+.pill.hz { background: var(--hz-soft); color: var(--hz); }
+.disclaim { font-size: 12.5px; color: var(--muted); padding: 8px 14px 12px; border-top: 1px solid var(--line); }
+
+svg.sv[hidden] { display: none !important; }
+
+/* Selection without blur: dim the rest, tint hit areas, colour the marker. */
+.sv .hs:hover, .sv .hs:focus-visible, .sv .hs.sel { filter: none; }
+.sv.has-sel .hs:not(.sel) { opacity: .45; }
+.sv .hs.sel .sv-room-r, .sv .hs.sel .eq-hz, .sv .hs.sel .eq-npe, .sv .hs.sel .sv-casing { stroke: var(--accent); }
+.sv .hs:hover .sv-room-r, .sv .hs:focus-visible .sv-room-r { stroke: var(--accent); }
+
+.no-classmode .sv-class { display: none; }
+.sv-class { fill-opacity: .9; }
+</style>
+<style>body{margin:0}[hidden]{display:none!important}:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <defs>
+    <marker id="ah-neg" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="var(--neg)"/></marker>
+    <marker id="ah-neg2" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="4" markerHeight="4" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="var(--hz)"/></marker>
+    <marker id="ah-pos" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="var(--pos)"/></marker>
+    <marker id="ah-people" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="var(--people)"/></marker>
+    <marker id="ah-mat" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="var(--material)"/></marker>
+    <marker id="ah-sa" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="4" markerHeight="4" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="var(--sa)"/></marker>
+    <pattern id="nc-hatch" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="8" height="8" fill="var(--floor)"/><line x1="0" y1="0" x2="0" y2="8" stroke="var(--nc-hatch)" stroke-width="2"/></pattern>
+  </defs>
+</svg>
+
+<header class="band">
+  <div class="wrap">
+    <div>
+      <div class="eyebrow">Master class · <b>Oncology site · high-potent oral solid dose</b> · containment HVAC</div>
+      <h1>Oncology Containment Master Class</h1>
+      <p class="lede">The HVAC system, isolators and negative pressure enclosures that keep cytotoxic dust inside your oncology production floor (FFO). Switch between four drawings: the floor plan with its pressure cascade, the air system on the mezzanine, the dispensing isolator, and the compression enclosure. Select any component to see what it does, how it is qualified at each stage, and how to run each test, with your site's SOP numbers and limits.</p>
+    </div>
+    <div class="progress" aria-label="Your progress">
+      <div class="row"><span>Components studied</span><b id="pg-comp">0 / 18</b></div>
+      <div class="meter"><i id="pg-comp-bar"></i></div>
+      <div class="row"><span>Knowledge check</span><b id="pg-quiz">0 / 15 answered</b></div>
+      <div class="meter"><i id="pg-quiz-bar"></i></div>
+      <div class="row"><span>Saved in this browser only</span><button class="btn" id="reset" style="padding:2px 8px;font-size:12px;background:transparent;color:var(--band-ink);border-color:var(--band-line)">Reset progress</button></div>
+    </div>
+    <div class="regs" aria-label="Basis">
+      <span>SOPGS0023E/Onc containment</span><span>SOPVL0102E HVAC qualification</span><span>SOPVL0011E ΔP</span><span>SOPQC0119E/Onc EM</span><span>WHO TRS 957 Annex 3</span><span>WHO TRS 1010 Annex 8</span><span>EU GMP Ch. 3 &amp; 5 · Annex 15</span><span>EMA HBEL guideline</span><span>ISO 14644-1/-3/-7</span><span>ISO 10648-2</span><span>ISPE SMEPAC</span><span>ISPE OSD Baseline Guide</span><span>ICH Q9(R1)</span>
+    </div>
+  </div>
+</header>
+
+<nav class="secnav" aria-label="Sections">
+  <div class="wrap">
+    <a href="#schematic">1 · Drawings</a>
+    <a href="#lifecycle">2 · Qualification lifecycle</a>
+    <a href="#containment">3 · Containment &amp; limits</a>
+    <a href="#tests">4 · Test method library</a>
+    <a href="#calculators">5 · Calculators</a>
+    <a href="#quiz">6 · Knowledge check</a>
+  </div>
+</nav>
+
+<main>
+<section id="schematic">
+  <div class="wrap">
+    <div class="sec-head">
+      <div class="eyebrow">Module 1</div>
+      <h2>Interactive drawings</h2>
+      <p>Rooms, codes, classifications, EM sampling points and equipment come from your asset register room registry, which follows the site layout drawing, and from SOPQC0119E/Onc. The room arrangement is schematic and not to scale. Pressure values are illustrative values that meet SOPVL0011E (≥6 Pa same class, ≥12 Pa different class); your ΔP labels govern.</p>
+    </div>
+    <div class="bench">
+      <div class="card drawing">
+        <div class="drawing-tools">
+          <div class="views" role="tablist" aria-label="Drawing">
+            <button role="tab" data-view="plan" aria-selected="true">Floor plan <i>FFO</i></button>
+            <button role="tab" data-view="air" aria-selected="false">Air system <i>mezzanine</i></button>
+            <button role="tab" data-view="iso" aria-selected="false">Dispensing isolator <i>EQ0939</i></button>
+            <button role="tab" data-view="npe" aria-selected="false">Press enclosure <i>EQ0940</i></button>
+          </div>
+          <div class="toggles" role="group" aria-label="Overlays" id="plan-toggles">
+            <button class="tog" id="t-press" aria-pressed="true">Pressures</button>
+            <button class="tog" id="t-flows" aria-pressed="true">People &amp; material</button>
+            <button class="tog" id="t-contain" aria-pressed="true">Containment line</button>
+            <button class="tog" id="t-class" aria-pressed="false">Colour by class</button>
+          </div>
+        </div>
+        <div class="view-cap" id="view-cap"></div>
+        <div class="svg-scroll">
+          <svg id="v-plan" class="sv" viewBox="0 0 1200 700" role="group" aria-label="Floor plan of the oncology production floor"></svg>
+
+<svg id="v-air" class="sv" viewBox="0 0 1200 700" role="group" aria-label="Air system schematic" hidden>
+  <g class="deco">
+    <rect class="sv-band" x="20" y="8" width="1160" height="52" rx="4"/><text class="sv-band-lbl" x="32" y="28">TERRACE · DISCHARGE</text>
+    <rect class="sv-band" x="20" y="70" width="1160" height="275" rx="4"/><text class="sv-band-lbl" x="32" y="88">MEZZANINE FFM-O-01 · TECHNICAL</text>
+    <text class="sv-band-lbl" x="32" y="408">1ST FLOOR PRODUCTION · SECTION THROUGH ENTRY ROUTE AND DISPENSING</text>
+    <rect x="60" y="420" width="340" height="220" class="sv-room-r"/><rect x="60" y="420" width="340" height="220" class="sv-room-p" fill="var(--neg)" fill-opacity=".22"/>
+    <rect x="400" y="420" width="220" height="220" class="sv-room-r"/><rect x="400" y="420" width="220" height="220" class="sv-room-p" fill="var(--neg)" fill-opacity=".1"/>
+    <rect x="620" y="420" width="160" height="220" class="sv-room-r"/><rect x="620" y="420" width="160" height="220" class="sv-room-p" fill="var(--pos)" fill-opacity=".1"/>
+    <rect x="780" y="420" width="180" height="220" class="sv-room-r"/><rect x="780" y="420" width="180" height="220" class="sv-room-p" fill="var(--pos)" fill-opacity=".22"/>
+    <rect x="960" y="420" width="200" height="220" class="sv-room-r" style="fill:url(#nc-hatch)"/>
+    <text class="sv-code" x="68" y="440">FFO-01</text><text class="sv-rname" x="68" y="455">Dispensing</text>
+    <text class="sv-code" x="408" y="440">FFO-05</text><text class="sv-rname" x="408" y="455">Corridor</text>
+    <text class="sv-code" x="628" y="440">FFO-22</text><text class="sv-rname" x="628" y="455">PAL IN</text>
+    <text class="sv-code" x="788" y="440">FFO-17</text><text class="sv-rname" x="788" y="455">Changing IN</text>
+    <text class="sv-code" x="968" y="440">Outside</text><text class="sv-rname" x="968" y="455">non-GMP · 0 Pa</text>
+    <g class="pa-chip neg"><rect x="68" y="612" width="52" height="18" rx="4"/><text class="sv-pa" x="94" y="625" text-anchor="middle">−20 Pa</text></g>
+    <g class="pa-chip neg"><rect x="408" y="612" width="52" height="18" rx="4"/><text class="sv-pa" x="434" y="625" text-anchor="middle">−5 Pa</text></g>
+    <g class="pa-chip pos"><rect x="628" y="612" width="52" height="18" rx="4"/><text class="sv-pa" x="654" y="625" text-anchor="middle">+5 Pa</text></g>
+    <g class="pa-chip pos"><rect x="788" y="612" width="52" height="18" rx="4"/><text class="sv-pa" x="814" y="625" text-anchor="middle">+15 Pa</text></g>
+    <path class="leak toneg" d="M410 560 H388"/><path class="leak toneg" d="M630 560 H608"/><path class="leak toneg" d="M790 560 H768"/><path class="leak toneg" d="M970 560 H948"/>
+    <path class="sv-flow thin sa" d="M350 434 C 345 500, 380 560, 380 610"/>
+    <path class="sv-flow thin sa" d="M510 434 C 500 520, 430 560, 425 610"/>
+    <path class="sv-flow thin sa" d="M700 434 C 700 520, 760 560, 765 610"/>
+    <path class="sv-flow thin sa" d="M870 434 C 880 520, 940 560, 945 610"/>
+  </g>
+
+  <g class="hs" data-id="ahu" tabindex="0" role="button" aria-label="Supply AHUs CTA 001 to 003">
+    <title>Supply AHUs CTA 001–003</title>
+    <path class="sv-duct-e" d="M60 24 V110"/><path class="sv-duct" d="M60 24 V110"/><path class="sv-flow oa" d="M60 26 V108"/>
+    <rect class="sv-equip" x="42" y="14" width="36" height="16"/><path class="sv-line" d="M45 19 h30 M45 25 h30" style="stroke-width:1"/>
+    <path class="sv-duct-e" d="M520 165 H560 V368 M340 368 H880 M350 368 V420 M510 368 V420 M700 368 V420 M870 368 V420"/>
+    <path class="sv-duct" d="M520 165 H560 V368 M340 368 H880 M350 368 V420 M510 368 V420 M700 368 V420 M870 368 V420"/>
+    <path class="sv-flow sa" d="M522 165 H560 V368 M560 368 H342 M560 368 H878 M350 372 V416 M510 372 V416 M700 372 V416 M870 372 V416"/>
+    <rect class="sv-casing" x="40" y="110" width="480" height="110" rx="4"/>
+    <path class="sv-div" d="M100 110 V220 M150 110 V220 M200 110 V220 M270 110 V220 M330 110 V220 M440 110 V220"/>
+    <text class="sv-sec" x="70" y="126">OA/MIX</text><text class="sv-sec" x="125" y="126">G4</text><text class="sv-sec" x="175" y="126">F7</text><text class="sv-sec" x="235" y="126">CC</text><text class="sv-sec" x="300" y="126">HC</text><text class="sv-sec" x="385" y="126">FAN</text><text class="sv-sec" x="480" y="126">F9</text>
+    <path class="sv-line" d="M112 140 L138 150 L112 160 L138 170 L112 180 L138 190 L112 200"/>
+    <path class="sv-line" d="M160 140 L192 150 L160 160 M160 168 L192 178 L160 188"/>
+    <rect class="sv-equip" x="212" y="140" width="46" height="66"/><path class="sv-coil-c" d="M214 204 L256 142 M214 184 L242 142 M228 204 L256 162"/>
+    <rect class="sv-equip" x="282" y="140" width="38" height="66"/><path class="sv-coil-h" d="M284 204 L318 150 M284 180 L310 142 M300 204 L318 176"/>
+    <circle class="sv-equip" cx="385" cy="168" r="28"/><path class="sv-line" d="M385 168 q8 -14 0 -24 M385 168 q14 4 24 -4 M385 168 q-8 14 0 24 M385 168 q-14 -4 -24 4"/>
+    <rect class="sv-equip" x="414" y="186" width="20" height="14"/><text class="eq-t" x="424" y="196">VS</text>
+    <path class="sv-line" d="M452 140 L478 150 L452 160 L478 170 L452 180 L478 190 L452 200"/>
+    <text class="callout k" x="40" y="104">CTA SUPPLY 001 · 002 · 003 (EQ0848–EQ0850)</text>
+    <text class="callout" x="86" y="22">Outdoor air</text>
+    <text class="callout" x="640" y="360">Supply main</text>
+    <g class="bdg"><circle cx="520" cy="110" r="10"/><text x="520" y="110">8</text></g>
+  </g>
+
+  <g class="hs" data-id="hepa" tabindex="0" role="button" aria-label="Terminal supply HEPA and low-level extract">
+    <title>Terminal H14 supply filters and low-level extract grilles</title>
+    <rect class="sv-filter" x="326" y="420" width="48" height="12"/><rect class="sv-filter" x="486" y="420" width="48" height="12"/><rect class="sv-filter" x="676" y="420" width="48" height="12"/><rect class="sv-filter" x="846" y="420" width="48" height="12"/>
+    <path class="sv-line" d="M330 422 l4 8 l4 -8 l4 8 l4 -8 l4 8 l4 -8 l4 8 l4 -8 l4 8 M490 422 l4 8 l4 -8 l4 8 l4 -8 l4 8 l4 -8 l4 8 l4 -8 l4 8 M680 422 l4 8 l4 -8 l4 8 l4 -8 l4 8 l4 -8 l4 8 l4 -8 l4 8 M850 422 l4 8 l4 -8 l4 8 l4 -8 l4 8 l4 -8 l4 8 l4 -8 l4 8" style="stroke-width:.8"/>
+    <g fill="var(--surface)" stroke="var(--ink-2)" stroke-width="1.2"><rect x="62" y="600" width="16" height="30"/><rect x="402" y="600" width="16" height="30"/><rect x="762" y="600" width="16" height="30"/><rect x="942" y="600" width="16" height="30"/></g>
+    <text class="callout" x="330" y="448">H14</text>
+    <g class="bdg"><circle cx="388" cy="426" r="10"/><text x="388" y="426">9</text></g>
+  </g>
+
+  <g class="hs" data-id="bibo" tabindex="0" role="button" aria-label="Exhaust AHUs with bag-in bag-out filters">
+    <title>Exhaust CTA 002/003 with BIBO safe-change filters and stack</title>
+    <path class="sv-duct-e" d="M70 615 V398 M410 615 V398 M770 615 V398 M950 615 V398 M70 398 H950 M600 398 V165 H640"/>
+    <path class="sv-duct" d="M70 615 V398 M410 615 V398 M770 615 V398 M950 615 V398 M70 398 H950 M600 398 V165 H640"/>
+    <path class="sv-flow ra" d="M70 612 V398 H596 M410 612 V402 M770 612 V402 M950 612 V398 H604 M600 398 V165 H638"/>
+    <rect class="sv-casing" x="640" y="110" width="500" height="110" rx="4"/>
+    <path class="sv-div" d="M730 110 V220 M820 110 V220 M960 110 V220"/>
+    <text class="sv-sec" x="685" y="126">BIBO M5</text><text class="sv-sec" x="775" y="126">BIBO H14</text><text class="sv-sec" x="890" y="126">EXHAUST FAN</text><text class="sv-sec" x="1050" y="126">DISCHARGE</text>
+    <rect class="eq-hz" x="655" y="140" width="60" height="66"/><path class="sv-line" d="M660 150 L710 160 L660 170 M660 178 L710 188 L660 198"/>
+    <rect class="eq-hz" x="745" y="140" width="60" height="66"/><path class="sv-line" d="M750 146 l5 10 l5 -10 l5 10 l5 -10 l5 10 l5 -10 l5 10 l5 -10 l5 10 M750 176 l5 10 l5 -10 l5 10 l5 -10 l5 10 l5 -10 l5 10 l5 -10 l5 10" style="stroke-width:.8"/>
+    <path d="M665 206 q15 22 30 0 M755 206 q15 22 30 0" fill="none" stroke="var(--hz)" stroke-width="1.2" stroke-dasharray="3 2"/>
+    <circle class="sv-equip" cx="890" cy="168" r="28"/><path class="sv-line" d="M890 168 q8 -14 0 -24 M890 168 q14 4 24 -4 M890 168 q-8 14 0 24 M890 168 q-14 -4 -24 4"/>
+    <path class="sv-duct-e" d="M1000 110 V20"/><path class="sv-duct" d="M1000 110 V20"/><path class="sv-flow ea" d="M1000 108 V22"/>
+    <path d="M820 220 V236 H70 V220" fill="none" stroke="var(--muted)" stroke-width="1.6" stroke-dasharray="6 4"/>
+    <text class="callout" x="120" y="250">Recirculation only to the same area, after risk assessment, through a second HEPA stage (SOPGS0023E)</text>
+    <text class="callout k" x="640" y="104">CTA EXHAUST 002 · 003 · BIBO safe-change</text>
+    <text class="callout" x="1012" y="40">Stack · after H14 only</text>
+    <g class="bdg"><circle cx="1140" cy="110" r="10"/><text x="1140" y="110">10</text></g>
+  </g>
+
+  <g class="hs" data-id="procair" tabindex="0" role="button" aria-label="Process air: FBD and coater AHUs, dust collectors, BIBO">
+    <title>Process air: FBD and coater AHUs, Donaldson dust collectors, Camfil BIBO, extractors</title>
+    <rect class="sv-equip" x="650" y="262" width="130" height="54" rx="3"/><text class="eq-t" x="715" y="284">PROCESS AHU</text><text class="eq-t" x="715" y="298">95 % + 99.97 %</text>
+    <rect class="sv-equip" x="800" y="262" width="90" height="54" rx="3"/><path class="sv-line" d="M812 270 v38 M824 270 v38 M836 270 v38 M848 270 v38 M860 270 v38 M872 270 v38" style="stroke-width:1"/><text class="eq-t" x="845" y="312">DUST COLL.</text>
+    <rect class="eq-hz" x="910" y="262" width="80" height="54" rx="3"/><text class="eq-t hz" x="950" y="292">BIBO CS3</text>
+    <circle class="sv-equip" cx="1050" cy="289" r="22"/><path class="sv-line" d="M1050 289 q6 -10 0 -18 M1050 289 q10 3 18 -3 M1050 289 q-6 10 0 18"/>
+    <path class="sv-pipe" d="M780 289 H800 M890 289 H910 M990 289 H1028 M1072 289 H1165 V22"/>
+    <path class="sv-flow thin ea" d="M1072 289 H1165 V24"/>
+    <path class="sv-pipe" d="M715 316 V340 M845 316 V340" style="stroke-dasharray:4 3"/>
+    <text class="callout" x="650" y="336">to/from FBD EQ0935 (FFO-08) · coater EQ0936 (FFO-10)</text>
+    <g class="bdg"><circle cx="650" cy="262" r="10"/><text x="650" y="262">11</text></g>
+  </g>
+
+  <g class="hs" data-id="bms" tabindex="0" role="button" aria-label="BMS, room pressure gauges, fan interlock and emergency power">
+    <title>BMS / EMS, ΔP gauges, fan interlock, emergency power</title>
+    <rect class="sv-equip" x="330" y="258" width="190" height="58" rx="4"/>
+    <text class="sv-room" x="342" y="278">BMS / EMS</text>
+    <text class="eq-t" x="425" y="296" style="text-anchor:middle">fan interlock · alarms · trends</text>
+    <path class="sv-sig" d="M385 258 V200 M520 287 H545 V470 H960 M400 470 V478 M620 470 V478 M780 470 V478 M960 470 V478"/>
+    <circle class="sv-gauge" cx="400" cy="490" r="11"/><path class="sv-line" d="M400 490 L406 484"/>
+    <circle class="sv-gauge" cx="620" cy="490" r="11"/><path class="sv-line" d="M620 490 L626 484"/>
+    <circle class="sv-gauge" cx="780" cy="490" r="11"/><path class="sv-line" d="M780 490 L786 484"/>
+    <circle class="sv-gauge" cx="960" cy="490" r="11"/><path class="sv-line" d="M960 490 L966 484"/>
+    <rect class="sv-equip" x="1030" y="560" width="110" height="60" rx="4"/><text class="eq-t" x="1085" y="586">EMERGENCY</text><text class="eq-t" x="1085" y="600">GENERATOR</text>
+    <g class="bdg"><circle cx="520" cy="258" r="10"/><text x="520" y="258">12</text></g>
+  </g>
+
+  <g class="hs" data-id="isoair" tabindex="0" role="button" aria-label="Isolator air handling, opens the isolator drawing">
+    <title>Dispensing isolator EQ0939 with its dedicated CTA EQ0939/01 (opens the isolator drawing)</title>
+    <rect class="sv-equip" x="110" y="262" width="190" height="54" rx="3"/><text class="eq-t" x="205" y="284">ISOLATOR CTA</text><text class="eq-t" x="205" y="298">EQ0939/01</text>
+    <path class="sv-pipe" d="M230 500 V316 M300 289 H316 V340 H600"/>
+    <rect class="eq-hz" x="120" y="500" width="180" height="90" rx="4"/>
+    <circle class="sv-glove" cx="165" cy="560" r="10"/><circle class="sv-glove" cx="210" cy="560" r="10"/><circle class="sv-glove" cx="255" cy="560" r="10"/>
+    <text class="eq-t hz" x="210" y="525">ISOLATOR EQ0939</text>
+    <path d="M150 590 V640 M270 590 V640" class="sv-line"/>
+  </g>
+</svg>
+
+<svg id="v-iso" class="sv" viewBox="0 0 1200 700" role="group" aria-label="Dispensing isolator cutaway" hidden>
+  <g class="deco">
+    <rect x="20" y="20" width="1160" height="620" rx="6" fill="var(--neg)" fill-opacity=".06" stroke="var(--line)"/>
+    <text class="sv-band-lbl" x="34" y="42">ROOM FFO-01 · API DISPENSING · −20 Pa (ILLUSTRATIVE)</text>
+    <path class="sv-line" d="M20 640 H1180" style="stroke-width:2.5"/>
+    <path class="sv-line" d="M420 500 V640 M780 500 V640 M410 640 h20 M770 640 h20" style="stroke-width:3"/>
+    <text class="callout" x="34" y="664">Pressures inside the isolator are relative to the room. Values are typical vendor ranges for containment isolators; your URS and FAT set the real ones.</text>
+  </g>
+
+  <g class="hs" data-id="isochamber" tabindex="0" role="button" aria-label="Isolator shell, window and glove ports">
+    <title>Main chamber, window, glove ports and gloves</title>
+    <rect class="eq-hz" x="400" y="200" width="400" height="260" rx="10"/>
+    <rect class="sv-glass" x="414" y="214" width="372" height="190" rx="6"/>
+    <g><circle class="sv-glove" cx="490" cy="370" r="24"/><circle class="sv-glove" cx="600" cy="370" r="24"/><circle class="sv-glove" cx="710" cy="370" r="24"/></g>
+    <path d="M478 360 q-6 -40 4 -60 q6 -10 10 0 q3 -14 9 -4 q4 -10 8 2 q6 -4 6 10 q0 30 -12 52" fill="var(--hz-soft)" stroke="var(--hz)" stroke-width="1.3"/>
+    <path d="M698 360 q-6 -40 4 -60 q6 -10 10 0 q3 -14 9 -4 q4 -10 8 2 q6 -4 6 10 q0 30 -12 52" fill="var(--hz-soft)" stroke="var(--hz)" stroke-width="1.3"/>
+    <rect class="sv-equip" x="565" y="404" width="70" height="30" rx="3"/><rect class="sv-equip" x="578" y="396" width="44" height="8"/><text class="eq-t" x="600" y="424">BALANCE</text>
+    <rect class="sv-equip" x="80" y="520" width="110" height="80" rx="6"/><text class="eq-t" x="135" y="552">SGLT</text><text class="eq-t" x="135" y="566">EQ0960</text>
+    <path d="M190 545 C 300 520, 420 470, 470 392" fill="none" stroke="var(--ink-2)" stroke-width="1.5" stroke-dasharray="5 3"/>
+    <text class="callout k" x="420" y="452">MAIN CHAMBER ≈ −100 Pa vs room</text>
+    <text class="callout" x="82" y="514">Glove leak tester</text>
+    <g class="bdg"><circle cx="800" cy="200" r="10"/><text x="800" y="200">13</text></g>
+  </g>
+
+  <g class="hs" data-id="isotransfer" tabindex="0" role="button" aria-label="Infeed and outfeed pass boxes and bag-out port">
+    <title>Infeed / outfeed pass boxes (MD0165 / MD0166) and bag-out port</title>
+    <rect class="eq-hz" x="240" y="270" width="160" height="160" rx="6"/><rect class="sv-glass" x="252" y="282" width="136" height="120" rx="4"/>
+    <path d="M240 280 V420" stroke="var(--ink-2)" stroke-width="4"/><path d="M400 280 V420" stroke="var(--ink-2)" stroke-width="4" stroke-dasharray="8 4"/>
+    <rect class="eq-hz" x="800" y="270" width="160" height="160" rx="6"/><rect class="sv-glass" x="812" y="282" width="136" height="120" rx="4"/>
+    <path d="M960 280 V420" stroke="var(--ink-2)" stroke-width="4"/><path d="M800 280 V420" stroke="var(--ink-2)" stroke-width="4" stroke-dasharray="8 4"/>
+    <circle class="sv-gauge" cx="320" cy="248" r="13"/><path class="sv-line" d="M320 248 L328 241"/><text class="callout" x="270" y="226">MD0165 infeed</text>
+    <circle class="sv-gauge" cx="880" cy="248" r="13"/><path class="sv-line" d="M880 248 L888 241"/><text class="callout" x="836" y="226">MD0166 outfeed</text>
+    <circle class="sv-equip" cx="880" cy="470" r="22"/><circle class="sv-equip" cx="880" cy="470" r="13"/>
+    <path d="M866 492 q14 70 28 0" fill="var(--hz-soft)" stroke="var(--hz)" stroke-width="1.2"/>
+    <text class="callout" x="910" y="476">Bag-out / liner port (typical)</text>
+    <path class="inflow" d="M212 350 H236"/><path class="inflow" d="M988 350 H964"/>
+    <text class="callout k" x="246" y="446">PASS BOX ≈ −50 Pa</text><text class="callout k" x="806" y="446">PASS BOX ≈ −50 Pa</text>
+    <g class="bdg"><circle cx="240" cy="270" r="10"/><text x="240" y="270">14</text></g>
+  </g>
+
+  <g class="hs" data-id="isofilters" tabindex="0" role="button" aria-label="Isolator inlet and exhaust HEPA filters">
+    <title>Inlet HEPA (MD0167) and exhaust HEPA, push-push / safe change (MD0168)</title>
+    <rect class="sv-filter" x="470" y="150" width="260" height="50" rx="4"/>
+    <path class="sv-line" d="M478 156 l8 38 l8 -38 l8 38 l8 -38 l8 38 l8 -38 l8 38 l8 -38 l8 38 l8 -38 l8 38 l8 -38 l8 38 l8 -38 l8 38 l8 -38 l8 38 l8 -38 l8 38 l8 -38 l8 38 l8 -38 l8 38 l8 -38 l8 38 l8 -38 l8 38 l8 -38 l8 38 l8 -38 l8 38" style="stroke-width:.8"/>
+    <rect class="eq-hz" x="470" y="460" width="260" height="44" rx="4"/>
+    <path class="sv-line" d="M478 466 l8 32 l8 -32 l8 32 l8 -32 l8 32 l8 -32 l8 32 l8 -32 l8 32 l8 -32 l8 32 l8 -32 l8 32 l8 -32 l8 32 l8 -32 l8 32 l8 -32 l8 32 l8 -32 l8 32 l8 -32 l8 32 l8 -32 l8 32 l8 -32 l8 32 l8 -32 l8 32 l8 -32 l8 32" style="stroke-width:.8"/>
+    <rect class="sv-gauge" x="742" y="160" width="40" height="22" rx="3"/><text class="eq-t" x="762" y="175">ΔP</text>
+    <rect class="sv-gauge" x="742" y="470" width="40" height="22" rx="3"/><text class="eq-t" x="762" y="485">ΔP</text>
+    <text class="callout k" x="470" y="140">INLET HEPA H14 · MD0167</text>
+    <text class="callout k" x="470" y="522">EXHAUST HEPA (push-push / safe change) · MD0168</text>
+    <path class="sv-flow thin sa" d="M520 120 V148 M600 120 V148 M680 120 V148"/>
+    <g class="bdg"><circle cx="470" cy="150" r="10"/><text x="470" y="150">15</text></g>
+  </g>
+
+  <g class="hs" data-id="isoair" tabindex="0" role="button" aria-label="Isolator air handling and pressure control">
+    <title>Exhaust fan, dedicated CTA EQ0939/01, chamber ΔP MD0169 and alarms</title>
+    <path class="sv-duct-e" d="M730 482 H750 V600 H1020 V60"/><path class="sv-duct" d="M730 482 H750 V600 H1020 V60"/><path class="sv-flow ea" d="M734 482 H750 V600 H1020 V62"/>
+    <circle class="sv-equip" cx="1020" cy="300" r="30"/><path class="sv-line" d="M1020 300 q8 -14 0 -24 M1020 300 q14 4 24 -4 M1020 300 q-8 14 0 24 M1020 300 q-14 -4 -24 4"/>
+    <text class="callout" x="1058" y="296">Exhaust fan</text><text class="callout" x="1032" y="74">to CTA EQ0939/01</text><text class="callout" x="1032" y="88">→ HEPA exhaust</text>
+    <rect class="sv-equip" x="1050" y="150" width="110" height="80" rx="4"/>
+    <rect x="1060" y="160" width="90" height="34" rx="2" fill="var(--band)"/><text x="1105" y="182" text-anchor="middle" style="font-family:var(--font-mono);font-size:13px;font-weight:600;fill:var(--oa)">−102 Pa</text>
+    <circle cx="1070" cy="212" r="5" fill="var(--oa)"/><circle cx="1088" cy="212" r="5" fill="var(--medium)"/><circle cx="1106" cy="212" r="5" fill="var(--critical)"/>
+    <text class="callout" x="1050" y="246">MD0169 chamber ΔP · alarms</text>
+    <path class="swirl" d="M450 250 c 20 -20 50 -10 40 15 c -8 18 -30 10 -25 -5"/>
+    <path class="swirl" d="M640 240 c 25 -15 55 0 40 22 c -10 14 -28 6 -22 -8"/>
+    <path class="swirl" d="M720 300 c 20 -10 40 5 28 22 c -8 10 -22 4 -18 -6"/>
+    <path class="swirl" d="M520 320 c 18 -12 40 0 30 18"/>
+    <g class="bdg"><circle cx="1050" cy="150" r="10"/><text x="1050" y="150">16</text></g>
+  </g>
+</svg>
+
+<svg id="v-npe" class="sv" viewBox="0 0 1200 700" role="group" aria-label="Compression negative pressure enclosure" hidden>
+  <g class="deco">
+    <rect x="20" y="20" width="1160" height="620" rx="6" fill="var(--neg)" fill-opacity=".06" stroke="var(--line)"/>
+    <text class="sv-band-lbl" x="34" y="42">ROOM FFO-09 · COMPRESSION · −20 Pa (ILLUSTRATIVE)</text>
+    <path class="sv-line" d="M20 640 H1180" style="stroke-width:2.5"/>
+    <rect x="40" y="520" width="230" height="100" rx="6" fill="var(--surface)" stroke="var(--line-strong)"/>
+    <text class="callout k" x="52" y="542">SAME PRINCIPLE IN FFO-28</text>
+    <text class="callout" x="52" y="560">Blister machine EQ0941 with</text>
+    <text class="callout" x="52" y="576">negative enclosure EQ0941/01</text>
+    <text class="callout" x="52" y="592">DP transmitters MD0160–MD0162</text>
+    <text class="callout" x="52" y="608">extract to mezzanine</text>
+    <text class="callout" x="34" y="664">The press works inside a rigid enclosure held below room pressure, so air leaks in at every seam and door gap and dust cannot leak out.</text>
+  </g>
+
+  <g class="hs" data-id="npe" tabindex="0" role="button" aria-label="Negative pressure enclosure shell, doors and closed transfer">
+    <title>Enclosure shell, interlocked doors, glove ports, IBC docking, manometer MD0187</title>
+    <path class="sv-line" d="M190 120 V640 M175 640 h30" style="stroke-width:5"/>
+    <path class="sv-line" d="M190 130 H470" style="stroke-width:4"/>
+    <path d="M420 90 h120 v60 l-30 30 h-60 l-30 -30 z" class="sv-equip"/><text class="eq-t" x="480" y="124">IBC</text>
+    <text class="callout" x="204" y="116">Lifter / potence EQ0940/01</text>
+    <rect class="sv-equip" x="460" y="180" width="40" height="22" rx="3"/><text class="eq-t" x="480" y="195">valve</text>
+    <rect class="eq-hz" x="300" y="200" width="580" height="400" rx="6" style="fill-opacity:.35"/>
+    <rect class="sv-glass" x="316" y="216" width="548" height="368" rx="4"/>
+    <rect x="350" y="250" width="200" height="320" rx="4" fill="none" stroke="var(--ink-2)" stroke-dasharray="6 4"/>
+    <rect x="630" y="250" width="200" height="320" rx="4" fill="none" stroke="var(--ink-2)" stroke-dasharray="6 4"/>
+    <rect class="sv-equip" x="534" y="400" width="12" height="20"/><rect class="sv-equip" x="634" y="400" width="12" height="20"/>
+    <circle class="sv-glove" cx="420" cy="430" r="20"/><circle class="sv-glove" cx="760" cy="430" r="20"/>
+    <circle class="sv-gauge" cx="860" cy="236" r="14"/><path class="sv-line" d="M860 236 L868 228"/><text class="callout" x="880" y="232">MD0187 · 0–125 Pa</text>
+    <path class="inflow" d="M270 300 H296"/><path class="inflow" d="M270 500 H296"/><path class="inflow" d="M910 400 H884"/><path class="inflow" d="M590 630 V604"/>
+    <text class="callout k" x="306" y="616">ENCLOSURE ≈ −20 Pa vs room · inflow at every opening</text>
+    <g class="bdg"><circle cx="300" cy="200" r="10"/><text x="300" y="200">17</text></g>
+  </g>
+
+  <g class="deco">
+    <rect class="sv-equip" x="545" y="230" width="90" height="70"/><path class="sv-line" d="M545 300 L575 330 h30 L635 300"/>
+    <path class="sv-line" d="M480 202 V215 H590 V230"/>
+    <ellipse class="sv-equip" cx="590" cy="350" rx="110" ry="22"/>
+    <rect class="sv-equip" x="490" y="350" width="200" height="220" rx="4"/>
+    <text class="eq-t" x="590" y="460">IMA PREXIMA</text><text class="eq-t" x="590" y="474">EQ0940</text>
+  </g>
+
+  <g class="hs" data-id="npeexh" tabindex="0" role="button" aria-label="Enclosure extract, HEPA, dedusting, vacuum and wash">
+    <title>Extract with HEPA, deduster / metal detector EQ0940/02, vacuum EQ0940/03, wash centre EQ0940/04</title>
+    <path class="sv-duct-e" d="M840 200 V60"/><path class="sv-duct" d="M840 200 V60"/><path class="sv-flow ea" d="M840 198 V62"/>
+    <rect class="eq-hz" x="812" y="100" width="56" height="44" rx="3"/><text class="eq-t hz" x="840" y="126">HEPA</text>
+    <text class="callout" x="878" y="80">extract → mezzanine BIBO → stack</text>
+    <path class="sv-pipe" d="M690 520 H930"/>
+    <rect class="eq-hz" x="930" y="480" width="100" height="80" rx="4"/><text class="eq-t hz" x="980" y="512">DEDUSTER</text><text class="eq-t" x="980" y="526">metal det.</text><text class="eq-t" x="980" y="540">EQ0940/02</text>
+    <path class="sv-pipe" d="M980 560 V580"/><rect class="sv-equip" x="955" y="580" width="50" height="50" rx="3"/><text class="eq-t" x="980" y="608">closed</text>
+    <rect class="sv-equip" x="1070" y="380" width="80" height="70" rx="6"/><text class="eq-t" x="1110" y="408">VACUUM</text><text class="eq-t" x="1110" y="422">EQ0940/03</text>
+    <path d="M1070 420 C 1040 430, 1040 480, 1030 500" fill="none" stroke="var(--ink-2)" stroke-width="2" stroke-dasharray="4 3"/>
+    <rect class="sv-equip" x="980" y="250" width="110" height="70" rx="6"/><text class="eq-t" x="1035" y="280">WASH CENTRE</text><text class="eq-t" x="1035" y="294">EQ0940/04</text>
+    <path d="M980 290 H884" fill="none" stroke="var(--sa)" stroke-width="2" stroke-dasharray="5 3"/>
+    <g class="bdg"><circle cx="868" cy="100" r="10"/><text x="868" y="100">18</text></g>
+  </g>
+</svg>
+        </div>
+        <div class="legend" id="legend"></div>
+        <div class="chips" id="chips" aria-label="Components"></div>
+      </div>
+      <aside class="card panel" id="panel" aria-live="polite"></aside>
+    </div>
+  </div>
+</section>
+
+<section id="lifecycle">
+  <div class="wrap">
+    <div class="sec-head">
+      <div class="eyebrow">Module 2</div>
+      <h2>Qualification lifecycle for a containment facility</h2>
+      <p>SOPVL0102E sets DQ, IQ, OQ and PQ for the HVAC system. A high-potent facility adds three things: a containment master plan and hazard banding at the start (SOPGS0023E), equipment containment tests at FAT and OQ, and a containment verification with a surrogate powder in PQ. Select a stage.</p>
+    </div>
+    <div class="card" style="padding:18px 12px 12px"><div class="lc-rail" id="lc-rail" role="group" aria-label="Lifecycle stages"></div></div>
+    <div class="card lc-detail" id="lc-detail"></div>
+  </div>
+</section>
+
+<section id="containment">
+  <div class="wrap">
+    <div class="sec-head">
+      <div class="eyebrow">Module 3</div>
+      <h2>Containment bands, site limits and the pressure cascade</h2>
+      <p>The hazard sets the containment; the containment sets the HVAC. SOPGS0023E classifies a product as highly hazardous when its PDE (OEL × 10 m³) is 10 µg/day or lower.</p>
+    </div>
+    <div class="grid-2">
+      <div class="card card-pad">
+        <h3>Occupational exposure bands and typical controls</h3>
+        <div class="tbl-wrap"><table class="oeb" id="oeb-tbl"></table></div>
+        <p class="tagline">Band boundaries vary between companies and consultants. Your toxicologist assigns the band; equipment containment performance must be verified against it.</p>
+      </div>
+      <div class="card card-pad">
+        <h3>Your site's acceptance criteria</h3>
+        <div class="tbl-wrap"><table id="site-tbl"></table></div>
+      </div>
+      <div class="card card-pad">
+        <h3>Microbial limits, Grade D oncology area (SOPQC0119E/Onc)</h3>
+        <div class="tbl-wrap"><table id="em-tbl"></table></div>
+        <p class="tagline">Alert is half the action limit. An alert result opens a deviation; an action result is resampled at once, then OOS (SOPQC0034E/Onc) and deviation if it fails again.</p>
+      </div>
+      <div class="card card-pad ladder">
+        <h3>Pressure ladder of the floor plan</h3>
+        <p class="tagline">Every room on the drawing, ranked by pressure against the outside. Bars are drawn to scale.</p>
+        <div id="ladder"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="tests">
+  <div class="wrap">
+    <div class="sec-head">
+      <div class="eyebrow">Module 4</div>
+      <h2>Test method library</h2>
+      <p>Each test lists the site SOP that governs it where one exists, then instruments, prerequisites, procedure, acceptance criteria and records. Values marked typical are industry practice; your URS, SOPs and protocols set the actual criteria.</p>
+    </div>
+    <div class="lib-tools">
+      <div class="stages" id="lib-stages" role="group" aria-label="Filter by stage"></div>
+      <input id="lib-q" type="search" placeholder="Search tests, e.g. glove, SMEPAC, BIBO, recovery" aria-label="Search tests">
+    </div>
+    <div class="lib-grid" id="lib"></div>
+  </div>
+</section>
+
+<section id="calculators">
+  <div class="wrap">
+    <div class="sec-head">
+      <div class="eyebrow">Module 5</div>
+      <h2>Containment calculators</h2>
+      <p>Working tools for protocol design and training. Check results against the current standard before you use them in an approved protocol.</p>
+    </div>
+    <div class="calcs four">
+      <div class="card card-pad">
+        <h3>Isolator leak tightness</h3>
+        <p class="tagline">Pressure-change method, ISO 10648-2. Hourly leak rate and class.</p>
+        <div class="form">
+          <label>Start pressure (Pa, gauge)<input id="k1-p1" type="number" step="1" value="-250"></label>
+          <label>End pressure (Pa, gauge)<input id="k1-p2" type="number" step="1" value="-232"></label>
+          <label>Test duration (min)<input id="k1-t" type="number" min="1" step="1" value="10"></label>
+          <label>Atmospheric pressure (Pa)<input id="k1-atm" type="number" step="10" value="101325"></label>
+          <label>Start temperature (°C)<input id="k1-t1" type="number" step="0.1" value="21.0"></label>
+          <label>End temperature (°C)<input id="k1-t2" type="number" step="0.1" value="21.0"></label>
+        </div>
+        <div class="out" id="k1-out"></div>
+        <p class="formula">R<sub>h</sub> = (3600 / t) × |P₂/T₂ − P₁/T₁| / (P₁/T₁), absolute pressures and kelvin.</p>
+      </div>
+      <div class="card card-pad">
+        <h3>Exposure limit to hazard category</h3>
+        <p class="tagline">SOPGS0023E: PDE (µg/day) = OEL (µg/m³) × 10 m³.</p>
+        <div class="form">
+          <label>OEL (µg/m³, 8 h TWA)<input id="k2-oel" type="number" min="0" step="0.01" value="0.5"></label>
+          <label>Task duration (min)<input id="k2-task" type="number" min="1" step="1" value="30"></label>
+          <label class="full">Measured task concentration, e.g. from SMEPAC (µg/m³)<input id="k2-meas" type="number" min="0" step="0.01" value="2"></label>
+        </div>
+        <div class="out" id="k2-out"></div>
+        <p class="formula">8 h TWA = measured × task min / 480. Compare with the OEL.</p>
+      </div>
+      <div class="card card-pad">
+        <h3>Door leakage and supply–extract offset</h3>
+        <p class="tagline">Air needed through door gaps to hold a pressure difference. Negative rooms need extract greater than supply by this amount.</p>
+        <div class="form">
+          <label>Gap area per door (m²)<input id="c3-a" type="number" min="0.001" step="0.001" value="0.015"></label>
+          <label>Pressure difference (Pa)<input id="c3-dp" type="number" min="1" step="1" value="15"></label>
+          <label>Number of doors<input id="c3-n" type="number" min="1" step="1" value="1"></label>
+          <label>Other leakage, e.g. pass boxes (m³/h)<input id="c3-o" type="number" min="0" step="10" value="40"></label>
+        </div>
+        <div class="out" id="c3-out"></div>
+        <p class="formula">Q = 0.83 × A × ΔP<sup>0.5</sup> m³/s per opening (orifice equation).</p>
+      </div>
+      <div class="card card-pad">
+        <h3>Air changes and recovery</h3>
+        <p class="tagline">Theoretical 100:1 recovery corrected for mixing. Compare with the SOPVL0102E recovery test.</p>
+        <div class="form">
+          <label>Length (m)<input id="c2-l" type="number" min="0.5" step="0.1" value="7"></label>
+          <label>Width (m)<input id="c2-w" type="number" min="0.5" step="0.1" value="5"></label>
+          <label>Ceiling height (m)<input id="c2-h" type="number" min="1" step="0.1" value="3"></label>
+          <label>Supply airflow (m³/h)<input id="c2-q" type="number" min="1" step="50" value="2100"></label>
+          <label class="full">Mixing effectiveness ε (1 = perfect)<input id="c2-e" type="number" min="0.3" max="1" step="0.05" value="0.7"></label>
+        </div>
+        <div class="out" id="c2-out"></div>
+        <p class="formula">ACH = Q / V. t<sub>100:1</sub> = 276 / (ACH × ε) min.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="quiz">
+  <div class="wrap">
+    <div class="sec-head">
+      <div class="eyebrow">Module 6</div>
+      <h2>Knowledge check</h2>
+      <p>Fifteen questions on containment HVAC, isolators, enclosures and your site's procedures.</p>
+    </div>
+    <div class="quiz-bar"><span class="score" id="q-score"></span><button class="btn" id="q-reset">Clear answers</button></div>
+    <div class="quiz" id="q-list"></div>
+  </div>
+</section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <p><b>Training use.</b> Built from your site documents (asset register room registry and equipment lists, SOPGS0023E/Onc, SOPVL0102E, SOPVL0011E, SOPQC0119E/Onc, SOPQC0116E/Onc) and from WHO TRS 957 Annex 3, WHO TRS 1010 Annex 8, EU GMP Chapters 3 and 5, Annex 15, the EMA guideline on health-based exposure limits, ISO 14644, ISO 10648-2 and the ISPE SMEPAC guide. The floor plan is a schematic arrangement of the registered rooms, not the architectural drawing. Pressure values are illustrative. Your approved drawings, URS, SOPs and protocols govern.</p>
+    <p>Risk scores use the Quality Risk Manager rules: RPN = S × O × D (1–125); level from S × O: Low 1–4, Medium 5–9, High 10–19, Critical 20–25.</p>
+  </div>
+</footer>
+<div class="tip" id="tip" hidden></div>
+
+<script>
+(function () {
+"use strict";
+var REF = {
+  GS23: ["SOPGS0023E/Onc", "Hazardous oncology products containment: containment master plan, HVAC rules, PPE, waste"],
+  VL102: ["SOPVL0102E", "Qualification and requalification of HVAC systems (DQ, IQ, OQ, PQ, recovery, 12-month requalification)"],
+  VL11: ["SOPVL0011E", "Monitoring of room absolute and differential pressure (≥6 Pa same class, ≥12 Pa different class)"],
+  QC119: ["SOPQC0119E/Onc", "Microbiological environmental control for the oncology area (locations, frequencies, limits)"],
+  VL07: ["SOPVL0007E", "HEPA filter leakage test"],
+  VL08: ["SOPVL0008E", "Air volume test"],
+  VL09: ["SOPVL0009E", "Airflow direction and visualisation test"],
+  VL10: ["SOPVL0010E", "Monitoring of temperature and relative humidity of controlled installations"],
+  VL12: ["SOPVL0012E", "Non-viable particulate test"],
+  VL56: ["SOPVL0056E", "Cleanrooms and associated controlled environments monitoring"],
+  QC116: ["SOPQC0116E/Onc", "Performance verification of the oncology laboratory isolator"],
+  QC229: ["SOPQC0229/Onc", "Operating and cleaning procedure for the oncology laboratory isolator"],
+  HSE4: ["SOPHSE0004/Onc", "Risk management of high-potent oncology products"],
+  WHO957: ["WHO TRS 957, Annex 3 (2010)", "GMP for pharmaceutical products containing hazardous substances"],
+  WHO1010: ["WHO TRS 1010, Annex 8 (2018)", "HVAC systems for non-sterile pharmaceutical products"],
+  EUGMP: ["EU GMP Part I, Chapters 3 and 5 (2015)", "Premises and production: dedicated facilities and cross-contamination controls based on HBELs"],
+  A15: ["EU GMP Annex 15 (2015)", "Qualification and validation"],
+  HBEL: ["EMA guideline on health-based exposure limits (EMA/CHMP/CVMP/SWP/169430/2012) and Q&A", "PDE setting and risk-based cross-contamination control in shared facilities"],
+  ISO1: ["ISO 14644-1:2015", "Classification of air cleanliness by particle concentration"],
+  ISO3: ["ISO 14644-3", "Cleanroom test methods: airflow, pressure, filter leak, visualisation, recovery, containment leak"],
+  ISO7: ["ISO 14644-7", "Separative devices: clean air hoods, gloveboxes, isolators, mini-environments"],
+  ISO10648: ["ISO 10648-2", "Containment enclosures: classification by leak tightness and test methods"],
+  SMEPAC: ["ISPE Good Practice Guide: Assessing the Particulate Containment Performance of Pharmaceutical Equipment (SMEPAC), 2nd ed.", "Surrogate powder testing of containment equipment"],
+  OSD: ["ISPE Baseline Guide Vol. 2: Oral Solid Dosage Forms, 3rd ed.", "Facility, HVAC and containment design for OSD"],
+  Q9: ["ICH Q9(R1)", "Quality risk management"],
+  EN1822: ["EN 1822 / ISO 29463", "HEPA filter classes (H13 ≥ 99.95 %, H14 ≥ 99.995 % at MPPS)"],
+  GAMP: ["ISPE GAMP 5, 2nd ed.", "Risk-based approach to GxP computerised systems"],
+  A11: ["EU GMP Annex 11 / 21 CFR Part 11", "Computerised systems, audit trails, electronic records"],
+  NIOSH: ["NIOSH Alert 2004", "Preventing occupational exposure to antineoplastic and other hazardous drugs"]
+};
+
+var TESTS = {
+  "T-DOCS": { name: "Documentation and as-built verification", stages: ["IQ"], sop: "VL102",
+    purpose: "Show that what was installed is what was approved, including the containment features the design depends on.",
+    inst: ["Approved P&IDs, HVAC zoning and pressure drawings", "Equipment datasheets, asset register entries", "Camera, torch, tape"],
+    pre: ["DQ approved", "Mechanical completion signed", "Turnover package received"],
+    steps: ["Compile the turnover package: datasheets, filter certificates, FAT/SAT reports, duct leak records, O&M manuals.", "Walk down supply, extract and process air systems against the drawings. Tag each AHU, BIBO housing, damper, sensor and terminal filter.", "Record nameplate data and compare with the asset register (asset number, model, serial).", "Check that every exhaust path ends in a HEPA stage before discharge, with no bypass or direct vent.", "Check that each room has a ΔP gauge with a direction label and limits beside it.", "Mark up deviations; assess any containment-critical difference before closure."],
+    acc: ["Every critical component installed as specified or deviation closed with impact assessment", "No unfiltered exhaust route", "As-built drawings issued"],
+    rec: "IQ checklist, nameplate records, certificate index, red-lined drawings.", refs: ["VL102", "A15", "GS23"] },
+
+  "T-CAL": { name: "Calibration of critical instruments", stages: ["IQ", "RQ"],
+    purpose: "Make every reading used to accept or monitor the system traceable and accurate, including equipment-mounted containment gauges.",
+    inst: ["Reference micromanometer", "Reference T/RH probe", "Calibration certificates"],
+    pre: ["Critical instrument list (room ΔP gauges, isolator DP transmitters MD0165–MD0169, NPE transmitters MD0160–MD0162, MD0187, AHU sensors)"],
+    steps: ["List each critical instrument with tag, range, accuracy and interval (the register uses 12 months).", "Check each certificate: traceable, in date, as-found within tolerance.", "Check room ΔP gauges in situ against a reference micromanometer at the operating point.", "Check that the adjustment screw of each ΔP gauge is covered by a seal sticker (SOPVL0011E).", "Label each instrument with calibration status."],
+    acc: ["All critical instruments calibrated and in date", "Gauge seals intact", "Tolerances as in the calibration register (e.g. ±2 % FS for room gauges, ±4 % FS for −30/+30 Pa enclosure gauges)"],
+    rec: "Calibration certificates, in-situ check sheets.", refs: ["VL11", "A15"] },
+
+  "T-DUCT-LEAK": { name: "Duct leakage test, supply and exhaust", stages: ["IQ"],
+    purpose: "Show ducts are airtight. In a containment facility the exhaust duct after the exhaust fan runs above room pressure: any leak there releases unfiltered contaminated air into the mezzanine unless the HEPA stage is upstream of the fan.",
+    inst: ["Duct leakage rig (fan, calibrated orifice, manometer)", "Blanking plates"],
+    pre: ["Sections complete, before insulation", "Leakage class from the specification"],
+    steps: ["Identify sections: supply after final filter, extract before BIBO (negative), any positive-pressure contaminated section.", "Blank the section ends and connect the rig.", "Pressurise to the design pressure (or depressurise for negative sections) and hold until stable.", "Record leakage flow; calculate L/(s·m²) of duct surface.", "Compare with the class limit f = c × p^0.65 (c = 0.027 A, 0.009 B, 0.003 C, 0.001 D).", "Seal and retest any failing section."],
+    acc: ["At or below the specified class (class C or better typical for contaminated extract)", "No positive-pressure section carrying unfiltered contaminated air"],
+    rec: "Leak test sheet per section.", refs: ["WHO957", "WHO1010"] },
+
+  "T-FILTER-DP": { name: "Filter ΔP baseline and change points", stages: ["IQ", "OQ"],
+    purpose: "Record clean filter pressure drop at design airflow and set alarm and change-out points, for AHU filters and BIBO housings.",
+    inst: ["Reference micromanometer", "Filter data (initial and final ΔP)"],
+    pre: ["Design airflow set by balancing", "New filters installed"],
+    steps: ["Read ΔP across each stage (G4/F7, F9, BIBO M5, BIBO H14) at design flow.", "Compare installed gauges (e.g. MD2515–MD2520 on AHU 2.7) with the reference.", "Set change-out ΔP and high-ΔP alarm per stage.", "Label each gauge with clean and change values."],
+    acc: ["Gauge within ±2 % FS or ±16 Pa of reference (register tolerance for 0–750 Pa gauges)", "Change points documented"],
+    rec: "Filter schedule with clean ΔP, change ΔP, gauge ID.", refs: ["WHO1010", "GS23"] },
+
+  "T-AIRVOL": { name: "Air volume and air change rate", stages: ["OQ", "RQ"], sop: "VL08",
+    purpose: "Show each terminal and each extract grille moves its design airflow, so that ACH and the supply–extract offsets that create negative pressure are met.",
+    inst: ["Balometer (capture hood) with back-pressure compensation", "Thermal anemometer or pitot traverse"],
+    pre: ["Balancing complete", "Doors closed, system at set points"],
+    steps: ["Measure every supply terminal with the capture hood sealed around the diffuser.", "Measure every low-level extract grille.", "Where a hood does not fit, traverse the branch duct.", "Sum supply and extract per room; calculate ACH = supply ÷ room volume.", "Calculate the offset (extract − supply) for each negative room and compare with the air balance.", "Compare with design."],
+    acc: ["Each terminal within ±10 % of design (typical)", "ACH at or above the room data sheet value", "Offsets consistent with the pressure design"],
+    rec: "Air volume data sheet per room.", refs: ["VL08", "ISO3"] },
+
+  "T-HEPA": { name: "Terminal supply HEPA leak test", stages: ["OQ", "RQ"], sop: "VL07",
+    purpose: "Prove each installed supply HEPA, its seal and housing are leak free.",
+    inst: ["Aerosol generator with PAO", "Aerosol photometer", "Upstream sampling port"],
+    pre: ["Airflow at operating value", "Filter certificates checked at IQ", "PPE for PAO handling (SOPVL0102E)"],
+    steps: ["Introduce PAO upstream and verify mixing.", "Measure upstream concentration and set it as 100 %.", "Scan the whole filter face about 25 mm from the media, overlapping strokes at no more than 5 cm/s.", "Scan the frame, gasket or gel seal and housing-to-ceiling joint.", "Confirm any reading above 0.01 % with a stationary probe; repair within limits or replace.", "Retest and record per filter."],
+    acc: ["No penetration above 0.01 % of upstream concentration"],
+    rec: "Filter-by-filter report.", refs: ["VL07", "ISO3", "EN1822"] },
+
+  "T-BIBO": { name: "BIBO exhaust filter test and safe change", stages: ["OQ", "RQ"],
+    purpose: "Show the exhaust HEPA in each bag-in/bag-out housing is intact and can be changed without exposing staff or releasing dust.",
+    inst: ["Aerosol generator and photometer or particle counter", "Housing injection, upstream and downstream scan or sampling ports", "Bags, ties, PPE"],
+    pre: ["Exhaust airflow at design", "Change procedure written; HSE informed"],
+    steps: ["Inject aerosol through the housing's upstream port and measure upstream concentration.", "Scan the downstream face with the housing's scan device. If the housing cannot be scanned, run an overall efficiency test at the downstream port.", "Test the pre-filter and HEPA stages as specified (e.g. AHU 2.7 BIBO: M5 then H14).", "Dry-run a bag-out and bag-in change with the bag clamped, the old filter bagged out and the bag sealed and cut.", "Check the BIBO pressure switch alarm on the exhaust CTA."],
+    acc: ["No leak above 0.01 % (scan) or efficiency meets the filter class; H13 minimum (SOPGS0023E)", "Change completed without breaking the bag", "Pressure switch alarms at set point"],
+    rec: "Test report per housing; change record.", refs: ["GS23", "WHO957", "ISO3"] },
+
+  "T-DP": { name: "Room pressure differential and cascade", stages: ["OQ", "PQ", "RQ"], sop: "VL11",
+    purpose: "Show every room holds the designed direction and size of pressure difference, so air always leaks from the cleaner or safer side into the contained rooms.",
+    inst: ["Calibrated micromanometer (absolute and differential)", "Installed ΔP gauges", "Forms VL0011E/FE01 and FE02"],
+    pre: ["Balancing complete", "Doors closed; closers adjusted", "Gauges calibrated and sealed"],
+    steps: ["Check each installed ΔP gauge is calibrated, its adjustment screw sealed, and a direction label with limits sits beside it.", "Record the occupancy state (at rest or in operation).", "Measure absolute pressure at the room centre at work height after at least 5 min stabilisation.", "Read ΔP to each adjacent room and record on VL0011E/FE01.", "Open each door for a typical time, close it, and record how long ΔP takes to return.", "Repeat in operation for PQ, and read once per shift in routine use (VL0011E/FE02)."],
+    acc: ["≥ 6 Pa between adjacent rooms of the same class", "≥ 12 Pa between adjacent rooms of different classes", "Suite negative to outside; perimeter airlock positive (SOPGS0023E)", "Out-of-range: impact study, then deviation (SOPQA0015E) or work order"],
+    rec: "VL0011E/FE01 (qualification), VL0011E/FE02 (daily).", refs: ["VL11", "GS23", "WHO957"] },
+
+  "T-SMOKE": { name: "Airflow visualisation", stages: ["OQ", "PQ"], sop: "VL09",
+    purpose: "Show on video that air moves from the corridor into the contained rooms at doors, into pass boxes and enclosures at their openings, and toward the low-level extract.",
+    inst: ["Fog generator (water based)", "Video camera and lighting"],
+    pre: ["ΔP and air volume tests passed", "Storyboard of locations approved"],
+    steps: ["Release fog at each door gap of the contained rooms with the door closed, then during opening.", "Release fog at isolator pass box outer doors when opened, and at NPE door seams and openings.", "Release fog near dust-generating points (FBD discharge, press hopper, capsule filler) and follow it to the extract.", "Film continuously with location labels.", "Assess any outward flow, stagnation or reflux and act on it."],
+    acc: ["Inward flow at every door, pass box and enclosure opening", "No outward flow from a contained room or enclosure", "Observations assessed"],
+    rec: "Annotated videos and assessment report.", refs: ["VL09", "ISO3"] },
+
+  "T-RECOV": { name: "Recovery time", stages: ["OQ"], sop: "VL102",
+    purpose: "Show the room returns to its at-rest particle limits after a defined challenge.",
+    inst: ["Qualified particle counter", "Particle generator if justified"],
+    pre: ["HVAC running; room at rest, cleaned, stabilised", "Worst-case locations defined (furthest from supply, critical zone)"],
+    steps: ["Measure and record the at-rest baseline at the selected locations.", "Apply the challenge: personnel movement, defined door openings, or a justified particle generator.", "Stop the challenge, restore normal conditions and start timing.", "Count continuously at ≥0.5 µm and ≥5.0 µm, recording every minute.", "Record the time when every monitored point is back within the at-rest limits."],
+    acc: ["Time to return to at-rest limits within the protocol criterion (15–20 min is common practice)", "Repeat after HVAC change, HEPA replacement, airflow adjustment, reclassification or major maintenance"],
+    rec: "Counts versus time and recovery time per location.", refs: ["VL102", "ISO3"] },
+
+  "T-CLASS": { name: "Particle classification (Grade D / ISO 8)", stages: ["OQ", "PQ", "RQ"], sop: "VL12",
+    purpose: "Classify each room against its grade at rest and record in-operation levels.",
+    inst: ["Light-scattering particle counter calibrated to ISO 21501-4"],
+    pre: ["HEPA, air volume and ΔP tests passed", "Cleaning complete"],
+    steps: ["Take the number of locations from ISO 14644-1 Table A.1 by area, then add risk-based locations.", "Calculate sample volume V = 20 / C × 1000 L (≥2 L, ≥1 min).", "Sample at work height at each location.", "Compare each location with the limit; investigate any failure."],
+    acc: ["Grade D at rest: ≤ 3 520 000 /m³ ≥0.5 µm and ≤ 29 300 /m³ ≥5.0 µm (ISO 8)", "In operation: site-defined"],
+    rec: "Location map and counts.", refs: ["VL12", "ISO1"] },
+
+  "T-TRH": { name: "Temperature and humidity", stages: ["OQ", "PQ"], sop: "VL10",
+    purpose: "Show each room holds its T and RH range, which matters for operator comfort in full PPE and for hygroscopic products.",
+    inst: ["Calibrated data loggers"],
+    pre: ["Control loops tuned", "Ranges approved"],
+    steps: ["Place loggers at work height and near heat sources.", "Log at rest (OQ) and in operation (PQ) over the defined period, by quarter for seasons.", "Compare with installed sensors."],
+    acc: ["Within the room data sheet limits"],
+    rec: "Trend plots and statistics.", refs: ["VL10", "WHO1010"] },
+
+  "T-EM": { name: "Microbial environmental monitoring", stages: ["PQ", "RQ"], sop: "QC119",
+    purpose: "Confirm viable contamination stays within the oncology area limits and set the routine monitoring points.",
+    inst: ["RCS or MAS-100 NT air sampler (1 m³)", "90 mm settle plates, 4 h", "RODAC contact plates (TSA + Tween 80)", "Swabs, 0.9 % NaCl"],
+    pre: ["Sampling points per attachments AE03/AE04", "Media growth-promoted"],
+    steps: ["Sample at the planned locations: door entrances, corners, room centre, low-level returns and equipment control panels (OIT).", "Place air and surface points in an X pattern without overlap.", "Incubate TSA at 30–35 °C for 3–5 days and SDA at 20–25 °C for 5–7 days.", "Count, record, identify atypical or objectionable isolates.", "Issue the monthly trend (QC0119E/Onc/FE08)."],
+    acc: ["Grade D: settle plate action 100 cfu/4 h, air 200 cfu/m³, surface 50 cfu/plate; alert at half", "Alert opens a deviation; action is resampled, then OOS and deviation"],
+    rec: "QC0119E/Onc/FE04 report, FE03 alert logbook, FE08 trend.", refs: ["QC119"] },
+
+  "T-ALARM": { name: "Alarm and interlock challenge", stages: ["OQ"],
+    purpose: "Show each containment alarm triggers at its set point and after its delay: room ΔP, isolator chamber ΔP, BIBO pressure switch, velocity switch, filter ΔP.",
+    inst: ["Alarm list with set points and delays", "Calibrated signal source or physical means"],
+    pre: ["BMS/EMS IQ complete"],
+    steps: ["Create each condition for real where possible: open a door, slow a fan, block a filter partly, open a glove port.", "Record trigger value, time and annunciation (local and BMS).", "Acknowledge and check the audit trail.", "Remove the condition and confirm the reset.", "Test interlocks: supply fan stops if exhaust fan fails; pass box doors cannot both open."],
+    acc: ["Each alarm at set point ± tolerance after its delay", "Each interlock acts as specified"],
+    rec: "Alarm challenge matrix with evidence.", refs: ["GS23", "A11"] },
+
+  "T-PWR": { name: "Fan sequencing, power failure and restart", stages: ["OQ"],
+    purpose: "Show the suite stays negative during start-up, shut-down and power failure, and recovers on generator power (SOPGS0023E).",
+    inst: ["Data-logging micromanometers at the perimeter airlock and a process room (1 s)", "BMS trend"],
+    pre: ["Start/stop sequence in the FDS (exhaust before supply on start; supply before exhaust on stop)"],
+    steps: ["Start the system from off and log ΔP: the contained rooms must never go positive to the corridor or outside.", "Stop the system and log the same.", "Simulate a power failure; record transfer to the emergency generator and fan restart.", "Trip the exhaust fan alone and confirm the supply fan stops by interlock.", "Record recovery time to set points and check for data gaps."],
+    acc: ["No positive excursion of any contained room at any time", "Recovery within the defined time; no data loss"],
+    rec: "Event timeline and ΔP traces.", refs: ["GS23", "WHO957"] },
+
+  "T-DOOR": { name: "Airlock and pass box interlocks", stages: ["OQ"],
+    purpose: "Show airlock doors and pass box doors cannot open together, and emergency release works and is alarmed.",
+    inst: ["Interlock logic", "Stopwatch"],
+    pre: ["Doors, closers, seals installed"],
+    steps: ["Open one door of each airlock and try the other: it must stay locked.", "Repeat for each pass box (FFO-31, FFO-29, isolator pass boxes).", "Operate the emergency release; confirm alarm and record.", "Check behaviour on power failure against the fire strategy."],
+    acc: ["No simultaneous opening", "Emergency release alarmed"],
+    rec: "Checklist per door set.", refs: ["GS23"] },
+
+  "T-ISO-LEAK": { name: "Isolator leak tightness (ISO 10648-2)", stages: ["OQ", "RQ"],
+    purpose: "Show the isolator shell, window seals, glove ports and pass box doors are tight enough for its containment class.",
+    inst: ["Calibrated pressure transducer", "Temperature sensor inside the chamber", "Blanking caps for glove ports if testing the shell alone"],
+    pre: ["Leak class set in the URS (class 2 or 3 is common for pharmaceutical containment isolators)", "Isolator clean, doors closed, fan isolated"],
+    steps: ["Isolate the chamber from its fan and ducts.", "Bring the chamber to the test pressure (e.g. −250 Pa or as the vendor specifies) and let it stabilise.", "Record pressure and temperature at start, then after the test time (e.g. 10–30 min).", "Calculate the hourly leak rate with temperature correction (calculator in Module 5).", "Compare with the ISO 10648-2 class limit.", "If it fails, locate leaks (soap solution, ultrasonic detector), fix and retest."],
+    acc: ["Hourly leak rate within the URS class: class 1 ≤ 5 × 10⁻⁴ h⁻¹, class 2 ≤ 2.5 × 10⁻³, class 3 ≤ 10⁻², class 4 ≤ 10⁻¹"],
+    rec: "Pressure and temperature log, calculation, class result.", refs: ["ISO10648", "ISO7"] },
+
+  "T-GLOVE": { name: "Glove and sleeve integrity", stages: ["OQ", "PQ", "RQ"],
+    purpose: "Find holes in gloves and sleeves before they release cytotoxic dust onto the operator.",
+    inst: ["Smart glove leak tester SGLT EQ0960", "Glove change kit"],
+    pre: ["Glove inventory with installation dates", "Test pressure and pass limit from the vendor and URS"],
+    steps: ["Inspect each glove visually and by touch before every use.", "Fit the SGLT test head over the glove port from outside.", "Run the pressure-decay test and record pass or fail with the glove ID.", "Change any failed glove using the push-through change method so containment is not broken.", "Test at the frequency set by risk: before and after each campaign is common, and after any suspected damage."],
+    acc: ["Every glove passes the SGLT test", "Change interval respected"],
+    rec: "Glove test log per port.", refs: ["ISO7", "ISO10648"] },
+
+  "T-ISO-PRESS": { name: "Isolator pressure cascade and breach response", stages: ["OQ", "PQ"],
+    purpose: "Show room → pass box → chamber pressures are in order, alarms work, and air rushes inward if a glove is lost.",
+    inst: ["Installed transmitters MD0165–MD0169", "Reference micromanometer", "Thermal anemometer", "Glove port blanking"],
+    pre: ["Isolator leak test passed"],
+    steps: ["Compare each installed gauge with the reference.", "Record chamber and pass box ΔP to the room in normal running.", "Open the outer door of each pass box: chamber ΔP must stay within its range.", "Remove one glove (or open a glove port with a test fitting) and measure inflow velocity at the port; record chamber ΔP and alarms.", "Check the fan responds and the alarm clears when the port is closed."],
+    acc: ["Chamber more negative than pass boxes, pass boxes more negative than the room", "Breach inflow velocity at an open glove port at or above the URS value (commonly ≥ 0.5 m/s)", "Alarms at set points"],
+    rec: "Pressure table, breach velocity readings.", refs: ["ISO7", "GS23"] },
+
+  "T-ISO-AIR": { name: "Isolator airflow and filters", stages: ["OQ", "RQ"],
+    purpose: "Show the isolator moves enough air through its HEPA filters to dilute dust and that the filters are intact.",
+    inst: ["Anemometer", "Aerosol photometer and generator", "Particle counter"],
+    pre: ["Isolator running"],
+    steps: ["Measure airflow through the inlet filter and calculate air changes of the chamber.", "Scan the inlet HEPA from inside; test the exhaust HEPA through its test port or by efficiency test.", "Check inlet and exhaust filter ΔP (MD0167, MD0168) against clean values.", "Optional: count particles in the chamber at rest."],
+    acc: ["Airflow and air changes per URS", "No filter leak above 0.01 %", "Filter ΔP within range"],
+    rec: "Airflow and filter test report.", refs: ["ISO7", "ISO3"] },
+
+  "T-SMEPAC": { name: "Containment verification with a surrogate powder", stages: ["PQ"],
+    purpose: "Measure how much powder actually escapes from the isolator or enclosure during real tasks, and compare it with the OEL.",
+    inst: ["Surrogate powder (naproxen sodium or lactose are common) with a validated analytical method and low LOQ", "Personal air samplers in the breathing zone (about 2 L/min)", "Static samplers around the equipment", "Wipe sampling kit"],
+    pre: ["Leak, pressure and glove tests passed", "Tasks, operators and sampling plan agreed with HSE", "Background samples taken"],
+    steps: ["Run the real task with surrogate: dispensing a batch quantity in EQ0939, a compression run in the NPE, transfers through pass boxes.", "Sample breathing zones of operators and static points at openings, pass boxes, door seams and 1 m around.", "Repeat the task at least three times.", "Take surface wipes outside the barrier after the runs.", "Analyse, convert to task and 8 h TWA concentrations, and compare with the OEL or the containment performance target."],
+    acc: ["Task or TWA results below the OEL or target, with a safety margin", "No surrogate on wipes outside the barrier above the limit"],
+    rec: "SMEPAC protocol and report with raw data.", refs: ["SMEPAC", "GS23", "HSE4"] },
+
+  "T-NPE": { name: "Enclosure pressure and inflow", stages: ["OQ", "PQ"],
+    purpose: "Show the enclosure is held below room pressure and air flows inward at every opening.",
+    inst: ["Installed gauges (MD0187 for the press; MD0160–MD0162 for the blister)", "Reference micromanometer", "Thermal anemometer", "Fog generator"],
+    pre: ["Extract balanced"],
+    steps: ["Compare installed gauges with the reference.", "Record enclosure ΔP to room with doors closed and in operation.", "Measure inflow velocity at each fixed opening and at an open door if doors can open during running.", "Visualise with fog at every seam and opening.", "Check the low-ΔP alarm and door interlocks."],
+    acc: ["Enclosure ΔP within the URS range (e.g. −10 to −30 Pa)", "Inflow at every opening, commonly ≥ 0.5 m/s", "Alarm and interlocks work"],
+    rec: "ΔP and velocity table, video.", refs: ["ISO7", "GS23"] },
+
+  "T-WIPE": { name: "Surface wipe sampling for API", stages: ["PQ", "RQ"],
+    purpose: "Check that potent API does not build up on surfaces outside the containment barrier: corridor, door handles, gauges, changing rooms.",
+    inst: ["Validated wipe method and solvent", "Templates (e.g. 10 × 10 cm)"],
+    pre: ["Analytical method with LOQ below the surface limit", "Surface limits set from the PDE"],
+    steps: ["Select points by risk: pass box handles, isolator fronts, NPE doors, corridor floor at doors, ΔP gauges, PAL OUT, changing room benches.", "Wipe with a template, both directions.", "Analyse and compare with the limit.", "Trend results; act on any rise."],
+    acc: ["Below the surface limit derived from the PDE", "No upward trend"],
+    rec: "Wipe map and results.", refs: ["HBEL", "GS23"] },
+
+  "T-MIST": { name: "Mist shower function", stages: ["OQ"],
+    purpose: "Show the mist shower wets and settles dust on garments before de-gowning, and handles the water safely.",
+    inst: ["Stopwatch", "Water-sensitive paper or a test garment", "Interlock list"],
+    pre: ["Water supply and effluent route to treatment confirmed (SOPHSE0002F/Onc)"],
+    steps: ["Run a cycle and record cycle time and spray pattern.", "Check coverage on a test garment from head to feet, front and back.", "Check door interlocks: the exit door opens only after the cycle.", "Check drains and effluent route; check extract runs during the cycle."],
+    acc: ["Full garment coverage", "Cycle and interlocks as specified", "Effluent to treatment, not to the general drain"],
+    rec: "Function test sheet.", refs: ["GS23", "WHO957"] },
+
+  "T-PROC": { name: "Process air and dust collection", stages: ["OQ"],
+    purpose: "Show the FBD and coater air units, dust collectors and BIBO housings run at design flow, alarm on filter loading and never vent unfiltered.",
+    inst: ["Pitot traverse", "Filter manometers (MD0125, MD0126, MD0138, MD0139)"],
+    pre: ["Process equipment IQ complete"],
+    steps: ["Measure process airflow and compare with the recipe range.", "Record 95 % and 99.97 % filter ΔP.", "Run the dust collector pulse cleaning and check ΔP recovery.", "Scan or efficiency-test the BIBO HEPA.", "Check the interlock: the process stops if extract is lost."],
+    acc: ["Flows and ΔP in range", "BIBO leak free", "Interlock works"],
+    rec: "Process air test sheet.", refs: ["OSD", "GS23"] },
+
+  "T-CSV": { name: "BMS/EMS computerised system validation", stages: ["IQ", "OQ", "PQ"],
+    purpose: "Show the system holding ΔP, T, RH and alarm records is fit for use and its records are reliable.",
+    inst: ["URS, FS, configuration", "Test scripts", "Traceability matrix"],
+    pre: ["GAMP 5 category and risk assessment"],
+    steps: ["IQ: versions, network, time sync, point-to-point check of every GMP sensor.", "OQ: input-to-record checks, alarm handling, audit trail, user roles, backup and restore.", "PQ: live operation review over a defined period.", "Set up periodic and audit-trail review."],
+    acc: ["Scripts pass or deviations closed", "Traceability complete"],
+    rec: "Validation plan, scripts, summary report.", refs: ["GAMP", "A11"] },
+
+  "T-SEASON": { name: "Seasonal performance", stages: ["PQ"],
+    purpose: "Show T, RH and ΔP hold through summer and winter, which a short PQ may miss.",
+    inst: ["BMS trends", "Quarterly forms (VL0011E/FE01 records the season)"],
+    pre: ["PQ complete"],
+    steps: ["Review trends for each quarter of the first year.", "Flag valves or fans at 100 %.", "Report and act through change control."],
+    acc: ["Parameters in limits all year", "Spare capacity available"],
+    rec: "Seasonal report.", refs: ["VL11", "WHO1010"] }
+};
+
+var COMPS = [
+{ id: "entry", view: "plan", name: "Perimeter airlocks and entry", area: "FFO-16, FFO-17, FFO-22, FFO-33, FFO-20",
+  role: "Seal the containment suite from the rest of the site while people and materials pass through.",
+  fn: ["Every route in or out of the suite passes through an airlock with interlocked doors. SOPGS0023E asks for the airlock at the containment perimeter to be positive to the environment, so outside dust cannot enter, while the suite behind it stays negative so potent dust cannot leave.", "On the drawing, operators enter through FFO-16 and gown in FFO-17, held at +15 Pa. They pass PAL IN FFO-22 at +5 Pa into the −5 Pa corridor. Packaged product and waste leave through airlock FFO-33 and MAL OUT FFO-20 toward the secondary corridor."],
+  types: [["Bubble airlock", "Higher than both sides. At the perimeter it protects the suite from the site and the site from the suite."], ["Cascade airlock", "Between the two adjoining pressures. PAL IN steps down from the changing room to the corridor."], ["Sink airlock", "Lower than both sides; used on the exit route (see changing and mist shower)."], ["Material airlock (MAL)", "For containers, waste and equipment; often with a decontamination step."]],
+  params: [["ΔP across each door", "≥ 6 Pa same class; ≥ 12 Pa different class (SOPVL0011E)"], ["Perimeter airlock", "Positive to the environment (SOPGS0023E)"], ["Door interlock", "One door at a time; emergency release alarmed"]],
+  site: ["FFO-17 Changing IN and FFO-22 PAL IN are Grade D, sampled monthly (2 + 1 and 3 + 2 points, SOPQC0119E/Onc).", "FFO-33 airlock and FFO-20 MAL OUT are not classified, sampled every three months.", "Registry and EM SOP use different names for FFO-14/15/17/18. This page follows the EM SOP."],
+  stages: {
+    DQ: ["Pressure map shows every airlock type and value, with the perimeter positive to outside.", "Door leakage and offsets calculated (Module 5).", "Interlock logic and emergency release in the FDS."],
+    IQ: ["@T-DOCS", "Door closers, seals, interlock hardware and ΔP gauges with labels installed.", "@T-CAL"],
+    OQ: ["@T-DP", "@T-DOOR", "@T-SMOKE", "@T-ALARM"],
+    PQ: ["ΔP read once per shift in operation, including shift changes.", "@T-EM"],
+    RQ: ["ΔP verified at the 12-month requalification (SOPVL0102E).", "@T-WIPE"]
+  },
+  risks: [["Both airlock doors opened (interlock bypassed)", "Pressure collapse; dust leaves the suite", "Interlocks; alarm; training", 5, 2, 2], ["Perimeter airlock not positive", "Site dust enters; suite boundary undefined", "ΔP design and daily reading", 3, 2, 2]],
+  finds: ["Airlock with both doors propped open during material movement; no alarm fitted."],
+  refs: ["GS23", "VL11", "WHO957"] },
+
+{ id: "change", view: "plan", name: "Exit route, mist shower and changing", area: "FFO-18, FFO-14",
+  role: "Remove dust from operators before they leave, so nothing potent is carried out on garments.",
+  fn: ["Leaving the suite is the high-risk direction. Operators pass from the corridor into PAL OUT FFO-18, where the mist shower EQ0943 wets their protective suits so dust sticks and settles. They then de-gown in FFO-14 across a step-over bench.", "FFO-18 is drawn as a sink airlock at −15 Pa: air flows into it from both the corridor and the changing room, so dust released while showering and de-gowning cannot move either way. FFO-14 is positive to outside as the perimeter."],
+  types: [["Mist (water) shower", "Wets garments; best for dry dust. Needs drainage to effluent treatment."], ["Air shower", "Blows dust off garments; less effective for potent dust and can spread it."], ["Step-over bench", "Separates dirty and clean sides (SOPGS0023E)."], ["Bagged garment disposal", "Garments leave bagged for laundry or destruction."]],
+  params: [["Exit airlock", "Sink, below both sides"], ["Shower cycle", "Full coverage, timed, door interlocked"], ["Effluent", "To the high-potent effluent route (SOPHSE0002F/Onc)"]],
+  site: ["Mist shower EQ0943. The EM plan samples its control panel (OIT) in FFO-18.", "FFO-14 and FFO-18 are Grade D, sampled monthly."],
+  stages: {
+    DQ: ["Exit route separate from entry; sink airlock with mist shower; step-over bench.", "Shower water supply, drainage and effluent route defined."],
+    IQ: ["@T-DOCS", "Nozzles, drains, interlocks and extract installed as drawn."],
+    OQ: ["@T-MIST", "@T-DP", "@T-DOOR", "@T-SMOKE"],
+    PQ: ["@T-WIPE", "@T-EM"],
+    RQ: ["Shower function and ΔP at requalification; wipe trend reviewed."]
+  },
+  risks: [["Operators skip the shower cycle", "Dust carried to changing room and site", "Door interlock; training; wipe trend", 5, 3, 3], ["Exit airlock not a sink", "Dust pushed into changing or corridor", "ΔP design and checks", 4, 2, 3]],
+  finds: ["Wipe samples found API on changing-room benches; shower cycle could be skipped."],
+  refs: ["GS23", "WHO957", "NIOSH"] },
+
+{ id: "corridor", view: "plan", name: "Clean corridor and pressure cascade", area: "FFO-05",
+  role: "Collects the routes between rooms and sits above the process rooms, so dust stays in the rooms.",
+  fn: ["The corridor is the reference point of the cascade. It is held slightly negative to outside (−5 Pa on the drawing) so the suite as a whole leaks inward. Every process room is held lower still (−20 Pa), so air flows from the corridor into the rooms at every door. Storage rooms with closed containers sit in between (−12 Pa).", "This is the 'contain in the room' strategy. Each door gives a defined, measurable pressure step that operators can check on the gauge every shift."],
+  types: [["Clean corridor (contain in room)", "Corridor above process rooms; the usual OSD potent design."], ["Dirty corridor", "Corridor below rooms to protect products from each other; does not suit potent dust."], ["Airlocked rooms", "Each process room with its own airlock for the highest bands."]],
+  params: [["Corridor to process room", "≥ 6 Pa (15 Pa on the drawing)"], ["Gauge per door", "Calibrated, sealed, labelled with direction and limits"], ["Reading frequency", "At least once per shift"]],
+  site: ["FFO-05 is Grade D with 7 air and 6 surface EM points, monthly.", "Room ΔP gauges are among the 139 pressure instruments in the register."],
+  stages: {
+    DQ: ["Cascade strategy chosen and justified by risk assessment (SOPGS0023E).", "Pressure map with values, tolerances and alarm delays."],
+    IQ: ["Gauges installed with correct reference and label. @T-CAL"],
+    OQ: ["@T-AIRVOL", "@T-DP", "@T-SMOKE", "@T-RECOV", "@T-CLASS"],
+    PQ: ["@T-DP", "@T-EM", "@T-SEASON"],
+    RQ: ["12-month requalification: ΔP, T, RH, HEPA, particles, viables (SOPVL0102E)."]
+  },
+  risks: [["Process room drifts above corridor", "Dust leaks into the corridor", "Daily ΔP reading; alarm", 5, 2, 2], ["Gauge reference tube blocked", "False 'in limit' reading", "Calibration; reference checks", 4, 2, 4]],
+  finds: ["ΔP labels missing beside gauges; readings recorded without limits."],
+  refs: ["VL11", "GS23", "OSD"] },
+
+{ id: "dispense", view: "plan", name: "API dispensing room", area: "FFO-01, FFO-02",
+  role: "The room where open API is handled, always inside the dispensing isolator.",
+  fn: ["Dispensing is where the most concentrated powder is handled open, so it uses the highest level of containment on the site: the isolator EQ0939 with its own air unit. The room around it is a second barrier, held at −20 Pa with HEPA supply and low-level extract.", "Weighed materials go to FFO-02 in closed containers. FFO-02 is less negative (−12 Pa) because nothing is open there."],
+  types: [["Isolator dispensing", "Primary containment for OEB 4–5 (this site)."], ["Downflow booth", "For lower bands; protects the operator but needs PPE."], ["Closed transfer", "Drums or bags docked to the isolator."]],
+  params: [["Room ΔP", "−20 Pa illustrative, ≥6 Pa below corridor"], ["Isolator", "Chamber negative to room; see isolator drawing"], ["EM", "5 air and 4 surface points monthly, including the isolator OIT"]],
+  site: ["Dispensing isolator EQ0939 with dedicated CTA EQ0939/01 on the 1st floor mezzanine.", "Balance BL0001 (Radwag PS 10100.X2.M, 0.5 g–10 100 g).", "EM points: door entrance, room centre, three corners, walls and isolator OIT (C2)."],
+  stages: {
+    DQ: ["Isolator chosen for the OEB; room as secondary containment.", "Material and waste routes in and out of the isolator defined."],
+    IQ: ["@T-DOCS"],
+    OQ: ["@T-DP", "@T-AIRVOL", "@T-HEPA", "@T-SMOKE", "@T-CLASS"],
+    PQ: ["@T-SMEPAC", "@T-WIPE", "@T-EM"],
+    RQ: ["Room requalification at 12 months; isolator tests on their own schedule."]
+  },
+  risks: [["Isolator breach during dispensing", "API released to the room", "Room is negative; alarm; PPE", 5, 2, 2], ["Weighed containers not closed", "Dust in FFO-02 and corridor", "Procedure; wipe sampling", 4, 2, 3]],
+  finds: ["Dispensing performed with the pass box inner door open to save time."],
+  refs: ["GS23", "WHO957", "QC119"] },
+
+{ id: "process", view: "plan", name: "Process rooms", area: "FFO-08, 09, 10, 24, 23, 04, 06, 07, 26",
+  role: "Granulation, compression, coating, capsule filling and IPQC: rooms that act as dust sinks.",
+  fn: ["The process rooms hold the dusty steps after dispensing. Each is the lowest point of its local cascade (−20 Pa on the drawing), with H14 terminal supply and low-level extract that sweeps dust down and away from the operator's breathing zone.", "The equipment provides the primary containment: closed granulation (SMG and FBD with local isolators and dust collectors), the press inside a negative pressure enclosure, and the IPQC isolator. Washing (FFO-04) is also a sink, because wet residues are handled there."],
+  types: [["Granulation & blending FFO-08", "SMG EQ0934, FBD EQ0935, cone mill EQ0937, bin mixer EQ0938, VSD EQ0944."], ["Compression FFO-09", "IMA Prexima EQ0940 inside an enclosure (see drawing 4)."], ["Coating FFO-10", "Coater EQ0936 with its own air unit and dust collector."], ["Capsule filling FFO-24", "PTK EQ0953 with ΔP manometer MD0199."], ["IPQC FFO-23", "IPQC isolator EQ0942."]],
+  params: [["Room ΔP", "−20 Pa illustrative (≥ 6 Pa below corridor)"], ["Supply", "Terminal H14, low-level extract"], ["EM", "4–7 air and 4–8 surface points per room, monthly"]],
+  site: ["FFO-08 has 7 air and 8 surface EM points, including the SMG, FBD and VSD control panels.", "Process air: FBD AHU EQ0935/01 and coater AHU EQ0936/02 with 95 % and 99.97 % filters; Donaldson dust collectors; Camfil BIBO CS3-610 and CS3-305."],
+  stages: {
+    DQ: ["Each room's primary containment matched to the OEB of the products.", "Extract positions near dust sources; room data sheets."],
+    IQ: ["@T-DOCS", "@T-DUCT-LEAK"],
+    OQ: ["@T-AIRVOL", "@T-HEPA", "@T-DP", "@T-SMOKE", "@T-RECOV", "@T-CLASS", "@T-TRH"],
+    PQ: ["@T-SMEPAC", "@T-WIPE", "@T-EM", "@T-TRH"],
+    RQ: ["12-month requalification (SOPVL0102E)."]
+  },
+  risks: [["Dust from FBD discharge or bin transfer", "Room and operator exposure", "Closed transfer; local extract; PPE", 5, 3, 3], ["Extract grille blocked by equipment", "Dead zone; room pressure rises", "Layout control; air volume checks", 3, 3, 3]],
+  finds: ["Extract grilles in FFO-08 blocked by stored bins; room ΔP close to the limit."],
+  refs: ["OSD", "GS23", "QC119"] },
+
+{ id: "pack", view: "plan", name: "Packaging and the mouse hole", area: "FFO-28, FFO-29, FFO-25, FFO-19, FFO-34",
+  role: "Moves sealed product out of containment through a pass-through that is lower than both sides.",
+  fn: ["Blistering FFO-28 still handles naked tablets, so it is a contained process room with the blister machine inside its own negative enclosure. Once tablets are sealed, the risk drops, and secondary packaging FFO-25 is not classified.", "Blisters cross from primary to secondary packaging through a conveyor opening, the 'mouse hole'. SOPGS0023E recommends a pass-through chamber over it held negative to both rooms, so air flows into it from each side. FFO-29 is drawn that way at −28 Pa."],
+  types: [["Primary packaging", "Contained room plus machine enclosure."], ["Pass-through chamber", "Negative to both sides over the conveyor."], ["Secondary packaging", "Sealed product; not classified."]],
+  params: [["FFO-29 vs FFO-28", "≥ 6 Pa lower (same class)"], ["FFO-29 vs FFO-25", "≥ 12 Pa lower (different class)"], ["Blister enclosure", "DP transmitters MD0160–MD0162"]],
+  site: ["Blister machine EQ0941 with negative enclosure EQ0941/01; leak tester EQ0568.", "FFO-28 has 6 air and 4 surface EM points; FFO-25 is sampled every three months.", "Ink-jet printer EQ0600 in FFO-25."],
+  stages: {
+    DQ: ["Mouse-hole arrangement chosen and justified.", "Enclosure on the blister machine specified."],
+    IQ: ["@T-DOCS"],
+    OQ: ["@T-DP", "@T-SMOKE", "@T-NPE"],
+    PQ: ["@T-WIPE", "@T-SMEPAC", "@T-EM"],
+    RQ: ["ΔP, enclosure and wipes at requalification."]
+  },
+  risks: [["Air flows from FFO-28 into secondary packaging", "Potent dust reaches unclassified areas", "Negative pass-through; ΔP check", 4, 3, 3], ["Broken blisters reach secondary packaging", "Exposure of packaging staff", "In-line inspection; leak tester EQ0568", 3, 2, 3]],
+  finds: ["Mouse hole open with no pass-through chamber; smoke showed flow toward secondary packaging."],
+  refs: ["GS23", "OSD"] },
+
+{ id: "passbox", view: "plan", name: "Material entry and pass boxes", area: "FFO-32, FFO-31, FFO-30",
+  role: "Bring materials into the suite without opening a door between outside and inside.",
+  fn: ["Raw materials arrive from the warehouse FFO-32, which is outside the containment line and held positive. They pass through a dynamic pass box (FFO-31) into excipient storage FFO-30 inside the suite.", "A dynamic pass box has its own HEPA-filtered air and interlocked doors. Its air flushes the chamber between door openings so dust cannot ride through with the material."],
+  types: [["Dynamic pass box", "HEPA supply and extract; interlocked doors; purge time."], ["Static pass box", "Interlocked doors only; for low-risk items."], ["Material airlock", "Room-sized; for pallets and large equipment."]],
+  params: [["Door interlock", "One door at a time"], ["Purge time", "Set at OQ"], ["HEPA ΔP", "Gauged, e.g. 0–60 Pa magnehelic"]],
+  site: ["FFO-31, FFO-27, FFO-29 and FFO-12 are registered pass boxes or pass-throughs; each has 1 air and 1 surface EM point.", "QC dynamic pass boxes EQ1068/EQ1069 have HEPA gauges MD0203/MD0205 (0–60 Pa)."],
+  stages: {
+    DQ: ["Material routes into and out of containment defined; pass box type per route."],
+    IQ: ["@T-DOCS"],
+    OQ: ["@T-DOOR", "@T-HEPA", "@T-SMOKE"],
+    PQ: ["@T-EM"],
+    RQ: ["HEPA leak test and interlock check at requalification."]
+  },
+  risks: [["Both doors opened", "Direct path from warehouse into suite", "Interlock; alarm", 4, 2, 2], ["Purge time skipped", "Dust carried across", "Timer interlock", 3, 3, 3]],
+  finds: ["Pass box interlock defeated with tape to speed up material transfer."],
+  refs: ["GS23", "WHO957"] },
+
+{ id: "ahu", view: "air", name: "Supply air handling units", area: "CTA Supply 001–003 · mezzanine FFM-O-01",
+  role: "Condition and filter the air supplied to the suite.",
+  fn: ["Three supply AHUs on the 1st-floor mezzanine filter, cool, heat and move the supply air. Each has a pressure switch on its filters, a flow meter and a velocity switch that proves airflow, plus supply, room and exhaust temperature probes.", "SOPGS0023E prefers single-pass air for hazardous products. Return air may be recirculated only to the same area, after a risk assessment, and only through an extra safe-change HEPA stage, so the air passes two HEPA stages in series before reaching a room again."],
+  types: [["Single pass (100 % outdoor air)", "Preferred for potent suites; highest energy use."], ["Recirculating with safe-change HEPA", "Allowed by risk assessment; second HEPA stage on the return."], ["Filter stages", "G4 / F7 pre-filters, F9 final in the AHU, H14 terminal in the room."]],
+  params: [["Airflow", "Proven by velocity switch and flow meter"], ["Filters", "G4/F7 and F9 with ΔP gauges"], ["T/RH", "Supply and room probes ±0.3 °C / ±3 % RH"]],
+  site: ["CTA Supply 001, 002, 003 = EQ0848, EQ0849, EQ0850 (Siemens QBM pressure switches, QVM62.1 velocity switch, QFM3160 T/RH probes, Regel Technik flow meter).", "R&D: AHU 2.7 (EQ0245) with G4/F7 and F9 gauges MD2515/MD2516."],
+  stages: {
+    DQ: ["Single pass or recirculation decided by documented risk assessment (SOPGS0023E).", "Filter classes, capacity, design conditions and redundancy specified."],
+    IQ: ["@T-DOCS", "@T-CAL", "@T-FILTER-DP", "@T-DUCT-LEAK"],
+    OQ: ["@T-AIRVOL", "@T-ALARM", "@T-PWR"],
+    PQ: ["@T-TRH", "@T-SEASON"],
+    RQ: ["Filter ΔP trend; 12-month requalification."]
+  },
+  risks: [["Supply fan fails while exhaust runs", "Rooms go very negative; doors hard to open", "Interlock; alarm", 2, 2, 2], ["Recirculation without second HEPA", "Potent dust returned to other rooms", "Risk assessment; safe-change filter", 5, 2, 3]],
+  finds: ["Recirculation damper found open on a 'single-pass' AHU after maintenance."],
+  refs: ["GS23", "WHO1010", "WHO957"] },
+
+{ id: "hepa", view: "air", name: "Terminal HEPA and low-level extract", area: "Room ceilings and walls",
+  role: "Deliver clean air at the ceiling and remove dusty air low down.",
+  fn: ["Supply HEPA filters are mounted in the room ceiling. SOPGS0023E asks for terminal mounting because, if the supply fan stops, the filter still stands between the room and the duct, so contaminated air cannot flow back into clean ductwork.", "Extract grilles sit low on the walls, so air moves down past the operator and carries dust toward the floor and out, away from the breathing zone."],
+  types: [["Terminal H14 housing", "Room-side replaceable, with test ports."], ["Low-level extract grille", "About 300 mm above floor, near dust sources."], ["Extract filter at the grille", "Optional pre-filter to keep the duct clean."]],
+  params: [["Integrity", "No leak > 0.01 % (SOPVL0007E)"], ["Air volume", "Per terminal and grille (SOPVL0008E)"], ["Placement", "Supply high, extract low and near sources"]],
+  site: ["Requalified with the HVAC system every 12 months (SOPVL0102E).", "EM plans sample at low-level returns, corners and doors (SOPQC0119E/Onc)."],
+  stages: {
+    DQ: ["Terminal mounting; grille positions per room data sheet."],
+    IQ: ["Filter certificates, IDs mapped to ceiling plan. @T-DOCS"],
+    OQ: ["@T-HEPA", "@T-AIRVOL", "@T-SMOKE"],
+    PQ: ["@T-CLASS", "@T-EM"],
+    RQ: ["HEPA leak test and air volume at 12 months and after filter change."]
+  },
+  risks: [["HEPA leak", "Unfiltered air into the room", "Leak test", 4, 2, 2], ["Extract grille high or blocked", "Dust held at breathing height", "Design; air volume test", 4, 2, 3]],
+  finds: ["Supply filters mounted in the AHU only; back-flow into ducts on fan stop."],
+  refs: ["GS23", "VL07", "VL08"] },
+
+{ id: "bibo", view: "air", name: "Exhaust with BIBO safe-change filters", area: "CTA Exhaust 002/003 · stack",
+  role: "Filter all contaminated air through HEPA before it leaves the building.",
+  fn: ["All air extracted from the suite passes a pre-filter and a HEPA filter in bag-in/bag-out housings before the exhaust fan sends it up the stack. SOPGS0023E: no direct venting, HEPA at least H13, and both pre-filter and HEPA removable with the safe bagging system.", "Putting the BIBO before the fan keeps the duct after the filters clean, so a leak in the positive-pressure discharge duct releases only filtered air."],
+  types: [["BIBO housing", "Filters changed through a sealed bag; no exposure."], ["Push-push filter", "Small units such as isolators: the new filter pushes the old one into a bag."], ["Two-stage BIBO", "Pre-filter (e.g. M5) then HEPA (H14)."]],
+  params: [["HEPA class", "≥ H13 (SOPGS0023E)"], ["Pressure switch", "Alarm on filter loading or loss"], ["Stack", "Discharge away from intakes"]],
+  site: ["CTA Exhaust 002 and 003 have pressure switches on their BIBO (MD0052, MD0071).", "AHU 2.7 BIBO EQ0245/01: M5 gauges MD2517/MD2518, H14 gauges MD2519/MD2520."],
+  stages: {
+    DQ: ["BIBO upstream of fan; HEPA class; stack position; scan capability."],
+    IQ: ["@T-DOCS", "@T-DUCT-LEAK", "@T-FILTER-DP"],
+    OQ: ["@T-BIBO", "@T-ALARM", "@T-PWR"],
+    PQ: ["ΔP and alarm history over the PQ period."],
+    RQ: ["BIBO test at requalification and after change."]
+  },
+  risks: [["BIBO HEPA leak", "Potent dust to atmosphere", "In-situ test; ΔP alarm", 5, 2, 2], ["Unsafe filter change", "Maintenance staff exposure", "BIBO procedure; PPE; training", 5, 2, 3]],
+  finds: ["BIBO filter changed without bag; no change record."],
+  refs: ["GS23", "WHO957", "EN1822"] },
+
+{ id: "procair", view: "air", name: "Process air and dust collection", area: "Mezzanine 2nd floor",
+  role: "Supply and clean the air used inside the FBD and coater, and capture their dust.",
+  fn: ["The fluid bed dryer and coater have their own air units (95 % and 99.97 % filters, humidity control) because process air conditions are part of the recipe. Their exhaust carries a lot of fine powder.", "That exhaust passes through a Donaldson dust collector, then a Camfil BIBO HEPA, then an extractor fan to the stack. The wash-in-place (WIP) system cleans the collector so it can be opened safely."],
+  types: [["Process AHU", "Conditions the inlet air of FBD or coater."], ["Cartridge dust collector", "Pulse-cleaned cartridges; WIP wetting."], ["BIBO HEPA", "Final filter before the extractor."]],
+  params: [["Process airflow", "Recipe range"], ["Filter ΔP", "Manometers 0–80 mmH₂O"], ["Interlock", "Process stops on extract loss"]],
+  site: ["FBD AHU EQ0935/01, dust collector EQ0935/02 (Donaldson DF02-2), BIBO EQ0935/03 (Camfil CS3-610), WIP EQ0935/04, extractor EQ0935/05.", "Coater AHU EQ0936/02, collector EQ0936/03, BIBO EQ0936/04 (CS3-305), extractor EQ0936/06."],
+  stages: {
+    DQ: ["Dust load, explosion risk and containment of the collector assessed."],
+    IQ: ["@T-DOCS", "@T-CAL"],
+    OQ: ["@T-PROC", "@T-BIBO"],
+    PQ: ["@T-SMEPAC"],
+    RQ: ["BIBO and ΔP checks on the requalification schedule."]
+  },
+  risks: [["Collector opened without WIP", "Heavy exposure of maintenance staff", "WIP before opening; permit", 5, 2, 2], ["Cartridge failure", "Dust load on BIBO; ΔP rises", "ΔP alarm; inspection", 3, 3, 2]],
+  finds: ["Dust collector bin emptied manually without containment."],
+  refs: ["OSD", "GS23"] },
+
+{ id: "bms", view: "air", name: "BMS, ΔP gauges and emergency power", area: "Controls",
+  role: "Run the fans in the right order, show room pressures and raise alarms.",
+  fn: ["The BMS starts and stops supply and exhaust fans in a set order so the suite never goes positive (SOPGS0023E). It reads room pressures, raises an alarm on cascade reversal or loss, and keeps trends.", "Each room also has a local ΔP gauge with a label, read once per shift (SOPVL0011E). An emergency generator keeps the extract and controls running in a power cut."],
+  types: [["BMS", "Control and alarms."], ["EMS", "Validated monitoring of GMP parameters."], ["Local gauges", "Magnehelic or digital, with direction and limit labels."]],
+  params: [["Start", "Exhaust before supply"], ["Stop", "Supply before exhaust"], ["Alarm", "Cascade reversal or ΔP below limit"]],
+  site: ["Note in SOPVL0011E: when ΔP comes from the BMS as room-to-technical-roof pressure, the differential is the difference between the two rooms.", "139 pressure instruments and 312 calibration items are registered (12-month calibration)."],
+  stages: {
+    DQ: ["Start/stop sequence, alarm philosophy, generator load list."],
+    IQ: ["@T-CSV", "@T-CAL"],
+    OQ: ["@T-ALARM", "@T-PWR", "@T-CSV"],
+    PQ: ["Alarm history and data completeness reviewed."],
+    RQ: ["Periodic review; calibration program."]
+  },
+  risks: [["Wrong fan order on restart", "Suite goes positive; dust pushed out", "Sequence test; interlock", 5, 2, 2], ["Generator does not cover extract", "Containment lost in power cut", "Load list; test", 5, 1, 3]],
+  finds: ["After a power cut, the BMS trend showed the suite positive for 4 minutes; restart sequence never tested."],
+  refs: ["GS23", "VL11", "GAMP"] },
+
+{ id: "isochamber", view: "iso", name: "Isolator chamber and glove ports", area: "EQ0939 · FFO-01",
+  role: "The sealed workspace where API is opened and weighed.",
+  fn: ["The isolator is a leak-tight box (ISO 10648-2) that separates the operator from the product. The operator works through gloves in sealed ports. Turbulent, HEPA-filtered air moves through the chamber, and the chamber is held well below room pressure, so any leak draws room air in.", "Gloves are the weakest point. They are inspected every use and tested with the smart glove leak tester EQ0960."],
+  types: [["Negative-pressure containment isolator", "Operator protection; this site."], ["Positive-pressure aseptic isolator", "Product protection; not used for containment."], ["Rigid or flexible wall", "Rigid stainless/glass here."]],
+  params: [["Leak class", "ISO 10648-2, per URS (class 2–3 common)"], ["Chamber ΔP", "≈ −50 to −150 Pa vs room (typical)"], ["Gloves", "SGLT pass; change interval"]],
+  site: ["Dispensing isolator EQ0939 (Schematic Engineering) in FFO-01; IPQC isolator EQ0942 in FFO-23.", "Smart glove leak tester SGLT EQ0960 (mobile).", "QC lab isolator I-BOX 4G EQ1052: microbiological verification at least twice a month, < 1 CFU (SOPQC0116E/Onc)."],
+  stages: {
+    DQ: ["Leak class, glove material and port count, ergonomics mock-up."],
+    IQ: ["@T-DOCS", "Glove IDs and installation dates recorded."],
+    OQ: ["@T-ISO-LEAK", "@T-GLOVE", "@T-ISO-PRESS"],
+    PQ: ["@T-SMEPAC", "@T-GLOVE", "@T-WIPE"],
+    RQ: ["Leak test and glove testing on the defined schedule."]
+  },
+  risks: [["Glove pinhole", "API on operator's hand and in room", "SGLT; visual check; negative chamber", 5, 3, 2], ["Window seal leak", "Containment loss", "Leak test", 4, 2, 2]],
+  finds: ["Glove test records missing for several ports; gloves past change date."],
+  refs: ["ISO10648", "ISO7", "SMEPAC"] },
+
+{ id: "isotransfer", view: "iso", name: "Isolator pass boxes and waste port", area: "EQ0939 infeed / outfeed",
+  role: "Move materials in and weighed doses out without opening the chamber to the room.",
+  fn: ["Each side has a pass box with interlocked inner and outer doors and its own gauge. The pass box sits between room and chamber pressure, so air flows room → pass box → chamber.", "Waste and empty liners leave through a bag-out or continuous-liner port (typical), sealed before they are cut free."],
+  types: [["Interlocked pass box", "Inner and outer doors cannot open together."], ["Rapid transfer port (RTP)", "Alpha/beta docking for containers."], ["Continuous liner / bag-out port", "Sealed waste removal."]],
+  params: [["Pass box ΔP", "Between room and chamber"], ["Gauges", "MD0165 infeed, MD0166 outfeed (−250 to +250 Pa)"], ["Door interlock", "Tested at OQ"]],
+  site: ["MD0165 and MD0166: Dwyer −250/+250 Pa, ±2 % FS.", "Same arrangement on IPQC isolator EQ0942 (MD0170, MD0171)."],
+  stages: {
+    DQ: ["Transfer method per material and waste stream."],
+    IQ: ["@T-DOCS", "@T-CAL"],
+    OQ: ["@T-DOOR", "@T-ISO-PRESS", "@T-SMOKE"],
+    PQ: ["@T-SMEPAC", "@T-WIPE"],
+    RQ: ["Interlock and gauge checks."]
+  },
+  risks: [["Both pass box doors open", "Direct path chamber → room", "Interlock", 5, 2, 2], ["Waste bag cut open", "Dust release", "Crimp/seal procedure", 4, 2, 3]],
+  finds: ["Wipes found API on the outfeed door handle."],
+  refs: ["ISO7", "GS23"] },
+
+{ id: "isofilters", view: "iso", name: "Isolator HEPA filters", area: "Inlet MD0167 · exhaust MD0168",
+  role: "Clean the air entering the chamber and catch powder in the air leaving it.",
+  fn: ["The inlet HEPA filters room air drawn into the chamber. The exhaust HEPA traps the powder carried by the chamber air before it goes to the isolator's air unit; a push-push or safe-change housing lets it be replaced without exposure.", "Transmitters across each filter show loading. A rising exhaust ΔP means powder is building up on the filter."],
+  types: [["Inlet HEPA H14", "Protects the product inside."], ["Exhaust HEPA, push-push", "Contains powder; changed through a bag."], ["Double exhaust HEPA", "Two in series for the highest bands."]],
+  params: [["Integrity", "No leak > 0.01 %"], ["Filter ΔP", "0–750 Pa transmitters, ±1 % FS"], ["Change", "By ΔP or schedule; leak test after"]],
+  site: ["MD0167 inlet filter, MD0168 exhaust filter (Dwyer 616KD-B-12).", "IPQC isolator: MD0172, MD0173."],
+  stages: {
+    DQ: ["Filter classes, safe-change design, test ports."],
+    IQ: ["Certificates; @T-CAL"],
+    OQ: ["@T-ISO-AIR", "@T-FILTER-DP"],
+    PQ: ["ΔP trend over campaigns."],
+    RQ: ["Leak test after change and on schedule."]
+  },
+  risks: [["Exhaust HEPA leak", "Powder reaches CTA and exhaust", "Test; downstream BIBO", 4, 2, 3], ["Unsafe change", "Exposure", "Push-push procedure", 5, 2, 2]],
+  finds: ["Exhaust filter ΔP alarm disabled 'temporarily'."],
+  refs: ["ISO7", "EN1822"] },
+
+{ id: "isoair", view: "iso", name: "Isolator air handling and pressure control", area: "CTA EQ0939/01 · MD0169",
+  role: "Keep the chamber negative and the air moving, and alarm if not.",
+  fn: ["A dedicated air unit (CTA EQ0939/01) on the mezzanine pulls air out of the chamber through the exhaust HEPA. The control holds chamber pressure, read by MD0169, at its set point against the room.", "If a glove is lost, the fan speeds up to keep air rushing inward through the hole, and an alarm sounds. The SOP for the QC isolator describes the same principle: containment by negative pressure with turbulent airflow."],
+  types: [["Dedicated fan / CTA", "This site."], ["Room-air-fed isolator", "Inlet from room through HEPA."], ["Ducted-in isolator", "Inlet from a supply duct."]],
+  params: [["Chamber ΔP", "MD0169, 0–750 Pa"], ["Alarms", "Low ΔP, high ΔP, fan fault"], ["Breach response", "Inflow at an open glove port"]],
+  site: ["CTA EQ0939/01 on the 1st floor mezzanine.", "MD0169 (Dwyer 616KD-B-12) chamber to atmosphere; IPQC isolator MD0174 (−750/+750 Pa)."],
+  stages: {
+    DQ: ["Control logic, alarm set points, breach response."],
+    IQ: ["@T-CSV", "@T-CAL"],
+    OQ: ["@T-ISO-PRESS", "@T-ALARM", "@T-PWR"],
+    PQ: ["@T-SMEPAC"],
+    RQ: ["Alarm and ΔP checks."]
+  },
+  risks: [["Fan failure", "Chamber goes to room pressure", "Alarm; stop work procedure", 5, 2, 1], ["Wrong set point after maintenance", "Weak containment", "Change control; ΔP check", 4, 2, 3]],
+  finds: ["Chamber ΔP alarm delay set to 10 minutes without justification."],
+  refs: ["ISO7", "GS23"] },
+
+{ id: "npe", view: "npe", name: "Negative pressure enclosure", area: "IMA Prexima EQ0940 · FFO-09",
+  role: "A rigid box around the press, held below room pressure, so dust cannot escape during compression.",
+  fn: ["The press runs inside a glazed enclosure with interlocked doors and glove ports for small interventions. The extract keeps it below room pressure, so air leaks in at every seam and door gap. Granulate arrives through a closed docking valve from the IBC on the lifter.", "The same principle applies to the blister machine in FFO-28 (EQ0941/01) and to the local isolators around R&D equipment, which have −30/+30 Pa gauges."],
+  types: [["Rigid NPE", "Glazed panels, doors, glove ports."], ["Flexible enclosure", "Film tent on a frame; for campaigns."], ["Closed transfer", "Docking valve or split butterfly valve from IBC."]],
+  params: [["Enclosure ΔP", "MD0187, 0–125 Pa (−10 to −30 Pa typical)"], ["Inflow at openings", "Commonly ≥ 0.5 m/s"], ["Doors", "Interlocked with machine run"]],
+  site: ["IMA Prexima EQ0940 with containment manometer MD0187 (Magnehelic 0–125 Pa, ±4 % FS).", "Lifter EQ0940/01 (YENCHEN YC-LD-100).", "Blister enclosure EQ0941/01: MD0160, MD0161, MD0162."],
+  stages: {
+    DQ: ["Enclosure design, glove ports for every routine intervention, closed transfer."],
+    IQ: ["@T-DOCS", "@T-CAL"],
+    OQ: ["@T-NPE", "@T-SMOKE", "@T-DOOR"],
+    PQ: ["@T-SMEPAC", "@T-WIPE"],
+    RQ: ["ΔP and inflow on schedule."]
+  },
+  risks: [["Door opened during run", "Dust cloud into room", "Interlock; alarm", 5, 2, 2], ["Interventions without glove ports", "Exposure", "Design; training", 4, 3, 3]],
+  finds: ["Operators open enclosure doors to clear jams because glove ports do not reach the feeder."],
+  refs: ["ISO7", "SMEPAC", "OSD"] },
+
+{ id: "npeexh", view: "npe", name: "Enclosure extract, dedusting and wash", area: "EQ0940/02–04",
+  role: "Remove dust from the enclosure and from tablets, and clean the enclosure before it is opened.",
+  fn: ["The extract draws air from the enclosure through a HEPA stage to the mezzanine exhaust. Tablets leave through the deduster and metal detector EQ0940/02 into a closed container; the Nilfisk vacuum EQ0940/03 collects dust from the deduster.", "Before maintenance or changeover, the wash centre EQ0940/04 wets and cleans the inside, so the enclosure can be opened without releasing dry powder."],
+  types: [["Extract with local HEPA", "Protects the duct."], ["Deduster + metal detector", "Closed discharge."], ["Wash-in-place", "Wet cleaning before opening."]],
+  params: [["Extract flow", "Holds enclosure ΔP"], ["HEPA", "Leak tested"], ["Wash", "Validated cleaning before opening"]],
+  site: ["Deduster / metal detector EQ0940/02 (Pharmaflex PFC).", "Vacuum EQ0940/03 (Nilfisk), wash centre EQ0940/04."],
+  stages: {
+    DQ: ["Extract design; wash coverage; closed discharge."],
+    IQ: ["@T-DOCS", "@T-DUCT-LEAK"],
+    OQ: ["@T-AIRVOL", "@T-BIBO"],
+    PQ: ["@T-WIPE", "@T-SMEPAC"],
+    RQ: ["Extract and HEPA checks on schedule."]
+  },
+  risks: [["Extract lost", "Enclosure at room pressure", "Alarm; interlock to press", 5, 2, 2], ["Enclosure opened before washing", "Exposure", "Procedure; lock", 5, 2, 3]],
+  finds: ["Vacuum filter emptied in the room without bagging."],
+  refs: ["OSD", "GS23"] }
+];
+
+/* Floor plan rooms: x, y, w, h, code, short name, full name, class, pressure (Pa vs outside, illustrative), component, EM [air, surface], equipment */
+var ROOMS = [
+  [40, 60, 100, 140, "FFO-16", "Entrance", "Oncology entrance", "NC", 0, "entry", null, ""],
+  [40, 200, 100, 100, "FFO-17", "Changing IN", "Manufacturing changing room IN", "D", 15, "entry", [2, 1], ""],
+  [140, 200, 90, 100, "FFO-22", "PAL IN", "Personnel airlock IN", "D", 5, "entry", [3, 2], ""],
+  [140, 300, 860, 60, "FFO-05", "Corridor", "Clean corridor", "D", -5, "corridor", [7, 6], ""],
+  [140, 360, 90, 100, "FFO-18", "PAL OUT", "Personnel airlock OUT with mist shower", "D", -15, "change", [1, 2], "Mist shower EQ0943"],
+  [40, 360, 100, 100, "FFO-14", "Changing OUT", "Manufacturing changing room OUT", "D", 12, "change", [2, 2], ""],
+  [40, 460, 190, 180, "FFO-32", "RM-PM warehouse", "Raw and primary packaging materials warehouse", "D", 12, "passbox", [3, 2], ""],
+  [230, 60, 130, 240, "FFO-01", "Dispensing", "API dispensing room", "D", -20, "dispense", [5, 4], "Dispensing isolator EQ0939 · balance BL0001"],
+  [360, 60, 80, 240, "FFO-02", "Weighed", "Weighed materials storage", "D", -12, "dispense", [2, 2], ""],
+  [440, 60, 180, 240, "FFO-08", "Granulation", "Granulation and blending room", "D", -20, "process", [7, 8], "SMG EQ0934 · FBD EQ0935 · cone mill EQ0937 · bin mixer EQ0938 · VSD EQ0944"],
+  [620, 60, 130, 240, "FFO-09", "Compression", "Compression room", "D", -20, "process", [4, 5], "IMA Prexima EQ0940 in enclosure"],
+  [750, 60, 120, 240, "FFO-10", "Coating", "Coating room", "D", -20, "process", [4, 4], "Coater EQ0936"],
+  [870, 60, 130, 240, "FFO-24", "Capsule filling", "Capsule filling room", "D", -20, "process", [4, 4], "PTK capsule filler EQ0953"],
+  [230, 360, 100, 280, "FFO-30", "Excipient", "Excipient storage room", "D", -12, "passbox", [4, 3], ""],
+  [330, 360, 90, 280, "FFO-26", "WIP store", "Work-in-process storage", "D", -12, "process", [2, 2], "Platform balance BL0073"],
+  [420, 360, 100, 160, "FFO-04", "Washing", "Washing room", "D", -20, "process", [2, 3], ""],
+  [420, 520, 100, 120, "FFO-06", "Drying", "Drying room", "D", -12, "process", [2, 3], ""],
+  [520, 360, 90, 280, "FFO-07", "Clean equip.", "Cleaned equipment storage", "D", -12, "process", [2, 4], ""],
+  [610, 360, 110, 280, "FFO-23", "IPQC", "In-process control room", "D", -20, "process", [4, 5], "IPQC isolator EQ0942 · hardness, friability, disintegration testers"],
+  [720, 360, 280, 280, "FFO-28", "Blister", "Blister machine room", "D", -20, "pack", [6, 4], "Blister EQ0941 in enclosure EQ0941/01 · leak tester EQ0568"],
+  [1000, 300, 60, 60, "FFO-33", "Airlock", "Airlock to secondary areas", "NC", 12, "entry", [1, 1], ""],
+  [1000, 200, 60, 100, "FFO-20", "MAL OUT", "Material airlock OUT", "NC", 0, "entry", [1, 1], ""],
+  [1060, 260, 100, 100, "FFO-19", "Sec. corridor", "Secondary corridor", "NC", 6, "pack", [5, 2], ""],
+  [1060, 60, 100, 200, "FFO-34", "FG warehouse", "Finished goods warehouse", "NC", 0, "pack", [3, 4], ""],
+  [1000, 360, 160, 280, "FFO-25", "Sec. packaging", "Secondary packaging room", "NC", -3, "pack", [4, 4], "Ink-jet printer EQ0600 · balance BL0125"],
+  [990, 480, 20, 40, "FFO-29", "", "Pass-through chamber over the conveyor (mouse hole)", "D", -28, "pack", [1, 1], ""],
+  [220, 540, 20, 30, "FFO-31", "", "Dynamic pass box, warehouse to excipient store", "D", null, "passbox", [1, 1], ""]
+];
+
+/* Doors: code A, code B ("OUT" = outside), x, y, orientation (h = on a horizontal wall, v = on a vertical wall) */
+var DOORS = [
+  ["FFO-16", "FFO-17", 90, 200, "h"], ["FFO-17", "FFO-22", 140, 250, "v"], ["FFO-22", "FFO-05", 185, 300, "h"],
+  ["FFO-05", "FFO-18", 185, 360, "h"], ["FFO-18", "FFO-14", 140, 410, "v"], ["FFO-14", "OUT", 40, 410, "v"],
+  ["FFO-16", "OUT", 40, 130, "v"], ["FFO-32", "OUT", 40, 590, "v"],
+  ["FFO-05", "FFO-01", 300, 300, "h"], ["FFO-05", "FFO-02", 400, 300, "h"], ["FFO-05", "FFO-08", 530, 300, "h"],
+  ["FFO-05", "FFO-09", 685, 300, "h"], ["FFO-05", "FFO-10", 810, 300, "h"], ["FFO-05", "FFO-24", 935, 300, "h"],
+  ["FFO-05", "FFO-30", 280, 360, "h"], ["FFO-05", "FFO-26", 375, 360, "h"], ["FFO-05", "FFO-04", 470, 360, "h"],
+  ["FFO-04", "FFO-06", 470, 520, "h"], ["FFO-05", "FFO-07", 565, 360, "h"], ["FFO-05", "FFO-23", 665, 360, "h"],
+  ["FFO-05", "FFO-28", 860, 360, "h"], ["FFO-05", "FFO-33", 1000, 330, "v"], ["FFO-33", "FFO-20", 1030, 300, "h"],
+  ["FFO-33", "FFO-19", 1060, 330, "v"], ["FFO-20", "FFO-19", 1060, 280, "v"], ["FFO-19", "FFO-25", 1110, 360, "h"],
+  ["FFO-19", "FFO-34", 1110, 260, "h"]
+];
+
+var LIFE = [
+  { k: "URS", t: "URS and containment master plan", q: false, what: "Write the URS for HVAC, isolators and enclosures together with the containment master plan SOPGS0023E asks for: products, people and environment; which steps are open or closed; the cascade; filtration; waste and effluent; PPE as back-up only.", out: ["URS for HVAC, isolator EQ0939, enclosures", "Containment master plan", "Room data sheets and pressure map"], who: "Production, HSE, validation, QA", refs: ["GS23", "WHO957"] },
+  { k: "HAZ", t: "Hazard banding and risk assessment", q: false, what: "Assign each product an OEL or OEB and a PDE (OEL × 10 m³; ≤ 10 µg/day = highly hazardous). Assess cross-contamination, airborne and effluent risks, separation from adjacent facilities and use of return air. Score failure modes with FMEA.", out: ["OEL/OEB and PDE per product", "Cross-contamination risk assessment and FMEA", "Decision on single pass or recirculation"], who: "HSE (toxicology), validation, QA", refs: ["GS23", "HBEL", "Q9"] },
+  { k: "DQ", t: "Design qualification", q: true, what: "Verify that the design meets the URS, GMP and the containment plan: AHUs, filters, ACH, ducts, T/RH, pressure strategy, controls, isolator leak class, enclosure design, BIBO positions.", out: ["DQ report and traceability matrix", "Approved P&IDs, layouts and airflow schematics"], who: "Engineering, validation; QA approval", refs: ["VL102", "A15"] },
+  { k: "FAT", t: "Factory acceptance (isolator, enclosures)", q: false, what: "At the vendor: isolator leak test to the URS class, glove ports and pass box interlocks, pressure control and alarms, filter tests. Some sites run a first surrogate test at FAT. Results can support OQ if transport does not affect them.", out: ["FAT protocol and report", "Punch list"], who: "Vendor, engineering, validation", refs: ["ISO10648", "A15"] },
+  { k: "SAT", t: "Commissioning and SAT", q: false, what: "Install, leak test ducts, balance air, tune loops, set the fan start/stop sequence and commission the BMS. Good documentation here reduces repeat testing in IQ and OQ.", out: ["Balancing report", "Duct leak records", "SAT report"], who: "Contractor, engineering", refs: ["WHO1010"] },
+  { k: "IQ", t: "Installation qualification", q: true, what: "Verify installation against drawings: IDs, models, materials, calibration, electrical and safety interlocks, labels, airflow direction and cleanliness (SOPVL0102E).", out: ["Component verification", "Calibration and certificates", "ΔP gauges with seals and labels"], who: "Validation; QA approval", refs: ["VL102"] },
+  { k: "OQ", t: "Operational qualification", q: true, what: "SOPVL0102E lists air volume, particle count, ΔP, T/RH uniformity, filter integrity, alarms and control, and recovery. Add for containment: fan sequencing and power failure, BIBO tests, isolator leak and glove tests, enclosure ΔP and inflow, airflow visualisation at every opening.", out: ["HVAC OQ report", "Isolator and enclosure OQ reports"], who: "Validation, test contractor; QA approval", refs: ["VL102", "ISO10648", "ISO3"] },
+  { k: "PQ", t: "Performance qualification", q: true, what: "Monitor ΔP, T, RH and particles over a defined period at rest and in operation (SOPVL0056E), run viable monitoring (SOPQC0119E/Onc), and verify containment with a surrogate (SMEPAC) and surface wipes.", out: ["PQ report with EM baseline", "Containment verification report", "Routine EM points issued"], who: "Validation, production, QC, HSE; QA approval", refs: ["VL102", "QC119", "SMEPAC"] },
+  { k: "REL", t: "Report and release", q: false, what: "Summarise all results and deviations, state fitness for use, and start routine monitoring and industrial hygiene follow-up.", out: ["Summary report", "Routine monitoring in force"], who: "Validation, QA", refs: ["A15"] },
+  { k: "OPS", t: "Routine monitoring", q: false, what: "ΔP once per shift (VL0011E/FE02), EM monthly in Grade D rooms and every three months in non-classified rooms, glove tests, filter ΔP, wipe trends, industrial hygiene and medical surveillance.", out: ["Daily ΔP records", "Monthly EM trend (FE08)", "Glove and wipe logs"], who: "Production, QC, HSE", refs: ["VL11", "QC119", "GS23"] },
+  { k: "RQ", t: "Requalification and change control", q: true, what: "Requalify every 12 months, or straight after maintenance or major change: ΔP, T, RH, HEPA integrity, particles and viables (SOPVL0102E). Repeat recovery after HVAC change, HEPA replacement, airflow change or reclassification.", out: ["Requalification report", "Change control impact assessments"], who: "Validation, QA", refs: ["VL102"] }
+];
+
+var QUIZ = [
+  { q: "Your site's minimum ΔP between adjacent rooms of the same cleanliness class is:", o: ["3 Pa", "6 Pa", "10 Pa", "15 Pa"], a: 1, e: "SOPVL0011E: ΔP ≥ 6 Pa between adjacent rooms of the same class, read at least once per shift." },
+  { q: "And between adjacent rooms of different classes?", o: ["≥ 6 Pa", "≥ 10 Pa", "≥ 12 Pa", "≥ 20 Pa"], a: 2, e: "SOPVL0011E: ΔP ≥ 12 Pa between adjacent rooms of different classes." },
+  { q: "The airlock at the containment perimeter, next to a non-GMP area, should be:", o: ["Negative to the environment", "Positive to the environment", "At the same pressure as the corridor", "Unventilated"], a: 1, e: "SOPGS0023E: the final perimeter airlock bordering an external or non-GMP area is positive to the environment, while the contained areas are negative." },
+  { q: "Minimum HEPA class for exhaust air from the hazardous area under SOPGS0023E:", o: ["F9", "E12", "H13", "U15"], a: 2, e: "Exhaust through HEPA filters with a minimum rating of H13 (EN 1822), in safe-change or BIBO housings." },
+  { q: "Why does SOPGS0023E prefer terminally mounted supply HEPA filters?", o: ["They are cheaper", "They prevent back-flow contamination of the supply duct if supply airflow fails", "They give higher air changes", "They do not need leak testing"], a: 1, e: "With the filter at the room, a supply failure cannot let contaminated room air flow back into clean ductwork." },
+  { q: "On start-up of a negative containment suite, which fan should run first?", o: ["Supply", "Exhaust", "Both at exactly the same time without control", "Order does not matter"], a: 1, e: "Exhaust first, then supply, so the suite never goes positive. SOPGS0023E asks for synchronised start and stop that keeps the premises negative." },
+  { q: "An API has an OEL of 0.5 µg/m³. Using SOPGS0023E, its PDE and category are:", o: ["50 µg/day, not highly hazardous", "5 µg/day, highly hazardous", "0.05 µg/day, not hazardous", "500 µg/day, highly hazardous"], a: 1, e: "PDE = 0.5 × 10 m³ = 5 µg/day. At 10 µg/day or less the product is highly hazardous." },
+  { q: "Return air from the containment suite may be recirculated:", o: ["Freely, after the AHU F9 filter", "Only to the same area, after risk assessment, through an extra safe-change HEPA stage", "To any area if the AHU has a G4 filter", "Never under any circumstances"], a: 1, e: "SOPGS0023E: not recirculated except to the same area, with a further HEPA stage, so return air passes two HEPA filters in series." },
+  { q: "ISO 10648-2 class 2 allows an hourly leak rate up to:", o: ["5 × 10⁻⁴ h⁻¹", "2.5 × 10⁻³ h⁻¹", "10⁻² h⁻¹", "10⁻¹ h⁻¹"], a: 1, e: "Class 1 ≤ 5 × 10⁻⁴, class 2 ≤ 2.5 × 10⁻³, class 3 ≤ 10⁻², class 4 ≤ 10⁻¹ per hour." },
+  { q: "A leak test gives 2.9 × 10⁻³ h⁻¹. Which ISO 10648-2 class does the isolator meet?", o: ["Class 1", "Class 2", "Class 3", "Class 4"], a: 2, e: "It exceeds the class 2 limit (2.5 × 10⁻³) but is within class 3 (10⁻²)." },
+  { q: "What does the SGLT EQ0960 test?", o: ["Room pressure", "Glove and sleeve integrity by pressure decay", "HEPA efficiency", "Isolator airflow velocity"], a: 1, e: "The smart glove leak tester checks each glove in place for leaks without breaking containment." },
+  { q: "Which surrogate is commonly used in SMEPAC containment testing?", o: ["PAO oil", "Naproxen sodium or lactose", "Sodium chloride solution", "Ethanol vapour"], a: 1, e: "Naproxen sodium (low detection limit) and lactose are common surrogates. PAO is the aerosol for HEPA leak tests." },
+  { q: "Your Grade D oncology area air-sampling action limit (SOPQC0119E/Onc) is:", o: ["50 cfu/m³", "100 cfu/m³", "200 cfu/m³", "500 cfu/m³"], a: 2, e: "Action 200 cfu/m³, alert 100 (half the action limit), target 50." },
+  { q: "Why is the exit airlock with the mist shower drawn as a sink?", o: ["To save energy", "So dust released while showering and de-gowning cannot move to the corridor or the changing room", "Because it is not classified", "To keep the shower water warm"], a: 1, e: "A sink airlock draws air in from both sides, holding released dust where it can be extracted." },
+  { q: "How often does SOPVL0102E require HVAC requalification?", o: ["Every 6 months", "Every 12 months, or after maintenance or major change", "Every 3 years", "Only after a deviation"], a: 1, e: "Typically every 12 months, or immediately after maintenance or major changes: ΔP, T, RH, HEPA integrity, non-viable and viable counts." }
+];
+
+var OEB = [
+  ["OEB 1", "> 1000", "General ventilation; normal GMP gowning"],
+  ["OEB 2", "100–1000", "Local exhaust at open points; basic PPE"],
+  ["OEB 3", "10–100", "Ventilated enclosures or downflow booths; closed transfer where possible"],
+  ["OEB 4", "1–10", "Closed processing, negative pressure enclosures, isolators for open handling; PAPR as back-up"],
+  ["OEB 5", "< 1", "Isolators for all open handling, fully closed transfer, BIBO exhaust; PPE as back-up only"]
+];
+
+var SITE = [
+  ["ΔP, same class", "≥ 6 Pa, read at least once per shift", "SOPVL0011E"],
+  ["ΔP, different class", "≥ 12 Pa", "SOPVL0011E"],
+  ["ΔP gauges", "Calibrated, adjustment screw sealed, direction and limit label beside the gauge", "SOPVL0011E"],
+  ["ΔP out of range", "Impact study, then deviation (SOPQA0015E) or work order with validation check", "SOPVL0011E"],
+  ["Suite vs outside", "Negative; perimeter airlock positive", "SOPGS0023E"],
+  ["Exhaust", "HEPA ≥ H13 in BIBO / safe change; no direct venting", "SOPGS0023E"],
+  ["Recirculation", "Same area only, after RA, with extra safe-change HEPA", "SOPGS0023E"],
+  ["Fan start/stop", "Synchronised so the premises stay negative", "SOPGS0023E"],
+  ["Requalification", "Every 12 months or after maintenance or major change", "SOPVL0102E"],
+  ["Recovery", "Time to at-rest limits after challenge; repeat after HVAC change, HEPA replacement, airflow change", "SOPVL0102E"],
+  ["Particles, Grade D at rest", "≤ 3 520 000 /m³ ≥0.5 µm; ≤ 29 300 /m³ ≥5.0 µm", "SOPVL0012E · ISO 8"],
+  ["EM frequency", "Grade D rooms monthly; non-classified every three months", "SOPQC0119E/Onc"],
+  ["QC isolator viable check", "At least twice a month; < 1 CFU", "SOPQC0116E/Onc"]
+];
+
+function $(s, r) { return (r || document).querySelector(s); }
+function $$(s, r) { return Array.prototype.slice.call((r || document).querySelectorAll(s)); }
+function esc(s) { return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
+function fmt(n, d) { return Number(n).toLocaleString("en-GB", { maximumFractionDigits: d == null ? 0 : d, minimumFractionDigits: d == null ? 0 : d }); }
+function level(s, o) { var m = s * o; return m >= 20 ? "Critical" : m >= 10 ? "High" : m >= 5 ? "Medium" : "Low"; }
+function sgn(p) { return p > 0 ? "+" + p : p < 0 ? "−" + Math.abs(p) : "0"; }
+var reduceMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+var NS = "http://www.w3.org/2000/svg";
+
+var KEY = "onc-containment-masterclass-v1";
+var state = { studied: [], quiz: {} };
+try { var raw = localStorage.getItem(KEY); if (raw) { var pz = JSON.parse(raw); state.studied = pz.studied || []; state.quiz = pz.quiz || {}; } } catch (e) {}
+function save() { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {} }
+
+var byId = {}; COMPS.forEach(function (c, i) { c.n = i + 1; byId[c.id] = c; });
+var roomBy = {}; ROOMS.forEach(function (r) { roomBy[r[4]] = { x: r[0], y: r[1], w: r[2], h: r[3], code: r[4], short: r[5], name: r[6], cls: r[7], p: r[8], comp: r[9], em: r[10], eq: r[11] }; });
+roomBy.OUT = { code: "OUT", name: "Outside / site", cls: "U", p: 0 };
+
+var VIEWS = {
+  plan: { t: "Floor plan · 1st floor production (FFO)", s: "Schematic arrangement of registered rooms, not to scale. Hover a room for its details." },
+  air: { t: "Air system · mezzanine FFM-O-01 and a section through the floor", s: "Supply CTA 001–003, exhaust CTA 002/003 with BIBO, process air and the isolator's own CTA." },
+  iso: { t: "Dispensing isolator EQ0939 · FFO-01", s: "Cutaway. Instrument tags come from the asset register." },
+  npe: { t: "Press enclosure · IMA Prexima EQ0940 · FFO-09", s: "Cutaway of the negative pressure enclosure and its extract." }
+};
+var LEGENDS = {
+  plan: '<span><i style="background:var(--neg)"></i>Negative to outside</span><span><i style="background:var(--pos)"></i>Positive to outside</span><span><i style="background:repeating-linear-gradient(90deg,var(--people) 0 7px,transparent 7px 11px)"></i>People</span><span><i style="background:repeating-linear-gradient(90deg,var(--material) 0 3px,transparent 3px 7px)"></i>Materials</span><span><i style="background:repeating-linear-gradient(90deg,var(--hz) 0 10px,transparent 10px 13px)"></i>Containment line</span><span class="mono" style="font-size:11px">Arrows at doors show leakage direction · hatched = not classified</span>',
+  air: '<span><i style="background:var(--oa)"></i>Outdoor air</span><span><i style="background:var(--sa)"></i>Supply</span><span><i style="background:var(--ra)"></i>Extract</span><span><i style="background:var(--ea)"></i>Exhaust after HEPA</span><span><i style="background:repeating-linear-gradient(90deg,var(--sig) 0 4px,transparent 4px 7px)"></i>Signals</span><span><i style="background:var(--hz)"></i>Contaminated side of filters</span>',
+  iso: '<span><i style="background:var(--hz)"></i>Containment boundary</span><span><i style="background:var(--sa)"></i>Clean air in</span><span><i style="background:var(--ea)"></i>Exhaust</span><span class="mono" style="font-size:11px">Arrows at doors: inward leakage</span>',
+  npe: '<span><i style="background:var(--hz)"></i>Enclosure and inward leakage</span><span><i style="background:var(--ea)"></i>Extract</span><span><i style="background:var(--sa)"></i>Wash water</span>'
+};
+
+/* ---------- Floor plan ---------- */
+function el(tag, attrs, parent, text) { var e = document.createElementNS(NS, tag); for (var k in attrs) e.setAttribute(k, attrs[k]); if (text != null) e.textContent = text; if (parent) parent.appendChild(e); return e; }
+function buildPlan() {
+  var svg = $("#v-plan");
+  var groups = {};
+  ["entry", "change", "corridor", "dispense", "process", "pack", "passbox"].forEach(function (id) {
+    var c = byId[id];
+    groups[id] = el("g", { "class": "hs", "data-id": id, tabindex: "0", role: "button", "aria-label": c.n + " " + c.name }, svg);
+    el("title", {}, groups[id], c.name);
+  });
+  el("rect", { x: 1000, y: 60, width: 60, height: 140, fill: "var(--surface-2)", stroke: "var(--wall)", "stroke-width": 2 }, svg);
+  el("text", { x: 1030, y: 134, "class": "eq-t" }, svg, "shaft");
+  ROOMS.forEach(function (r) {
+    var R = roomBy[r[4]], g = groups[R.comp];
+    var rg = el("g", { "data-room": R.code }, g);
+    el("rect", { x: R.x, y: R.y, width: R.w, height: R.h, "class": "sv-room-r" }, rg);
+    if (R.p != null && R.p !== 0) el("rect", { x: R.x, y: R.y, width: R.w, height: R.h, "class": "sv-room-p", fill: R.p < 0 ? "var(--neg)" : "var(--pos)", "fill-opacity": Math.min(0.42, 0.05 + Math.abs(R.p) / 28 * 0.36).toFixed(2) }, rg);
+    el("rect", { x: R.x, y: R.y, width: R.w, height: R.h, "class": "sv-class", fill: R.cls === "NC" ? "url(#nc-hatch)" : "var(--gD)", "pointer-events": "none" }, rg);
+    if (R.w >= 50 && R.short) {
+      var lx = R.code === "FFO-05" ? 905 : R.x + 6, ly = R.code === "FFO-05" ? R.y + 14 : R.y + 16;
+      el("text", { x: lx, y: ly, "class": "sv-code" }, rg, R.code);
+      el("text", { x: lx, y: ly + 14, "class": "sv-rname" }, rg, R.short);
+      if (R.p != null) {
+        var cy = R.code === "FFO-05" ? R.y + 34 : R.y + R.h - 24;
+        var ch = el("g", { "class": "pa-chip " + (R.p < 0 ? "neg" : R.p > 0 ? "pos" : "zero") }, rg);
+        el("rect", { x: lx, y: cy, width: 48, height: 17, rx: 4 }, ch);
+        el("text", { x: lx + 24, y: cy + 12.5, "class": "sv-pa", "text-anchor": "middle" }, ch, sgn(R.p) + " Pa");
+      }
+    }
+  });
+  // doors and leakage arrows
+  var dl = el("g", { "class": "deco" }, svg);
+  DOORS.forEach(function (d) {
+    var A = roomBy[d[0]], B = roomBy[d[1]], x = d[2], y = d[3], h = d[4] === "h";
+    el("line", h ? { x1: x - 13, y1: y, x2: x + 13, y2: y, "class": "door-gap" } : { x1: x, y1: y - 13, x2: x, y2: y + 13, "class": "door-gap" }, dl);
+    el("path", { d: h ? "M" + (x - 13) + " " + y + " a26 26 0 0 1 26 0" : "M" + x + " " + (y - 13) + " a26 26 0 0 1 0 26", "class": "door-leaf" }, dl);
+    if (A.p == null || B.p == null || A.p === B.p) return;
+    var hi = A.p > B.p ? A : B, lo = hi === A ? B : A;
+    var dir;
+    if (lo.code === "OUT") dir = -1; else if (hi.code === "OUT") dir = 1;
+    else dir = h ? (lo.y + lo.h / 2 > y ? 1 : -1) : (lo.x + lo.w / 2 > x ? 1 : -1);
+    var dp = hi.p - lo.p, need = (A.cls === B.cls) ? 6 : 12;
+    if (A.code === "OUT" || B.code === "OUT") need = (A.cls === "NC" || B.cls === "NC") ? 0 : 12;
+    var a = el("path", { d: h ? "M" + (x + 16) + " " + (y - dir * 11) + " v" + (dir * 22) : "M" + (x - dir * 11) + " " + (y - 16) + " h" + (dir * 22), "class": "leak " + (lo.p < 0 ? "toneg" : "topos") }, svg);
+    a.setAttribute("data-dp", dp);
+    el("title", {}, a, hi.code + " → " + lo.code + ": ΔP " + dp + " Pa (need ≥ " + need + ") " + (dp >= need ? "✓" : "✗"));
+    if (dp < need) a.style.stroke = "var(--critical)";
+  });
+  // equipment glyphs
+  var gi = el("g", { "class": "hs", "data-id": "isochamber", tabindex: "0", role: "button", "aria-label": "Isolators, open the isolator drawing" }, svg);
+  el("title", {}, gi, "Isolators EQ0939 and EQ0942 (opens the isolator drawing)");
+  [[248, 150, 94, 50, "EQ0939"], [626, 470, 80, 44, "EQ0942"]].forEach(function (b) {
+    el("rect", { x: b[0], y: b[1], width: b[2], height: b[3], rx: 4, "class": "eq-hz" }, gi);
+    for (var i = 0; i < 3; i++) el("circle", { cx: b[0] + b[2] * (i + 1) / 4, cy: b[1] + b[3] - 12, r: 5, "class": "sv-glove" }, gi);
+    el("text", { x: b[0] + b[2] / 2, y: b[1] + 14, "class": "eq-t hz" }, gi, "ISOLATOR " + b[4]);
+  });
+  var gn = el("g", { "class": "hs", "data-id": "npe", tabindex: "0", role: "button", "aria-label": "Enclosures, open the enclosure drawing" }, svg);
+  el("title", {}, gn, "Negative pressure enclosures on the press and blister machine (opens the enclosure drawing)");
+  el("rect", { x: 638, y: 118, width: 94, height: 110, rx: 4, "class": "eq-npe" }, gn);
+  el("circle", { cx: 685, cy: 172, r: 22, "class": "eq" }, gn); el("text", { x: 685, y: 175, "class": "eq-t" }, gn, "IMA");
+  el("text", { x: 685, y: 222, "class": "eq-t hz" }, gn, "NPE");
+  el("rect", { x: 738, y: 468, width: 244, height: 64, rx: 4, "class": "eq-npe" }, gn);
+  el("rect", { x: 752, y: 486, width: 216, height: 28, rx: 3, "class": "eq" }, gn); el("text", { x: 860, y: 504, "class": "eq-t" }, gn, "BLISTER EQ0941");
+  el("text", { x: 860, y: 526, "class": "eq-t hz" }, gn, "NPE EQ0941/01");
+  var gp = groups.process;
+  el("circle", { cx: 480, cy: 150, r: 20, "class": "eq" }, gp); el("text", { x: 480, y: 153, "class": "eq-t" }, gp, "SMG");
+  el("rect", { x: 520, y: 118, width: 40, height: 70, rx: 4, "class": "eq" }, gp); el("text", { x: 540, y: 156, "class": "eq-t" }, gp, "FBD");
+  el("circle", { cx: 590, cy: 210, r: 14, "class": "eq" }, gp); el("text", { x: 590, y: 213, "class": "eq-t" }, gp, "BIN");
+  el("circle", { cx: 810, cy: 175, r: 28, "class": "eq" }, gp); el("text", { x: 810, y: 178, "class": "eq-t" }, gp, "COATER");
+  el("rect", { x: 900, y: 130, width: 70, height: 60, rx: 4, "class": "eq" }, gp); el("text", { x: 935, y: 163, "class": "eq-t" }, gp, "PTK");
+  var gc = groups.change;
+  el("circle", { cx: 185, cy: 418, r: 15, "class": "eq" }, gc);
+  el("path", { d: "M178 412 v8 M185 410 v10 M192 412 v8", stroke: "var(--sa)", "stroke-width": 1.5 }, gc);
+  // containment line, flows
+  el("path", { d: "M226 56 H1004 V644 H226 V464 H136 V196 H226 Z", "class": "contain-line" }, svg);
+  el("text", { x: 236, y: 52, "class": "contain-lbl" }, svg, "CONTAINMENT LINE · SUITE NEGATIVE TO OUTSIDE");
+  var fl = el("g", { "class": "deco" }, svg);
+  el("path", { d: "M10 130 H90 V250 H185 V318 H895", "class": "flowp" }, fl);
+  el("path", { d: "M300 334 H185 V410 H12", "class": "flowp" }, fl);
+  el("path", { d: "M10 590 H130 V555 H280 V348 H300 V244", "class": "flowm" }, fl);
+  el("path", { d: "M322 244 V346 H860 V500 H1110 V150", "class": "flowm" }, fl);
+  el("text", { x: 8, y: 122, "class": "callout flow-lbl", fill: "var(--people)" }, fl, "People in");
+  el("text", { x: 8, y: 428, "class": "callout flow-lbl" }, fl, "People out");
+  el("text", { x: 8, y: 608, "class": "callout flow-lbl" }, fl, "Materials in");
+  el("text", { x: 1068, y: 142, "class": "callout flow-lbl" }, fl, "to FG");
+  // badges
+  var BADGE = { entry: [220, 212], change: [220, 372], corridor: [880, 312], dispense: [350, 72], process: [610, 72], pack: [988, 372], passbox: [218, 474] };
+  Object.keys(BADGE).forEach(function (id) { var g = el("g", { "class": "bdg" }, groups[id]); el("circle", { cx: BADGE[id][0], cy: BADGE[id][1], r: 10 }, g); el("text", { x: BADGE[id][0], y: BADGE[id][1] }, g, byId[id].n); });
+  svg.classList.add("no-classmode");
+  // tooltip
+  var tip = $("#tip");
+  svg.addEventListener("mousemove", function (e) {
+    var rg = e.target.closest("[data-room]");
+    if (!rg) { tip.hidden = true; return; }
+    var R = roomBy[rg.getAttribute("data-room")];
+    tip.innerHTML = "<b>" + R.code + "</b> " + esc(R.name) + "<br><span>Class</span> " + (R.cls === "NC" ? "not classified" : "Grade D") + " · <span>ΔP to outside</span> " + (R.p == null ? "n/a" : sgn(R.p) + " Pa") + (R.em ? "<br><span>EM points</span> " + R.em[0] + " air · " + R.em[1] + " surface" : "") + (R.eq ? "<br><span>Equipment</span> " + esc(R.eq) : "");
+    tip.hidden = false;
+    var x = e.clientX + 14, y = e.clientY + 14;
+    if (x + 270 > window.innerWidth) x = e.clientX - 280;
+    tip.style.left = x + "px"; tip.style.top = y + "px";
+  });
+  svg.addEventListener("mouseleave", function () { tip.hidden = true; });
+}
+
+/* ---------- Tests ---------- */
+function testBlock(id, open) {
+  var t = TESTS[id]; if (!t) return "";
+  var li = function (a) { return a.map(function (x) { return "<li>" + esc(x) + "</li>"; }).join(""); };
+  return '<details class="test"' + (open ? " open" : "") + ' data-test="' + id + '"><summary><span class="tid">' + id + '</span><span class="tname">' + esc(t.name) + '</span><span class="stg">' + t.stages.map(function (s) { return "<i>" + s + "</i>"; }).join("") + '</span></summary>' +
+    '<div class="tbody">' + (t.sop ? '<p><span class="pill hz">Site SOP ' + esc(REF[t.sop][0]) + '</span></p>' : "") + '<p>' + esc(t.purpose) + '</p>' +
+    '<div class="tcols"><div><h5>Instruments and materials</h5><ul>' + li(t.inst) + '</ul></div><div><h5>Before you start</h5><ul>' + li(t.pre) + '</ul></div></div>' +
+    '<div><h5>Procedure</h5><ol>' + li(t.steps) + '</ol></div>' +
+    '<div><h5>Acceptance criteria</h5><ul class="acc">' + li(t.acc) + '</ul></div>' +
+    '<p style="font-size:13.5px"><b>Records:</b> ' + esc(t.rec) + '</p>' +
+    '<p class="refs">Sources: ' + t.refs.map(function (r) { return esc(REF[r][0]); }).join(" · ") + '</p></div></details>';
+}
+
+/* ---------- Views, selection, panel ---------- */
+var view = "plan", sel = null, tab = "overview", stage = "DQ";
+var STAGES = [["DQ", "Design qualification", "Is the design right for the hazard? Verify against the URS, GMP and the containment master plan."], ["IQ", "Installation qualification", "Is it installed as designed? Verify components, documents, calibration and labels."], ["OQ", "Operational qualification", "Does it work across its ranges, and fail safe? Test functions, alarms, sequences and containment at rest."], ["PQ", "Performance qualification", "Does it contain in real operation? Monitor over time and verify containment with a surrogate."], ["RQ", "Requalification", "Does it still perform? 12-month requalification (SOPVL0102E) and change-triggered tests."]];
+
+function setView(v) {
+  view = v;
+  $$(".views button").forEach(function (b) { b.setAttribute("aria-selected", b.getAttribute("data-view") === v); });
+  ["plan", "air", "iso", "npe"].forEach(function (k) { var e = $("#v-" + k); if (k === v) e.removeAttribute("hidden"); else e.setAttribute("hidden", ""); });
+  $("#plan-toggles").hidden = v !== "plan";
+  $("#view-cap").innerHTML = "<b>" + esc(VIEWS[v].t) + "</b><span>" + esc(VIEWS[v].s) + "</span>";
+  $("#legend").innerHTML = LEGENDS[v];
+  $("#tip").hidden = true;
+}
+
+function buildChips() {
+  var h = "";
+  ["plan", "air", "iso", "npe"].forEach(function (v) {
+    h += '<div class="chip-h">' + esc(VIEWS[v].t.split(" · ")[0]) + '</div>';
+    COMPS.filter(function (c) { return c.view === v; }).forEach(function (c) { h += '<button class="chip" data-id="' + c.id + '"><span class="n">' + c.n + '</span>' + esc(c.name) + '</button>'; });
+  });
+  $("#chips").innerHTML = h;
+}
+
+function refreshMarks() {
+  $$(".hs").forEach(function (g) { var on = g.getAttribute("data-id") === sel; g.classList.toggle("sel", on); g.setAttribute("aria-pressed", on ? "true" : "false"); });
+  $$(".sv").forEach(function (s) { s.classList.toggle("has-sel", !!sel); });
+  $$(".chip").forEach(function (b) { var id = b.getAttribute("data-id"); b.classList.toggle("sel", id === sel); b.classList.toggle("done", state.studied.indexOf(id) >= 0); });
+  var n = state.studied.length;
+  $("#pg-comp").textContent = n + " / " + COMPS.length;
+  $("#pg-comp-bar").style.width = (n / COMPS.length * 100) + "%";
+}
+
+function renderPanel() {
+  var c = byId[sel], panel = $("#panel");
+  var tabs = [["overview", "Overview"], ["qual", "Qualification"], ["risk", "Risks"], ["refs", "Sources"]];
+  var h = '<div class="p-head"><div class="eyebrow">Component ' + String(c.n).padStart(2, "0") + ' of ' + COMPS.length + ' · ' + esc(c.area) + '</div><h3>' + esc(c.name) + '</h3><p class="role">' + esc(c.role) + '</p></div>';
+  h += '<div class="p-tabs" role="tablist">' + tabs.map(function (t) { return '<button role="tab" data-tab="' + t[0] + '" aria-selected="' + (tab === t[0]) + '">' + t[1] + '</button>'; }).join("") + '</div><div class="p-body" id="p-body">';
+  if (tab === "overview") {
+    h += '<div style="display:grid;gap:8px"><h4>Function</h4>' + c.fn.map(function (p) { return "<p>" + esc(p) + "</p>"; }).join("") + '</div>';
+    h += '<div class="site"><h4>At your site</h4><ul>' + c.site.map(function (s) { return "<li>" + esc(s) + "</li>"; }).join("") + '</ul></div>';
+    h += '<div style="display:grid;gap:8px"><h4>Types</h4><div class="types">' + c.types.map(function (t) { return "<div><b>" + esc(t[0]) + "</b><span>" + esc(t[1]) + "</span></div>"; }).join("") + '</div></div>';
+    h += '<div style="display:grid;gap:8px"><h4>Critical parameters</h4><div class="tbl-wrap"><table><thead><tr><th>Parameter</th><th>Criterion or typical value</th></tr></thead><tbody>' + c.params.map(function (p) { return "<tr><td><b>" + esc(p[0]) + "</b></td><td>" + esc(p[1]) + "</td></tr>"; }).join("") + '</tbody></table></div></div>';
+    h += '<div class="findings"><h4>Seen in inspections and audits</h4>' + c.finds.map(function (f) { return "<p><b>Typical observation</b>" + esc(f) + "</p>"; }).join("") + '</div>';
+  } else if (tab === "qual") {
+    h += '<div class="stages" role="group" aria-label="Stage">' + STAGES.map(function (s) { return '<button data-stage="' + s[0] + '" aria-pressed="' + (stage === s[0]) + '">' + (s[0] === "RQ" ? "Requal" : s[0]) + ' <small>' + c.stages[s[0]].length + '</small></button>'; }).join("") + '</div>';
+    var st = STAGES.filter(function (s) { return s[0] === stage; })[0];
+    h += '<p class="stage-q"><b>' + st[1] + '</b>' + esc(st[2]) + '</p>';
+    var items = c.stages[stage], tests = [];
+    var checks = items.map(function (x) { var m = x.match(/@(T-[A-Z-]+)/g); if (m) m.forEach(function (k) { k = k.slice(1); if (tests.indexOf(k) < 0) tests.push(k); }); return x.replace(/\s*@T-[A-Z-]+/g, "").trim(); }).filter(Boolean);
+    if (checks.length) h += '<div style="display:grid;gap:8px"><h4>Checks</h4><ul class="checks">' + checks.map(function (x) { return "<li><span>" + esc(x) + "</span></li>"; }).join("") + '</ul></div>';
+    if (tests.length) h += '<div><h4 style="margin-bottom:8px">Test methods</h4>' + tests.map(function (k) { return testBlock(k, tests.length === 1); }).join("") + '</div>';
+  } else if (tab === "risk") {
+    h += '<p class="note">Scored with the Quality Risk Manager rules: RPN = S × O × D; level from S × O. A starting point for your own FMEA.</p><div class="tbl-wrap"><table><thead><tr><th>Failure mode → effect</th><th>Controls</th><th class="num">S</th><th class="num">O</th><th class="num">D</th><th class="num">RPN</th><th>Level</th></tr></thead><tbody>' +
+      c.risks.map(function (r) { var lv = level(r[3], r[4]); return '<tr><td><b>' + esc(r[0]) + '</b><br><span style="color:var(--ink-2)">' + esc(r[1]) + '</span></td><td>' + esc(r[2]) + '</td><td class="num">' + r[3] + '</td><td class="num">' + r[4] + '</td><td class="num">' + r[5] + '</td><td class="num"><b>' + (r[3] * r[4] * r[5]) + '</b></td><td><span class="pill ' + lv + '">' + lv + '</span></td></tr>'; }).join("") + '</tbody></table></div>';
+  } else {
+    h += '<ul class="refl">' + c.refs.map(function (r) { return "<li><b>" + esc(REF[r][0]) + "</b>" + esc(REF[r][1]) + "</li>"; }).join("") + '</ul>';
+  }
+  h += '</div>';
+  var i = c.n - 1;
+  h += '<div class="p-foot"><button class="btn" data-go="' + (i > 0 ? COMPS[i - 1].id : "") + '"' + (i > 0 ? "" : " disabled") + '>← ' + (i > 0 ? esc(COMPS[i - 1].name) : "Start") + '</button>' + (i < COMPS.length - 1 ? '<button class="btn primary" data-go="' + COMPS[i + 1].id + '">Next: ' + esc(COMPS[i + 1].name) + ' →</button>' : '<a class="btn primary" href="#lifecycle" style="text-decoration:none">Continue to the lifecycle →</a>') + '</div>';
+  panel.innerHTML = h;
+}
+
+function select(id, opts) {
+  var c = byId[id]; if (!c) return;
+  sel = id;
+  if (opts && opts.mark !== false && state.studied.indexOf(id) < 0) { state.studied.push(id); save(); }
+  if (c.view !== view) setView(c.view);
+  refreshMarks(); renderPanel();
+  try { history.replaceState(null, "", "#" + id); } catch (e) {}
+  if (opts && opts.scroll && window.innerWidth < 1120) $("#panel").scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "start" });
+}
+
+/* ---------- Lifecycle ---------- */
+var lcSel = "OQ";
+function renderLife() {
+  $("#lc-rail").innerHTML = LIFE.map(function (s, i) { return '<button class="lc-step' + (s.q ? " q" : "") + '" data-lc="' + s.k + '" aria-pressed="' + (lcSel === s.k) + '"><span class="dot">' + (i + 1) + '</span><span>' + esc(s.t) + '</span></button>'; }).join("");
+  var s = LIFE.filter(function (x) { return x.k === lcSel; })[0];
+  var tests = ["IQ", "OQ", "PQ", "RQ"].indexOf(s.k) >= 0 ? Object.keys(TESTS).filter(function (k) { return TESTS[k].stages.indexOf(s.k) >= 0; }) : [];
+  $("#lc-detail").innerHTML = '<div style="display:grid;gap:10px"><div class="eyebrow">' + (s.q ? "Formal qualification stage" : "Supporting stage") + ' · ' + esc(s.who) + '</div><h3>' + esc(s.t) + '</h3><p>' + esc(s.what) + '</p><p class="refs">Sources: ' + s.refs.map(function (r) { return esc(REF[r][0]); }).join(" · ") + '</p></div>' +
+    '<div style="display:grid;gap:12px;align-content:start"><div><h4 class="eyebrow">Deliverables</h4><ul>' + s.out.map(function (o) { return "<li>" + esc(o) + "</li>"; }).join("") + '</ul></div>' +
+    (tests.length ? '<div><h4 class="eyebrow">Tests used at this stage</h4><div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px">' + tests.map(function (k) { return '<a class="tid" style="text-decoration:none" href="#tests" data-jump="' + k + '">' + k + '</a>'; }).join("") + '</div></div>' : "") + '</div>';
+}
+
+/* ---------- Containment tables and ladder ---------- */
+function renderContainment() {
+  $("#oeb-tbl").innerHTML = '<thead><tr><th>Band</th><th class="num">OEL µg/m³</th><th>Typical controls</th></tr></thead><tbody>' + OEB.map(function (r) { return "<tr><td>" + r[0] + '</td><td class="num">' + r[1] + "</td><td>" + esc(r[2]) + "</td></tr>"; }).join("") + "</tbody>";
+  $("#site-tbl").innerHTML = '<thead><tr><th>Parameter</th><th>Criterion</th><th>Source</th></tr></thead><tbody>' + SITE.map(function (r) { return "<tr><td><b>" + esc(r[0]) + "</b></td><td>" + esc(r[1]) + '</td><td class="mono" style="font-size:12px">' + esc(r[2]) + "</td></tr>"; }).join("") + "</tbody>";
+  $("#em-tbl").innerHTML = '<thead><tr><th>Test</th><th class="num">Target</th><th class="num">Alert</th><th class="num">Action</th></tr></thead><tbody>' +
+    [["Settle plate, cfu / 4 h", 25, 50, 100], ["Air sample, cfu / m³", 50, 100, 200], ["Surface (TAMC), cfu / plate", 15, 25, 50]].map(function (r) { return "<tr><td>" + r[0] + '</td><td class="num">' + r[1] + '</td><td class="num">' + r[2] + '</td><td class="num"><b>' + r[3] + "</b></td></tr>"; }).join("") + "</tbody>";
+  var rows = ROOMS.filter(function (r) { return r[8] != null; }).map(function (r) { return { c: r[4], n: r[5] || r[6], p: r[8] }; }).sort(function (a, b) { return b.p - a.p; });
+  var W = 560, rh = 18, top = 22, L = 170, R = 36, min = -30, max = 20, H = top + rows.length * rh + 8;
+  var sx = function (v) { return L + (v - min) / (max - min) * (W - L - R); };
+  var s = '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Room pressures ranked">';
+  [-30, -20, -10, 0, 10, 20].forEach(function (t) { s += '<line class="ld-ax" x1="' + sx(t) + '" y1="' + (top - 4) + '" x2="' + sx(t) + '" y2="' + (H - 6) + '"/><text class="ld-t" x="' + sx(t) + '" y="12" text-anchor="middle">' + sgn(t) + '</text>'; });
+  rows.forEach(function (r, i) {
+    var y = top + i * rh, x0 = sx(0), x1 = sx(r.p);
+    s += '<text class="ld-t" x="' + (L - 8) + '" y="' + (y + 12) + '" text-anchor="end">' + r.c + ' ' + esc(r.n.length > 14 ? r.n.slice(0, 13) + "…" : r.n) + '</text>';
+    s += '<rect class="ld-bar ' + (r.p < 0 ? "neg" : r.p > 0 ? "pos" : "zero") + '" x="' + Math.min(x0, x1) + '" y="' + (y + 3) + '" width="' + Math.max(2, Math.abs(x1 - x0)) + '" height="' + (rh - 6) + '" rx="2"/>';
+    s += '<text class="ld-v" x="' + (r.p < 0 ? Math.min(x0, x1) - 4 : Math.max(x0, x1) + 4) + '" y="' + (y + 12) + '" text-anchor="' + (r.p < 0 ? "end" : "start") + '">' + sgn(r.p) + '</text>';
+  });
+  s += '<line class="ld-zero" x1="' + sx(0) + '" y1="' + (top - 4) + '" x2="' + sx(0) + '" y2="' + (H - 6) + '"/></svg>';
+  $("#ladder").innerHTML = s + '<p class="tagline" style="margin-top:6px">Pa relative to outside. Illustrative design values; take real values from your ΔP labels.</p>';
+}
+
+/* ---------- Library ---------- */
+var libStage = "All";
+function renderLib() {
+  var keysAll = Object.keys(TESTS);
+  $("#lib-stages").innerHTML = ["All", "IQ", "OQ", "PQ", "RQ"].map(function (s) { var n = s === "All" ? keysAll.length : keysAll.filter(function (k) { return TESTS[k].stages.indexOf(s) >= 0; }).length; return '<button data-ls="' + s + '" aria-pressed="' + (libStage === s) + '">' + (s === "RQ" ? "Requal" : s) + ' <small>' + n + '</small></button>'; }).join("");
+  var q = $("#lib-q").value.trim().toLowerCase();
+  var keys = keysAll.filter(function (k) { var t = TESTS[k]; if (libStage !== "All" && t.stages.indexOf(libStage) < 0) return false; return !q || (k + " " + t.name + " " + t.purpose + " " + t.steps.join(" ") + " " + (t.sop ? REF[t.sop][0] : "")).toLowerCase().indexOf(q) >= 0; });
+  if (!keys.length) { $("#lib").innerHTML = '<p class="empty">No test matches “' + esc(q) + '”. Try glove, BIBO, SMEPAC or recovery.</p>'; return; }
+  var half = Math.ceil(keys.length / 2);
+  $("#lib").innerHTML = [keys.slice(0, half), keys.slice(half)].map(function (c) { return '<div class="lib-col">' + c.map(function (k) { return testBlock(k, keys.length === 1); }).join("") + '</div>'; }).join("");
+}
+
+/* ---------- Calculators ---------- */
+function bad(id, msg) { $(id).innerHTML = '<p class="verdict bad">' + msg + '</p>'; }
+function kv(l, v, big) { return '<div class="kv' + (big ? " big" : "") + '"><span>' + l + '</span><b>' + v + '</b></div>'; }
+function k1() {
+  var p1 = parseFloat($("#k1-p1").value), p2 = parseFloat($("#k1-p2").value), t = parseFloat($("#k1-t").value), atm = parseFloat($("#k1-atm").value), T1 = parseFloat($("#k1-t1").value) + 273.15, T2 = parseFloat($("#k1-t2").value) + 273.15;
+  if (![p1, p2, t, atm, T1, T2].every(isFinite) || t <= 0 || atm <= 0) return bad("#k1-out", "Enter both pressures, a duration above 0 and the atmospheric pressure.");
+  var P1 = atm + p1, P2 = atm + p2, r = 3600 / (t * 60) * Math.abs(P2 / T2 - P1 / T1) / (P1 / T1);
+  var cls = r <= 5e-4 ? 1 : r <= 2.5e-3 ? 2 : r <= 1e-2 ? 3 : r <= 1e-1 ? 4 : null;
+  $("#k1-out").innerHTML = kv("Pressure change", fmt(p2 - p1, 0) + " Pa") + kv("Hourly leak rate", r.toExponential(2) + " h⁻¹", true) + kv("ISO 10648-2 class", cls ? "Class " + cls : "Outside class 4") +
+    '<p class="verdict ' + (cls && cls <= 3 ? "ok" : "bad") + '">' + (cls ? (cls <= 2 ? "Meets class " + cls + ". Typical target for a containment isolator." : cls === 3 ? "Meets class 3. Check this against the class in your URS." : "Class 4 only. Find and fix leaks before use.") : "Leak rate too high. Find and fix leaks, then retest.") + '</p>';
+}
+function k2() {
+  var oel = parseFloat($("#k2-oel").value), task = parseFloat($("#k2-task").value), m = parseFloat($("#k2-meas").value);
+  if (!(oel > 0) || !(task > 0) || !(m >= 0)) return bad("#k2-out", "Enter an OEL above 0, a task duration and a measured concentration.");
+  var pde = oel * 10, twa = m * task / 480, band = oel > 1000 ? "OEB 1" : oel > 100 ? "OEB 2" : oel > 10 ? "OEB 3" : oel >= 1 ? "OEB 4" : "OEB 5";
+  $("#k2-out").innerHTML = kv("PDE", fmt(pde, pde < 10 ? 2 : 0) + " µg/day", true) + kv("SOPGS0023E category", pde <= 10 ? "Highly hazardous" : "Not highly hazardous") + kv("Typical band", band) + kv("8 h TWA from the task", fmt(twa, 3) + " µg/m³") + kv("TWA as % of OEL", fmt(twa / oel * 100, 0) + " %") +
+    '<p class="verdict ' + (twa < oel * 0.5 ? "ok" : "bad") + '">' + (twa < oel * 0.5 ? "TWA is below half the OEL. Containment adequate for this task, subject to replicate runs." : twa < oel ? "TWA is below the OEL but with little margin. Improve containment or add controls." : "TWA exceeds the OEL. Containment is not adequate for this task.") + '</p>';
+}
+function c3() {
+  var A = parseFloat($("#c3-a").value), dp = parseFloat($("#c3-dp").value), n = parseInt($("#c3-n").value, 10), o = parseFloat($("#c3-o").value) || 0;
+  if (!(A > 0 && dp > 0 && n > 0)) return bad("#c3-out", "Enter a gap area, a pressure difference and at least one door.");
+  var q1 = 0.83 * A * Math.sqrt(dp) * 3600, tot = q1 * n + o;
+  $("#c3-out").innerHTML = kv("Leakage per door", fmt(q1) + " m³/h") + kv("Extract above supply to hold " + fmt(dp) + " Pa", fmt(tot) + " m³/h", true) + kv("At " + fmt(dp * 2) + " Pa", fmt(0.83 * A * Math.sqrt(dp * 2) * 3600 * n + o) + " m³/h") + '<p class="note">For a negative room, extract must exceed supply by this amount. Doubling ΔP needs only about 41 % more air.</p>';
+}
+function c2() {
+  var L = parseFloat($("#c2-l").value), W = parseFloat($("#c2-w").value), H = parseFloat($("#c2-h").value), Q = parseFloat($("#c2-q").value), e = parseFloat($("#c2-e").value);
+  if (!(L > 0 && W > 0 && H > 0 && Q > 0 && e > 0 && e <= 1)) return bad("#c2-out", "Enter positive dimensions and airflow, and ε between 0.3 and 1.");
+  var V = L * W * H, ach = Q / V, real = 276.3 / ach / e;
+  $("#c2-out").innerHTML = kv("Room volume", fmt(V, 1) + " m³") + kv("Air change rate", fmt(ach, 1) + " /h", true) + kv("100:1 recovery at ε = " + fmt(e, 2), fmt(real, 1) + " min") + kv("ACH needed for 15 min", fmt(276.3 / (15 * e), 1) + " /h") +
+    '<p class="verdict ' + (real <= 20 ? "ok" : "bad") + '">' + (real <= 20 ? "Expected recovery within 20 min. Confirm with the SOPVL0102E recovery test." : "Expected recovery exceeds 20 min. Increase airflow or improve mixing.") + '</p>';
+}
+
+/* ---------- Quiz ---------- */
+function renderQuiz() {
+  var answered = 0, right = 0;
+  $("#q-list").innerHTML = QUIZ.map(function (q, i) {
+    var a = state.quiz[i], done = a !== undefined;
+    if (done) { answered++; if (a === q.a) right++; }
+    return '<div class="card qcard"><div class="qn">Question ' + (i + 1) + ' of ' + QUIZ.length + '</div><h3>' + esc(q.q) + '</h3><div class="opts">' + q.o.map(function (o, j) { var cls = done ? (j === q.a ? " right" : (j === a ? " wrong" : "")) : ""; return '<button class="opt' + cls + '" data-q="' + i + '" data-a="' + j + '"' + (done ? " disabled" : "") + '>' + esc(o) + '</button>'; }).join("") + '</div>' + (done ? '<p class="expl"><b>' + (a === q.a ? "Correct." : "Not quite.") + '</b> ' + esc(q.e) + '</p>' : "") + '</div>';
+  }).join("");
+  $("#q-score").textContent = "Score " + right + " / " + answered + " answered · " + QUIZ.length + " questions";
+  $("#pg-quiz").textContent = answered ? right + " correct · " + answered + " / " + QUIZ.length : "0 / " + QUIZ.length + " answered";
+  $("#pg-quiz-bar").style.width = (answered / QUIZ.length * 100) + "%";
+}
+
+/* ---------- Events ---------- */
+function bind() {
+  $$(".views button").forEach(function (b) { b.addEventListener("click", function () { setView(b.getAttribute("data-view")); var first = COMPS.filter(function (c) { return c.view === view; })[0]; if (!sel || byId[sel].view !== view) select(first.id, { mark: false }); }); });
+  $$(".sv").forEach(function (s) {
+    s.addEventListener("click", function (e) { var g = e.target.closest(".hs"); if (g) select(g.getAttribute("data-id"), { scroll: true }); });
+    s.addEventListener("keydown", function (e) { if (e.key === "Enter" || e.key === " ") { var g = e.target.closest(".hs"); if (g) { e.preventDefault(); select(g.getAttribute("data-id"), { scroll: true }); } } });
+  });
+  $("#chips").addEventListener("click", function (e) { var b = e.target.closest(".chip"); if (b) select(b.getAttribute("data-id"), { scroll: true }); });
+  $("#panel").addEventListener("click", function (e) {
+    var t = e.target.closest("[data-tab]"); if (t) { tab = t.getAttribute("data-tab"); renderPanel(); return; }
+    var s = e.target.closest("[data-stage]"); if (s) { stage = s.getAttribute("data-stage"); renderPanel(); return; }
+    var g = e.target.closest("[data-go]"); if (g && g.getAttribute("data-go")) { e.preventDefault(); select(g.getAttribute("data-go")); var b = $("#p-body"); if (b) b.scrollTop = 0; }
+  });
+  [["#t-press", "no-press", false], ["#t-flows", "no-flows", false], ["#t-contain", "no-contain", false], ["#t-class", "classmode", true]].forEach(function (t) {
+    var b = $(t[0]);
+    b.addEventListener("click", function () { var on = b.getAttribute("aria-pressed") !== "true"; b.setAttribute("aria-pressed", on); var svg = $("#v-plan"); if (t[2]) { svg.classList.toggle("no-classmode", !on); } else svg.classList.toggle(t[1], !on); });
+  });
+  $("#lc-rail").addEventListener("click", function (e) { var b = e.target.closest("[data-lc]"); if (b) { lcSel = b.getAttribute("data-lc"); renderLife(); } });
+  document.addEventListener("click", function (e) { var j = e.target.closest("[data-jump]"); if (!j) return; var k = j.getAttribute("data-jump"); libStage = "All"; $("#lib-q").value = k; renderLib(); setTimeout(function () { var d = document.querySelector('#lib details[data-test="' + k + '"]'); if (d) d.open = true; }, 0); });
+  $("#lib-stages").addEventListener("click", function (e) { var b = e.target.closest("[data-ls]"); if (b) { libStage = b.getAttribute("data-ls"); renderLib(); } });
+  $("#lib-q").addEventListener("input", renderLib);
+  [["k1", k1], ["k2", k2], ["c3", c3], ["c2", c2]].forEach(function (p) { $$('[id^="' + p[0] + '-"]').forEach(function (i) { if (i.tagName === "INPUT") i.addEventListener("input", p[1]); }); });
+  $("#q-list").addEventListener("click", function (e) { var b = e.target.closest(".opt"); if (!b || b.disabled) return; state.quiz[b.getAttribute("data-q")] = parseInt(b.getAttribute("data-a"), 10); save(); renderQuiz(); });
+  $("#q-reset").addEventListener("click", function () { state.quiz = {}; save(); renderQuiz(); });
+  $("#reset").addEventListener("click", function () { state = { studied: [], quiz: {} }; save(); refreshMarks(); renderQuiz(); });
+  window.addEventListener("hashchange", function () { var h = location.hash.slice(1); if (byId[h] && h !== sel) select(h); });
+}
+
+buildPlan(); buildChips(); bind(); setView("plan");
+var h0 = (location.hash || "").slice(1);
+select(byId[h0] ? h0 : "dispense", { mark: !!byId[h0] });
+renderLife(); renderContainment(); renderLib(); k1(); k2(); c3(); c2(); renderQuiz();
+
+})();
+</script>
+
+</body>
+</html>
