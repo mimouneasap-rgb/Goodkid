@@ -21,9 +21,33 @@ export const LIST_BY_KEY = Object.fromEntries(LIST_DEFS.map((d) => [d.key, d]));
 const LOCKED = {
   stages: new Set(STAGE_ORDER),
   statuses: new Set(["Completed", "Not triggered"]),
-  people: new Set([...DEPARTMENTS.map(groupName), ROLE_APQR_OWNER, ROLE_APPROVER]),
 };
+/** Fully locked (can't rename or delete): stages and statuses the calculations use. */
 export const isLocked = (key, name) => !!LOCKED[key]?.has(name);
+/** System people entries: the department groups and the two acting roles. They can be renamed, not deleted. */
+export const isSystemPerson = (item) => !!(item && (item.deptGroup || item.sysRole));
+const SYS_DEFAULT_NAMES = new Set([...DEPARTMENTS.map(groupName), ROLE_APQR_OWNER, ROLE_APPROVER]);
+const systemPeople = () => [
+  ...DEPARTMENTS.map((d) => ({ name: groupName(d), type: "group", dept: d, deptGroup: d })),
+  { name: ROLE_APQR_OWNER, type: "role", dept: "QA", sysRole: "apqrOwner" },
+  { name: ROLE_APPROVER, type: "role", dept: "", sysRole: "approver" },
+];
+/** Tag the department groups / roles in older lists and make sure each one exists. */
+function normalisePeople(list) {
+  const out = list.map((x) => {
+    if (x.deptGroup || x.sysRole) return x;
+    const d = DEPARTMENTS.find((dd) => groupName(dd) === x.name);
+    if (d && x.type === "group") return { ...x, deptGroup: d, dept: d };
+    if (x.name === ROLE_APQR_OWNER) return { ...x, sysRole: "apqrOwner" };
+    if (x.name === ROLE_APPROVER) return { ...x, sysRole: "approver" };
+    return x;
+  });
+  for (const s of systemPeople()) {
+    if (s.deptGroup && !out.some((x) => x.deptGroup === s.deptGroup)) out.push(s);
+    if (s.sysRole && !out.some((x) => x.sysRole === s.sysRole)) out.push(s);
+  }
+  return out;
+}
 
 const DEFAULT_ACTIONS = [
   "Raise the Final QA Data Collection in Scigeniq",
@@ -53,10 +77,8 @@ export function defaultLists(state) {
   const topDept = (n) => Object.entries(deptOf.get(n) || {}).sort((a, b) => b[1] - a[1])[0]?.[0] || "";
   const users = uniq([...tasks.map((t) => t.assignee), ...tasks.map((t) => t.collector), ...tasks.map((t) => t.reviewer), ...prods.map((p) => p.owner), ...prods.flatMap((p) => (p.actions || []).map((a) => a.owner)), state.meta?.user]).filter((n) => !blank(n)).sort((a, b) => a.localeCompare(b));
   const people = [
-    ...users.filter((n) => !LOCKED.people.has(n)).map((name) => ({ name, type: "user", dept: topDept(name) })),
-    ...DEPARTMENTS.map((d) => ({ name: groupName(d), type: "group", dept: d })),
-    { name: ROLE_APQR_OWNER, type: "role", dept: "QA" },
-    { name: ROLE_APPROVER, type: "role", dept: "" },
+    ...users.filter((n) => !SYS_DEFAULT_NAMES.has(n) && !(state.lists?.people || []).some((x) => (x.deptGroup || x.sysRole) && x.name === n)).map((name) => ({ name, type: "user", dept: topDept(name) })),
+    ...systemPeople(),
   ];
   const titles = [];
   const seen = new Set();
@@ -83,7 +105,9 @@ export function getLists(state) {
   const stored = state.lists || {};
   const need = LIST_DEFS.some((d) => !Array.isArray(stored[d.key]));
   const def = need ? defaultLists(state) : null;
-  return Object.fromEntries(LIST_DEFS.map((d) => [d.key, Array.isArray(stored[d.key]) ? stored[d.key] : def[d.key]]));
+  const out = Object.fromEntries(LIST_DEFS.map((d) => [d.key, Array.isArray(stored[d.key]) ? stored[d.key] : def[d.key]]));
+  out.people = normalisePeople(out.people);
+  return out;
 }
 
 /** Add values found in the data that aren't in the lists yet (after an import). Returns the number added. */
@@ -94,6 +118,7 @@ export function addMissingFromData(state) {
   for (const d of LIST_DEFS) {
     const have = new Set(lists[d.key].map((x) => (d.kind === "titles" ? `${x.slot}|${x.name}` : x.name)));
     for (const item of def[d.key]) {
+      if (d.kind === "people" && isSystemPerson(item)) continue; // system entries are already there (maybe renamed)
       const k = d.kind === "titles" ? `${item.slot}|${item.name}` : item.name;
       if (!have.has(k)) { lists[d.key].push(item); have.add(k); added++; }
     }

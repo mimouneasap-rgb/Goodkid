@@ -172,15 +172,29 @@ const looksLikeGroup = (v) => /\b(group|team|department|dept|role|owner|approver
  * "Unassigned". Those resolve to the owning department's group (annexes) or
  * the role that acts on them (workflow / Final QA / approval), marked inferred.
  */
-export function resolveAssignee(t, role, dept, typeOf) {
+/**
+ * Names of the department groups and acting roles, which can be renamed in
+ * the People list to their real Scigeniq names.
+ */
+export function systemNames(lists) {
+  const people = lists?.people || [];
+  const dept = Object.fromEntries(DEPARTMENTS.map((d) => [d, people.find((x) => x.deptGroup === d)?.name || groupName(d)]));
+  const role = {
+    apqrOwner: people.find((x) => x.sysRole === "apqrOwner")?.name || ROLE_APQR_OWNER,
+    approver: people.find((x) => x.sysRole === "approver")?.name || ROLE_APPROVER,
+  };
+  return { dept, role };
+}
+
+export function resolveAssignee(t, role, dept, typeOf, names) {
   if (!UNASSIGNED(t.assignee)) {
     const name = String(t.assignee).trim();
     const type = t.assigneeType && ASSIGNEE_TYPES.includes(t.assigneeType) ? t.assigneeType : typeOf?.get(name) || (looksLikeGroup(t.assignee) ? "group" : "user");
     return { name, type, inferred: false };
   }
-  if (role === ROLES.ANNEX) return { name: groupName(dept), type: "group", inferred: true };
-  if (role === ROLES.APPROVAL) return { name: ROLE_APPROVER, type: "role", inferred: true };
-  return { name: ROLE_APQR_OWNER, type: "role", inferred: true };
+  if (role === ROLES.ANNEX) return { name: names?.dept[dept] || groupName(dept), type: "group", inferred: true };
+  if (role === ROLES.APPROVAL) return { name: names?.role.approver || ROLE_APPROVER, type: "role", inferred: true };
+  return { name: names?.role.apqrOwner || ROLE_APQR_OWNER, type: "role", inferred: true };
 }
 
 function mode(values) {
@@ -204,6 +218,7 @@ export function compute(state) {
   const ann = state.products || {};
   const prevPct = state.baseline?.prevPct || {};
   const typeOf = new Map((state.lists?.people || []).map((x) => [x.name, x.type]));
+  const names = systemNames(state.lists);
   const hasBaseline = !!state.baseline && Object.keys(prevPct).length > 0;
 
   /* --- plan --- */
@@ -228,7 +243,7 @@ export function compute(state) {
     const closed = isClosed(t);
     const due = pl ? pl.overdueDate : "";
     const D = dayInt(due);
-    const asg = resolveAssignee(t, role, dept, typeOf);
+    const asg = resolveAssignee(t, role, dept, typeOf, names);
     const collectorStored = !UNASSIGNED(t.collector);
     const collector = collectorStored ? String(t.collector).trim() : asg.name;
     const collectorType = collectorStored ? (typeOf.get(collector) || t.collectorType || (looksLikeGroup(t.collector) ? "group" : "user")) : asg.type;
@@ -548,13 +563,13 @@ export function compute(state) {
   /* --- groups / roles and their members (named users seen on that work) --- */
   const groups = new Map();
   const addGroup = (name, type, dept) => { if (!groups.has(name)) groups.set(name, { name, type, dept, members: new Map(), open: 0, total: 0 }); return groups.get(name); };
-  for (const d of DEPARTMENTS) addGroup(groupName(d), "group", d);
-  addGroup(ROLE_APQR_OWNER, "role", "QA");
-  addGroup(ROLE_APPROVER, "role", "");
+  for (const d of DEPARTMENTS) addGroup(names.dept[d], "group", d);
+  addGroup(names.role.apqrOwner, "role", "QA");
+  addGroup(names.role.approver, "role", "");
   for (const t of real) {
-    if (t.isAnnex && t.assigneeType === "user") { const g = groups.get(groupName(t.dept)); g.members.set(t.assigneeName, (g.members.get(t.assigneeName) || 0) + 1); }
-    if ((t.isWorkflow || t.isFinal) && t.assigneeType === "user") { const g = groups.get(ROLE_APQR_OWNER); g.members.set(t.assigneeName, (g.members.get(t.assigneeName) || 0) + 1); }
-    if (t.isApproval && t.assigneeType === "user") { const g = groups.get(ROLE_APPROVER); g.members.set(t.assigneeName, (g.members.get(t.assigneeName) || 0) + 1); }
+    if (t.isAnnex && t.assigneeType === "user") { const g = groups.get(names.dept[t.dept]); g.members.set(t.assigneeName, (g.members.get(t.assigneeName) || 0) + 1); }
+    if ((t.isWorkflow || t.isFinal) && t.assigneeType === "user") { const g = groups.get(names.role.apqrOwner); g.members.set(t.assigneeName, (g.members.get(t.assigneeName) || 0) + 1); }
+    if (t.isApproval && t.assigneeType === "user") { const g = groups.get(names.role.approver); g.members.set(t.assigneeName, (g.members.get(t.assigneeName) || 0) + 1); }
     const g = groups.get(t.assigneeName);
     if (g) { g.total++; if (!t.closed) g.open++; }
   }

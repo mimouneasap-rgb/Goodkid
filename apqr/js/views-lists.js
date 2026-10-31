@@ -3,7 +3,7 @@ import { esc, icon, fmtN, debounce } from "./ui.js";
 import { DEPARTMENTS, SLOTS } from "./engine.js";
 import * as store from "./store.js";
 import * as act from "./actions.js";
-import { LIST_DEFS, LIST_BY_KEY, isLocked, usageCounts, defaultLists } from "./lists.js";
+import { LIST_DEFS, LIST_BY_KEY, isLocked, isSystemPerson, usageCounts, defaultLists } from "./lists.js";
 
 const lv = { key: "people", q: "" };
 const opt = (v, label, sel) => `<option value="${esc(v)}"${String(v) === String(sel) ? " selected" : ""}>${esc(label)}</option>`;
@@ -36,7 +36,7 @@ export const listsView = {
         <button class="btn btn-sm btn-primary">${icon("plus")}Add</button>
       </form>
     </section>
-    <p class="muted" style="font-size:12px;margin:14px 2px 0">Renaming an entry updates every record that uses it, and is recorded in the audit trail. Deleting one lets you replace it in those records or keep the old value, which then shows as “not in list”. Entries marked BUILT IN drive the calculations and can’t be changed. Lists are saved with the data, published with the team version and exported to Excel.</p>`;
+    <p class="muted" style="font-size:12px;margin:14px 2px 0">Renaming an entry updates every record that uses it, and is recorded in the audit trail. Deleting one lets you replace it in those records or keep the old value, which then shows as “not in list”. Entries marked BUILT IN drive the calculations and can’t be changed. The department groups and the two roles can be renamed to their real Scigeniq names but not deleted. Lists are saved with the data, published with the team version and exported to Excel.</p>`;
   },
   items() {
     const L = store.lists();
@@ -48,13 +48,15 @@ export const listsView = {
     return `<div class="table-wrap" style="max-height:620px"><table class="data"><thead><tr>${head}</tr></thead><tbody>
       ${items.map(({ x, i }) => {
         const locked = isLocked(lv.key, x.name);
+        const sys = lv.key === "people" && isSystemPerson(x);
+        const sysNote = x.deptGroup ? `Group for ${x.deptGroup} tasks shown as Unassigned` : x.sysRole === "apqrOwner" ? "Role for workflows and Final QA shown as Unassigned" : x.sysRole === "approver" ? "Role for approvals shown as Unassigned" : "";
         return `<tr>
           <td style="white-space:nowrap"><button type="button" class="icon-btn sm" data-lv-move="${i}|-1" aria-label="Move up" ${i === 0 ? "disabled" : ""}>${icon("arrowUp")}</button> <button type="button" class="icon-btn sm" data-lv-move="${i}|1" aria-label="Move down" ${i === L[lv.key].length - 1 ? "disabled" : ""}>${icon("arrowDown")}</button></td>
-          <td>${locked ? `<b>${esc(x.name)}</b> <span class="tag" title="Built in: used by the calculations">BUILT IN</span>` : `<input class="inline" data-lv-name="${i}" value="${esc(x.name)}" aria-label="Rename" style="max-width:none;width:100%;min-width:220px;font-weight:600">`}</td>
-          ${def.kind === "people" ? `<td><select class="inline" data-lv-meta="${i}|type" aria-label="Type" ${locked ? "disabled" : ""}>${opt("user", "Person", x.type)}${opt("group", "Group", x.type)}${opt("role", "Role", x.type)}</select></td><td><select class="inline" data-lv-meta="${i}|dept" aria-label="Department" ${locked ? "disabled" : ""}>${opt("", "—", x.dept || "")}${DEPARTMENTS.map((d) => opt(d, d, x.dept || "")).join("")}</select></td>` : ""}
+          <td>${locked ? `<b>${esc(x.name)}</b> <span class="tag" title="Built in: used by the calculations">BUILT IN</span>` : `<input class="inline" data-lv-name="${i}" value="${esc(x.name)}" aria-label="Rename" style="max-width:none;width:100%;min-width:220px;font-weight:600">${sys ? `<div><small class="muted">${esc(sysNote)} · rename it to its real name in Scigeniq</small></div>` : ""}`}</td>
+          ${def.kind === "people" ? `<td><select class="inline" data-lv-meta="${i}|type" aria-label="Type" ${locked || sys ? "disabled" : ""}>${opt("user", "Person", x.type)}${opt("group", "Group", x.type)}${opt("role", "Role", x.type)}</select></td><td><select class="inline" data-lv-meta="${i}|dept" aria-label="Department" ${locked || x.deptGroup ? "disabled" : ""}>${opt("", "—", x.dept || "")}${DEPARTMENTS.map((d) => opt(d, d, x.dept || "")).join("")}</select></td>` : ""}
           ${def.kind === "titles" ? `<td><select class="inline" data-lv-meta="${i}|slot" aria-label="Annexe">${TITLE_SLOTS.map((sl) => opt(sl, sl, x.slot)).join("")}</select></td>` : ""}
           <td class="r num">${fmtN(counts.get(x.name) || 0)}</td>
-          <td>${locked ? "" : `<button type="button" class="icon-btn sm" data-lv-del="${i}" aria-label="Delete ${esc(x.name)}">${icon("trash")}</button>`}</td>
+          <td>${locked || sys ? "" : `<button type="button" class="icon-btn sm" data-lv-del="${i}" aria-label="Delete ${esc(x.name)}">${icon("trash")}</button>`}</td>
         </tr>`;
       }).join("") || `<tr><td colspan="6" class="empty-row">${q ? "No entries match." : "The list is empty."}</td></tr>`}
     </tbody></table></div>`;

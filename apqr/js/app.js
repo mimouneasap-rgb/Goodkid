@@ -8,10 +8,11 @@ import { dashboard, annexes, finalqa, workflow, workload, insights, bindChartTog
 import { tracker, plan, tasks, actions, data } from "./views-registers.js";
 import { collection } from "./views-collection.js";
 import { listsView } from "./views-lists.js";
-import { initDrawer, openProduct, refreshDrawer, closeDrawer, isOpen } from "./drawer.js";
+import { initDrawer, openProduct, refreshDrawer, closeDrawer, isOpen, setProductOpener } from "./drawer.js";
+import { productView } from "./views-product.js";
 import { productKey, todayIso } from "./engine.js";
 
-const VIEWS = { dashboard, tracker, plan, annexes, finalqa, workflow, collection, tasks, workload, actions, insights, lists: listsView, data };
+const VIEWS = { dashboard, tracker, plan, annexes, finalqa, workflow, collection, tasks, workload, actions, insights, lists: listsView, data, product: productView };
 const NAV = [
   { sec: "Overview" },
   { id: "dashboard", label: "Command centre", icon: "dashboard" },
@@ -261,6 +262,8 @@ function initGlobal() {
   document.addEventListener("change", (e) => {
     const t = e.target;
     if (t.dataset.taskStage) act.setTaskStage(t.dataset.taskStage, t.value);
+    else if (t.dataset.taskPerson) { const [field, id] = t.dataset.taskPerson.split("|"); act.setTaskPerson([id], field, t.value); }
+    else if (t.dataset.taskField) { const [field, id] = t.dataset.taskField.split("|"); act.setTaskField(id, field, t.value); }
     else if (t.dataset.taskAssignee !== undefined) act.setTaskAssignee(t.dataset.taskAssignee, t.value.trim());
   });
   $("#file-input").addEventListener("change", (e) => { const f = e.target.files[0]; e.target.value = ""; act.handleFile(f); });
@@ -300,6 +303,11 @@ store.subscribe((ev) => {
   refreshDrawer();
 });
 
+setProductOpener((key) => {
+  if (!store.getModel().productByKey.has(key)) return;
+  productView.open(key);
+  if (current === "product") { render(); window.scrollTo(0, 0); } else go("product");
+});
 initTooltip();
 initGlobal();
 initDrawer();

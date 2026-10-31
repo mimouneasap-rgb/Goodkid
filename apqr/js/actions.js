@@ -58,6 +58,16 @@ export function setTaskAssignee(id, user) {
   });
 }
 
+/** Set a plain task field (status, closed date) from an inline editor. */
+export function setTaskField(id, field, value) {
+  const t = store.getState().tasks.find((x) => x.id === id);
+  if (!t || String(t[field] ?? "") === String(value ?? "")) return;
+  const from = t[field];
+  store.update((st) => { const x = st.tasks.find((y) => y.id === id); x[field] = value; markApp(x, [field]); }, {
+    audit: [{ entity: "task", key: productKey(t.product), label: `${t.ref} · ${t.title}`, field, from, to: value }],
+  });
+}
+
 /** Set the data collection owner or data reviewer on one or many tasks. */
 export function setTaskPerson(ids, field, name, type) {
   type = type || (name ? typeOf(store.lists(), String(name).trim()) : "user");
@@ -206,10 +216,10 @@ export function editTask(task, defaults = {}) {
 
 /* -------------------------------------------------------------- plan */
 
-export function editPlan(row) {
+export function editPlan(row, defaults = {}) {
   const isNew = !row;
   const s = store.getState();
-  const p = row ? { ...row } : { id: uid(), no: (Math.max(0, ...s.plan.map((x) => +x.no || 0)) + 1), product: "", process: "Tablets", execYear: new Date().getFullYear(), site: "", reviewStart: "", reviewEnd: "", periodEnd: "", planStatus: "Approved" };
+  const p = row ? { ...row } : { id: uid(), no: (Math.max(0, ...s.plan.map((x) => +x.no || 0)) + 1), product: "", process: "Tablets", execYear: new Date().getFullYear(), site: "", reviewStart: "", reviewEnd: "", periodEnd: "", planStatus: "Approved", ...defaults };
   const forms = [...new Set(["Tablets", "Hard Capsule", "Liquid/Syrup", "Semi Solid", ...s.plan.map((x) => x.process).filter(Boolean)])];
   const toMonthInput = (my) => { const m = /^(\d{2})\/(\d{4})$/.exec(my || ""); return m ? `${m[2]}-${m[1]}` : ""; };
   const d = openDialog(html`<form method="dialog" class="modal-body">
@@ -652,7 +662,7 @@ export async function publishTeam() {
 
 /* ----------------------------------------------------------- managed lists */
 
-import { LIST_BY_KEY, isLocked, usageCount, replaceEverywhere, getLists, addMissingFromData } from "./lists.js";
+import { LIST_BY_KEY, isLocked, isSystemPerson, usageCount, replaceEverywhere, getLists, addMissingFromData } from "./lists.js";
 
 const itemKey = (def, x) => (def.kind === "titles" ? `${x.slot}|${x.name}` : x.name);
 
@@ -705,6 +715,7 @@ export function deleteListItem(key, index) {
   const old = cur[index];
   if (!old) return;
   if (isLocked(key, old.name)) { toast("This entry is built in and can’t be deleted.", { kind: "error" }); return; }
+  if (key === "people" && isSystemPerson(old)) { toast("Each department needs a group (and the workflow and approvals a role) for tasks Scigeniq shows as Unassigned. Rename it to its real name instead.", { kind: "error", timeout: 8000 }); return; }
   const n = key === "taskTitles" ? 0 : usageCount(st0, key, old.name);
   const others = cur.filter((_, i) => i !== index && (def.kind !== "people" || true));
   const d = openDialog(`<form method="dialog" class="modal-body">

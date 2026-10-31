@@ -40,7 +40,7 @@ Scigeniq can assign a task to a person, a role or a group, but its export only n
 
 ### Managed drop-down lists
 
-Every value you can set in the app is picked from a list: people, groups and roles (with type and department), workflow stages, task statuses, task titles (by annexe), follow-up action types, priorities, criticality, dosage forms, sites and plan statuses. The **Lists** page lets you add, rename, reorder and delete entries. Renaming updates every record that uses the entry. Deleting asks whether to replace the value in those records or keep it (it then shows as "not in list"). Built-in stages and the department groups and roles drive the calculations and are locked. Lists are seeded from the data, topped up when an import brings new values, published with the team version and exported to Excel (a "Lists" sheet that imports back).
+Every value you can set in the app is picked from a list: people, groups and roles (with type and department), workflow stages, task statuses, task titles (by annexe), follow-up action types, priorities, criticality, dosage forms, sites and plan statuses. The **Lists** page lets you add, rename, reorder and delete entries. Renaming updates every record that uses the entry. Deleting asks whether to replace the value in those records or keep it (it then shows as "not in list"). Built-in stages drive the calculations and are locked. The department groups and the two roles can be renamed to their real Scigeniq names (not deleted); each stays linked to its department so unassigned tasks still resolve to it. Lists are seeded from the data, topped up when an import brings new values, published with the team version and exported to Excel (a "Lists" sheet that imports back).
 
 ### Changes made in the app
 
