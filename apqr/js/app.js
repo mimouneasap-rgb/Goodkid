@@ -10,6 +10,7 @@ import { collection } from "./views-collection.js";
 import { listsView } from "./views-lists.js";
 import { initDrawer, openProduct, refreshDrawer, closeDrawer, isOpen, setProductOpener } from "./drawer.js";
 import { productView } from "./views-product.js";
+import { initPicker } from "./picker.js";
 import { productKey, todayIso } from "./engine.js";
 
 const VIEWS = { dashboard, tracker, plan, annexes, finalqa, workflow, collection, tasks, workload, actions, insights, lists: listsView, data, product: productView };
@@ -309,6 +310,7 @@ setProductOpener((key) => {
   if (current === "product") { render(); window.scrollTo(0, 0); } else go("product");
 });
 initTooltip();
+initPicker();
 initGlobal();
 initDrawer();
 initSearch();

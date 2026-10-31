@@ -4,6 +4,7 @@ import { raw, esc, icon, fmtN, fmtPct, fmtDate, fmtMonth, fmtMonthShort, fmtDays
 import { ring, segBar, hbars, columns, lineChart, deptColor, stageColor, progressBar, slotCells, slotHead, stackedColumns } from "./charts.js";
 import { DEPARTMENTS, SLOTS, MOVEMENT_METRICS, UP_IS_BAD, FINAL_QA_SIGNALS, monthLabel, eomonth } from "./engine.js";
 import * as store from "./store.js";
+import { personWorkloadSection, bindPersonWorkload } from "./views-people.js";
 
 export const RAG_COLOR = { COMPLETE: "var(--good)", "ON TRACK": "var(--info)", "DUE SOON": "var(--warn)", OVERDUE: "var(--crit)", "NOT STARTED - overdue": "#8f1d1d", "Not yet due": "var(--slot-nt)", "No tasks": "var(--line-2)" };
 export const FQ_COLOR = { Complete: "var(--good)", "Raised, not complete": "var(--info)", "NOT TRIGGERED - data ready": "var(--crit)", "Waiting on data collection": "var(--s1)", "Not triggered": "var(--slot-nt)" };
@@ -359,7 +360,7 @@ let wlSort = { key: "open", dir: -1 };
 export const workload = {
   id: "workload",
   title: "Owner workload",
-  sub: () => "Departmental annexes per assigned user, Final QA compilations owned and approval signatures",
+  sub: () => "Person workload as data collection owner, data reviewer and across all tasks; Scigeniq assignments below",
   render(m) {
     const rows = [...m.workload].sort((a, b) => (a[wlSort.key] > b[wlSort.key] ? 1 : a[wlSort.key] < b[wlSort.key] ? -1 : 0) * wlSort.dir || a.user.localeCompare(b.user));
     const people = m.workload.filter((o) => o.user !== "Unassigned");
@@ -368,6 +369,8 @@ export const workload = {
     const top = rows.filter((o) => o.annexes - o.notRaised > 0).slice(0, 14);
     const th = (key, label, cls = "") => `<th data-wl-sort="${key}" data-sort class="${cls} ${wlSort.key === key ? "sorted" + (wlSort.dir > 0 ? " asc" : "") : ""}">${label}</th>`;
     return `
+    <div class="grid g-12" style="margin-bottom:18px">${personWorkloadSection(m)}</div>
+    <div class="section-title"><h2>Assignments in Scigeniq</h2><p>Annexes by the user, group or role they are assigned to</p></div>
     <div class="kpis" style="margin-top:0">
       <div class="kpi"><div class="k">${icon("workload")}People with annexes</div><div class="v">${fmtN(people.filter((o) => o.annexes).length)}</div><div class="d">&nbsp;</div></div>
       <div class="kpi ${withOverdue ? "tone-crit" : ""}"><div class="k">${icon("alert")}With overdue items</div><div class="v">${fmtN(withOverdue)}</div><div class="d">&nbsp;</div></div>
@@ -388,6 +391,7 @@ export const workload = {
     </div>`;
   },
   bind(root, rerender) {
+    bindPersonWorkload(root, rerender);
     root.querySelectorAll("[data-wl-sort]").forEach((th) => th.addEventListener("click", () => {
       const k = th.dataset.wlSort;
       wlSort = { key: k, dir: wlSort.key === k ? -wlSort.dir : k === "user" || k === "mainDept" || k === "earliestDue" ? 1 : -1 };

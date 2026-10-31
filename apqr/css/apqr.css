@@ -715,3 +715,31 @@ table.ptable td select.inline { max-width: 148px; width: 148px; }
 table.ptable td select[data-task-field] { width: 112px; max-width: 112px; }
 table.ptable td input[type=date].inline { width: 118px; padding: 2px 4px; font-size: 12px; }
 table.ptable .stat-chip { justify-self: start; }
+
+/* searchable drop-down picker */
+.picker[popover] { margin: 0; inset: auto; padding: 0; }
+.picker { position: fixed; z-index: 500; display: flex; flex-direction: column; background: var(--surface); color: var(--ink); border: 1px solid var(--line-2); border-radius: 14px; box-shadow: var(--shadow-3); overflow: hidden; animation: pop .14s cubic-bezier(.2, .8, .2, 1); }
+.pk-top { display: flex; align-items: center; gap: 8px; padding: 8px; border-bottom: 1px solid var(--line); }
+.pk-q { flex: 1; min-width: 0; height: 38px; border: 1px solid var(--line); border-radius: 10px; padding: 0 12px; background: var(--surface-2); font-size: 15px; }
+.pk-q:focus { outline: 0; border-color: var(--accent-2); box-shadow: 0 0 0 3px var(--accent-soft); background: var(--surface); }
+.pk-count { font-size: 11px; color: var(--muted); font-weight: 700; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.pk-list { position: relative; overflow-y: auto; padding: 4px; overscroll-behavior: contain; }
+.pk-h { font-size: 10.5px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); padding: 8px 10px 4px; }
+.pk-opt { display: block; width: 100%; text-align: left; border: 0; background: none; padding: 9px 10px; border-radius: 9px; font-size: 13.5px; cursor: pointer; color: var(--ink); line-height: 1.3; }
+.pk-opt:hover, .pk-opt.act { background: var(--surface-3); }
+.pk-opt.sel { font-weight: 800; color: var(--accent); }
+.pk-opt.sel::after { content: " ✓"; }
+.pk-opt.dis { opacity: .45; cursor: default; }
+.pk-opt mark { background: color-mix(in srgb, var(--warn) 45%, transparent); color: inherit; border-radius: 3px; padding: 0 1px; }
+.pk-empty { padding: 14px 10px; color: var(--muted); font-size: 13px; }
+@media (pointer: coarse) { .pk-opt { padding: 12px 12px; font-size: 15px; } }
+
+/* person workload table */
+.pw-table th.grp { border-bottom: 2px solid var(--line-2); }
+.pw-table th.grp.on { color: var(--accent); border-bottom-color: var(--accent); }
+.pw-table thead tr:nth-child(2) th { top: 38px; font-size: 10px; padding: 6px 8px; }
+.pw-table td { padding: 8px; }
+.pw-table td.late { color: var(--crit-ink); font-weight: 800; }
+.pw-table td.tot { font-weight: 800; border-right: 1px solid var(--line); }
+.pw-cols { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px 28px; }
+@media (max-width: 1000px) { .pw-cols { grid-template-columns: 1fr; } }
