@@ -213,13 +213,64 @@ const slug = (s) => String(s || "chart").normalize("NFD").replace(/[̀-ͯ]/g, ""
 let footerText = () => "APQR Master Tracker";
 export function setExportFooter(fn) { footerText = fn; }
 
+/**
+ * Off-screen copy of a card laid out for export: every scroll area is opened
+ * so whole tables are visible, the card widens to its widest content, filters
+ * are replaced by the text of their current value, and nothing animates.
+ */
+export function expandedClone(card) {
+  const r = card.getBoundingClientRect();
+  const host = document.createElement("div");
+  host.className = "offscreen-render no-anim";
+  host.style.width = `${Math.ceil(r.width)}px`;
+  const clone = card.cloneNode(true);
+  clone.style.width = "100%";
+  clone.style.maxWidth = "none";
+  clone.style.margin = "0";
+  // filters → plain text of their current value (read from the live controls)
+  const srcSel = [...card.querySelectorAll("select")], dstSel = [...clone.querySelectorAll("select")];
+  dstSel.forEach((s, i) => { const o = srcSel[i]; const span = document.createElement("span"); span.textContent = o ? (o.selectedOptions[0]?.textContent || "").trim() : ""; span.style.cssText = "font-weight:700;font-size:12.5px"; s.replaceWith(span); });
+  const srcIn = [...card.querySelectorAll("input")], dstIn = [...clone.querySelectorAll("input")];
+  dstIn.forEach((inp, i) => {
+    const o = srcIn[i];
+    if (inp.type === "checkbox" || inp.type === "radio") { const span = document.createElement("span"); span.textContent = o?.checked ? "☑" : "☐"; inp.replaceWith(span); return; }
+    const v = (o?.value || "").trim();
+    const field = inp.closest(".field") || inp;
+    if (!v) { field.remove(); return; }
+    const span = document.createElement("span"); span.textContent = `“${v}”`; span.style.fontWeight = "700"; inp.replaceWith(span);
+  });
+  clone.querySelectorAll(".png-btn, .tools, .seg-toggle, [data-noexport], .table-foot button, .pager").forEach((n) => n.remove());
+  host.append(clone);
+  document.body.append(host);
+  const pr = parseFloat(getComputedStyle(clone).paddingRight) || 20;
+  for (let pass = 0; pass < 4; pass++) {
+    for (const el of clone.querySelectorAll("*")) {
+      if (el instanceof SVGElement) continue;
+      const cs = getComputedStyle(el);
+      if (/(auto|scroll)/.test(`${cs.overflow} ${cs.overflowX} ${cs.overflowY}`)) { el.style.overflow = "visible"; el.style.maxHeight = "none"; el.style.height = "auto"; }
+      if (cs.position === "sticky") el.style.position = "static";
+    }
+    if (getComputedStyle(clone).overflow !== "visible") clone.style.overflow = "visible";
+    const cr = clone.getBoundingClientRect();
+    let right = cr.right;
+    for (const el of clone.querySelectorAll("table, svg.chart, .hbars, .kpis, .grid")) right = Math.max(right, el.getBoundingClientRect().left + Math.max(el.scrollWidth, el.getBoundingClientRect().width));
+    const need = Math.ceil(right - cr.left + (right > cr.right ? pr : 0));
+    if (need > host.offsetWidth + 1) host.style.width = `${need}px`; else break;
+  }
+  return { el: clone, done: () => host.remove() };
+}
+
 /** Save one card as PNG. */
 export async function exportCardPng(card) {
   const title = card.querySelector(".card-h h3, .card-h h2, h3, h2")?.textContent.trim() || "chart";
   const btn = card.querySelector(".png-btn");
   btn?.classList.add("busy");
   try {
-    const { blob, width, height } = await elementToPng(card, { footer: footerText(title) });
+    await new Promise((r) => setTimeout(r, 0));
+    const x = expandedClone(card);
+    let res;
+    try { res = await elementToPng(x.el, { footer: footerText(title) }); } finally { x.done(); }
+    const { blob, width, height } = res;
     const ok = await download(blob, `APQR_${slug(title)}.png`);
     if (ok) toast(`Saved “${title}” as PNG (${width} × ${height} px).`, { kind: "success" });
   } catch (e) {

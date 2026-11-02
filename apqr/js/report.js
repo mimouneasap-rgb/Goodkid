@@ -6,8 +6,8 @@ import * as store from "./store.js";
 import { Docx } from "./docx.js";
 import { elementToPng } from "./snap.js";
 import { esc, fmtN, fmtPct, fmtDate, fmtMonth, fmtMonthShort, RAG_META, FQ_META, download, toast, openDialog, icon } from "./ui.js";
-import { segBar, hbars, lineChart, stackedColumns, deptColor, stageColor, LC } from "./charts.js";
-import { SLOTS, FINAL_QA_SIGNALS, eomonth } from "./engine.js";
+import { segBar, hbars, lineChart, stackedColumns, columns, deptColor, stageColor, LC } from "./charts.js";
+import { SLOTS, FINAL_QA_SIGNALS, DEPARTMENTS, eomonth, annexMatrix } from "./engine.js";
 import { workflowMonthChart, finalQaMonthChart, RAG_COLOR, FQ_COLOR } from "./views-overview.js";
 
 const RAG_ORDER = ["COMPLETE", "ON TRACK", "DUE SOON", "OVERDUE", "NOT STARTED - overdue", "Not yet due"];
@@ -21,6 +21,7 @@ const SECTIONS = [
   ["finalqa", "Final QA compilation", "Final QA chart, signals and reviews ready to compile"],
   ["annexes", "Annexes and departments", "Ten required annexes, departments, burn-up, dosage forms"],
   ["collection", "Data collection", "Stages by month, owners and reviewers, missing names"],
+  ["deptcollect", "Data collection by department", "Stage mix, month heat-map, owners and reviewers per department"],
   ["workload", "Workload by person", "Open, overdue and closed per person or group"],
   ["risks", "Overdue reviews and quality signals", "Reviews past their PQR due date, data-quality findings"],
   ["actions", "QA actions", "Open and completed follow-up actions"],
@@ -93,7 +94,14 @@ function chartDefs(m) {
   const stLegend = legend([["Collecting", LC.collect], ["In review", LC.review], ["Completed", LC.done]]);
   const top = m.workload.filter((o) => o.open > 0 || o.closed > 0).slice(0, 16);
 
+  const planned = m.tasks.filter((t) => t.isAnnex && m.planByKey.has(t.key));
+  const mx = annexMatrix(planned);
+  const dgroups = [...mx.rows, mx.total].map((r) => ({ label: r.dept === "Total" ? "Total general" : r.dept, values: mx.stages.map((st) => ({ key: st, value: r.total ? r.counts[st] / r.total : 0, count: r.counts[st], color: stageColor(st) })) }));
+  const deptStageRows = DEPARTMENTS.map((dp) => { const ts = planned.filter((t) => t.dept === dp); const c = (st) => ts.filter((t) => stageOf(t) === st).length; return { label: dp, sub: `${fmtN(ts.length)} required`, segments: [{ key: "Completed", value: c("Completed"), color: LC.done }, { key: "In data review", value: c("Data Review"), color: LC.review }, { key: "Collecting data", value: c("Collecting Data"), color: LC.collect }, { key: "Not triggered", value: c("Not triggered"), color: LC.nt }] }; });
+
   return {
+    deptStages: card("Actual APQR annexes progress by department (all planned months)", "% of each department’s required annexes at each current stage; untriggered PQRs count as “Not triggered”", columns(dgroups, { height: 300, series: mx.stages.map((st) => ({ label: st, color: stageColor(st) })) })),
+    deptStack: card("Data collection stage by department", "Required annexes of the plan by current stage", legend([["Completed", LC.done], ["In data review", LC.review], ["Collecting data", LC.collect], ["Not triggered", LC.nt]]) + hbars(deptStageRows, { labelWidth: 190, valueLabel: (r) => `${fmtPct(r.segments[0].value / Math.max(1, r.segments.reduce((n, s) => n + s.value, 0)))} <small>done</small>` })),
     rag: card("RAG status of the planned reviews", `${fmtN(m.products.length)} planned products`, segBar(RAG_ORDER.map((r) => ({ label: RAG_META[r].label, value: m.ragCounts[r] || 0, color: RAG_COLOR[r] })), { height: 18 }) + `<div style="height:14px"></div>` + hbars(RAG_ORDER.filter((r) => m.ragCounts[r]).map((r) => ({ label: RAG_META[r].label, segments: [{ key: "Products", value: m.ragCounts[r], color: RAG_COLOR[r] }] })), { labelWidth: 170, max: m.products.length, valueLabel: (r) => `${fmtN(r.segments[0].value)} <small>${fmtPct(r.segments[0].value / Math.max(1, m.products.length))}</small>` })),
     workflow: card("APQR workflow progress by planned month", "Parent APQR of each planned PQR, by planned month", workflowMonthChart(m, 300, 960)),
     finalqa: card("Final QA progress by planned month", "Final QA compilation of each planned PQR", finalQaMonthChart(m, 300, 960)),
@@ -147,7 +155,7 @@ export async function buildReport(choice = lastChoice) {
     const want = (x) => choice[x] !== false;
     const chartKeys = [
       ...(want("summary") ? ["rag"] : []), ...(want("progress") ? ["workflow"] : []), ...(want("finalqa") ? ["finalqa", "fqsignal"] : []),
-      ...(want("annexes") ? ["slots", "dept", "burn", "forms"] : []), ...(want("collection") ? ["collection", "owners", "reviewers"] : []), ...(want("workload") ? ["people"] : []),
+      ...(want("annexes") ? ["slots", "dept", "burn", "forms"] : []), ...(want("collection") ? ["collection", "owners", "reviewers"] : []), ...(want("deptcollect") ? ["deptStages", "deptStack"] : []), ...(want("workload") ? ["people"] : []),
     ];
     const img = await renderCharts(m, chartKeys, (p, msg) => b.set(p * 0.8, msg));
     b.set(0.85, "Writing the document");
@@ -155,6 +163,11 @@ export async function buildReport(choice = lastChoice) {
     const org = s.meta.organisation || "";
     const d = new Docx({ title: `APQR programme report — ${fmtDate(m.report)}`, header: `${programme}${org ? " · " + org : ""}`, footer: `Generated by the APQR Master Tracker on ${fmtDate(new Date().toISOString().slice(0, 10))} · source: Scigeniq export and APQR plan` });
     const put = (key, caption) => { const c = img[key]; if (c) d.image(c.png, c.width, c.height, { caption }); };
+    const ORDER = ["summary", "progress", "finalqa", "annexes", "collection", "deptcollect", "workload", "risks", "actions", "changes"];
+    const num = {};
+    let secN = 0;
+    for (const key of ORDER) if (want(key)) num[key] = ++secN;
+    const secRef = (key) => (num[key] ? `section ${num[key]}` : "the tracker");
     let fig = 0;
     const figCap = (t) => `Figure ${++fig} — ${t}`;
     let tab = 0;
@@ -189,17 +202,17 @@ export async function buildReport(choice = lastChoice) {
 
     /* ---------------- 1 summary */
     if (want("summary")) {
-      d.h1("1. Executive summary");
+      d.h1(`${num.summary}. Executive summary`);
       const msgs = [
         `**${fmtPct(k.completion, 1)}** of the ${fmtN(k.requiredAnnexes)} required departmental annexes are closed (${fmtN(k.annexClosed)}); ${fmtN(k.annexOpen)} are open and ${fmtN(k.annexNotRaised)} not yet raised, mostly in the ${fmtN(k.notTriggered)} reviews not triggered yet.`,
         `**${fmtN(k.triggered)} of ${fmtN(k.planned)}** planned reviews are triggered in Scigeniq (${fmtPct(k.planTriggered)}); **${fmtN(k.productsComplete)}** are complete (Final QA closed) and **${fmtN(k.closedOut)}** workflows are closed out.`,
         k.productsOverdue ? `**${fmtN(k.productsOverdue)} reviews are past their PQR due date** and not complete; ${fmtN(k.overdueAnnexes)} open annexes are overdue.` : "No review is past its PQR due date.",
-        k.fqReady ? `**${fmtN(k.fqReady)} reviews have all ten annexes closed but the Final QA compilation has not been raised** — they can move today (section 3).` : "Every review with complete data has its Final QA compilation raised.",
+        k.fqReady ? `**${fmtN(k.fqReady)} reviews have all ten annexes closed but the Final QA compilation has not been raised** — they can move today (${secRef("finalqa")}).` : "Every review with complete data has its Final QA compilation raised.",
         `${fmtN(k.unassignedOpen)} open annexes have no named data collection owner (assigned to a group or role) and ${fmtN(k.noReviewer)} have no named data reviewer.`,
         k.openActions ? `${fmtN(k.openActions)} QA follow-up actions are open${k.overdueActions ? `, ${fmtN(k.overdueActions)} overdue` : ""}.` : "No QA follow-up action is open.",
       ];
       msgs.forEach((t) => d.bullet(t));
-      if (k.fqReady || k.productsOverdue) d.callout("Priority this month", [k.fqReady ? `Raise the Final QA compilation for the ${fmtN(k.fqReady)} data-ready reviews.` : "", k.productsOverdue ? `Recover the ${fmtN(k.productsOverdue)} overdue reviews: chase the open annexes listed in section 7.` : "", k.noReviewer ? `Name the missing data reviewers (${fmtN(k.noReviewer)} open annexes).` : ""].filter(Boolean), { fill: "FFF3D6", color: "8A5A00" });
+      if (k.fqReady || k.productsOverdue) d.callout("Priority this month", [k.fqReady ? `Raise the Final QA compilation for the ${fmtN(k.fqReady)} data-ready reviews.` : "", k.productsOverdue ? `Recover the ${fmtN(k.productsOverdue)} overdue reviews: chase the open annexes listed in ${secRef("risks")}.` : "", k.noReviewer ? `Name the missing data reviewers (${fmtN(k.noReviewer)} open annexes).` : ""].filter(Boolean), { fill: "FFF3D6", color: "8A5A00" });
       d.h2("Key performance indicators");
       tabCap("Programme KPIs");
       d.table(["Indicator", "Value", "Definition"], [
@@ -227,7 +240,7 @@ export async function buildReport(choice = lastChoice) {
     /* ---------------- 2 progress */
     if (want("progress")) {
       d.pageBreak();
-      d.h1("2. Programme progress by planned month");
+      d.h1(`${num.progress}. Programme progress by planned month`);
       d.p("Each planned review is due in the month after its review period ends. The chart shows where the parent APQR workflow of every planned review stands; the table gives the month-by-month figures.");
       put("workflow", figCap("APQR workflow progress by planned month"));
       tabCap("Progress by planned month");
@@ -237,7 +250,7 @@ export async function buildReport(choice = lastChoice) {
     /* ---------------- 3 final QA */
     if (want("finalqa")) {
       d.pageBreak();
-      d.h1("3. Final QA compilation");
+      d.h1(`${num.finalqa}. Final QA compilation`);
       put("finalqa", figCap("Final QA progress by planned month"));
       put("fqsignal", figCap("Final QA compilation signal"));
       tabCap("Final QA signal");
@@ -251,7 +264,7 @@ export async function buildReport(choice = lastChoice) {
     /* ---------------- 4 annexes */
     if (want("annexes")) {
       d.pageBreak();
-      d.h1("4. Annexes and departments");
+      d.h1(`${num.annexes}. Annexes and departments`);
       d.h2("The ten required annexes");
       put("slots", figCap("Slot completeness of the ten required annexes"));
       tabCap("Annexe slots");
@@ -270,7 +283,7 @@ export async function buildReport(choice = lastChoice) {
     /* ---------------- 5 collection */
     if (want("collection")) {
       d.pageBreak();
-      d.h1("5. Data collection");
+      d.h1(`${num.collection}. Data collection`);
       put("collection", figCap("Data collection progress by planned month"));
       put("owners", figCap("Workload by data collection owner"));
       put("reviewers", figCap("Workload by data reviewer"));
@@ -280,10 +293,61 @@ export async function buildReport(choice = lastChoice) {
       d.table(["Department", "Open annexes", "No named owner", "No reviewer", "Overdue"], byDept, [32, 17, 17, 17, 17], { align: ["left", "right", "right", "right", "right"] });
     }
 
+    /* ---------------- data collection by department */
+    if (want("deptcollect")) {
+      d.pageBreak();
+      d.h1(`${num.deptcollect}. Data collection by department`);
+      const stageOf = m.collection.stageOf;
+      const planned = m.tasks.filter((t) => t.isAnnex && m.planByKey.has(t.key));
+      d.p("Required annexes of the approved plan (ten per planned product) by owning department and current data collection stage. Untriggered reviews count as “Not triggered”. Owners and reviewers are the named data collection owner and data reviewer of each raised annexe.");
+      put("deptStages", figCap("Actual APQR annexes progress by department, all planned months"));
+      put("deptStack", figCap("Data collection stage by department"));
+      const rows = DEPARTMENTS.map((dp) => {
+        const ts = planned.filter((t) => t.dept === dp);
+        const c = (st) => ts.filter((t) => stageOf(t) === st).length;
+        const open = ts.filter((t) => !t.generated && !t.closed);
+        return { dp, nt: c("Not triggered"), col: c("Collecting Data"), rev: c("Data Review"), done: c("Completed"), total: ts.length, open: open.length, late: open.filter((t) => t.overdue === "YES").length, noOwner: open.filter((t) => !t.collectorPerson).length, noRev: open.filter((t) => !t.reviewerPerson).length };
+      });
+      const tot = rows.reduce((a, r) => { for (const key of ["nt", "col", "rev", "done", "total", "open", "late", "noOwner", "noRev"]) a[key] = (a[key] || 0) + r[key]; return a; }, { dp: "Total" });
+      const warn = (n, c = "8A5A00") => ({ text: fmtN(n), color: n ? c : undefined, bold: !!n });
+      tabCap("Data collection summary by department");
+      d.table(["Department", "Not triggered", "Collecting", "In review", "Completed", "Total", "% completed", "Open", "Overdue", "No owner", "No reviewer"], [...rows, tot].map((r) => [{ text: r.dp, bold: r.dp === "Total" }, fmtN(r.nt), fmtN(r.col), fmtN(r.rev), fmtN(r.done), fmtN(r.total), { text: fmtPct(r.total ? r.done / r.total : 0, 1), bold: true }, fmtN(r.open), warn(r.late, "A52020"), warn(r.noOwner), warn(r.noRev)]), [17, 9, 8, 8, 9, 7, 9, 7, 8, 8, 10], { size: 15, align: ["left", "right", "right", "right", "right", "right", "right", "right", "right", "right", "right"] });
+      // heat-map: % completed by department and planned month
+      const heat = (p) => { if (p === null) return {}; const t = Math.max(0, Math.min(1, p)); const mix = (a, b) => Math.round(a + (b - a) * t).toString(16).padStart(2, "0"); return { fill: `${mix(0xee, 0x00)}${mix(0xf3, 0x83)}${mix(0xf8, 0x00)}`, color: t > 0.55 ? "FFFFFF" : "1A2233", bold: true }; };
+      const mcell = (r) => { if (!r || !r.total) return { text: "–" }; const done = Object.entries(r.counts).filter(([st]) => /complet|approved|closed/i.test(st)).reduce((n, [, v]) => n + v, 0); const p = done / r.total; return { text: fmtPct(p), align: "center", ...heat(p) }; };
+      tabCap("% of required annexes completed, by department and planned month");
+      d.table(["Department", ...m.months.map((x) => fmtMonthShort(x.month)), "All"], [...DEPARTMENTS, "All"].map((dp) => [{ text: dp === "All" ? "All departments" : dp, bold: dp === "All" }, ...m.months.map((x) => mcell(dp === "All" ? x.matrix.total : x.matrix.rows.find((y) => y.dept === dp))), mcell(dp === "All" ? annexMatrix(planned).total : annexMatrix(planned).rows.find((y) => y.dept === dp))]), [20, ...m.months.map(() => 8), 9], { size: 15, zebra: false, align: ["left", ...m.months.map(() => "center"), "center"] });
+      // owners and reviewers per department
+      d.h2("Owners and reviewers by department");
+      const real = planned.filter((t) => !t.generated);
+      for (const dp of DEPARTMENTS) {
+        const ts = real.filter((t) => t.dept === dp);
+        if (!ts.length) continue;
+        const tally = (keyFn, typeFn) => {
+          const mp = new Map();
+          for (const t of ts) {
+            const key = keyFn(t) || "— not set —";
+            if (!mp.has(key)) mp.set(key, { name: key, type: typeFn(t), col: 0, rev: 0, done: 0, late: 0 });
+            const r = mp.get(key);
+            const st = stageOf(t);
+            if (st === "Completed") r.done++; else if (st === "Data Review") r.rev++; else r.col++;
+            if (!t.closed && t.overdue === "YES") r.late++;
+          }
+          return [...mp.values()].sort((a, b) => (b.col + b.rev) - (a.col + a.rev) || b.done - a.done || a.name.localeCompare(b.name)).slice(0, 10);
+        };
+        const owners = tally((t) => t.collector, (t) => t.collectorType || "");
+        const reviewers = tally((t) => t.reviewer, (t) => (t.reviewer ? t.reviewerType || "" : "missing"));
+        const r = rows.find((x) => x.dp === dp);
+        d.h3(`${dp} — ${fmtN(r.total)} required · ${fmtPct(r.total ? r.done / r.total : 0)} completed · ${fmtN(r.open)} open${r.late ? ` · ${fmtN(r.late)} overdue` : ""}`);
+        const prow = (role) => (x) => [role, { text: x.type && x.type !== "user" ? `${x.name} (${x.type === "missing" ? "missing" : x.type})` : x.name, color: x.type === "missing" || (x.type && x.type !== "user") ? "8A5A00" : undefined }, fmtN(x.col), fmtN(x.rev), fmtN(x.done), { text: fmtN(x.late), color: x.late ? "A52020" : undefined, bold: !!x.late }];
+        d.table(["Role", "Person / group", "Collecting", "In review", "Completed", "Overdue"], [...owners.map(prow("Owner")), ...reviewers.map(prow("Reviewer"))], [12, 40, 12, 12, 12, 12], { size: 15, align: ["left", "left", "right", "right", "right", "right"] });
+      }
+    }
+
     /* ---------------- 6 workload */
     if (want("workload")) {
       d.pageBreak();
-      d.h1("6. Workload by person");
+      d.h1(`${num.workload}. Workload by person`);
       put("people", figCap("Load by person or group"));
       tabCap("Workload (people and groups with raised annexes)");
       d.table(["Person or group", "Type", "Main department", "Raised", "Closed", "Open", "Overdue", "Final QA", "% closed"], m.workload.filter((o) => o.annexes || o.finalQa).slice(0, 60).map((o) => [o.user, o.type, o.mainDept || "", fmtN(o.annexes), fmtN(o.closed), fmtN(o.open), { text: fmtN(o.overdue), color: o.overdue ? "A52020" : undefined, bold: !!o.overdue }, fmtN(o.finalQa), fmtPct(o.pct)]), [24, 9, 17, 8, 8, 8, 9, 8, 9], { align: ["left", "left", "left", "right", "right", "right", "right", "right", "right"], size: 15 });
@@ -292,7 +356,7 @@ export async function buildReport(choice = lastChoice) {
     /* ---------------- 7 risks */
     if (want("risks")) {
       d.pageBreak();
-      d.h1("7. Overdue reviews and quality signals");
+      d.h1(`${num.risks}. Overdue reviews and quality signals`);
       const overdue = m.products.filter((p) => p.rag === "OVERDUE" || p.rag === "NOT STARTED - overdue").sort((a, b) => (a.daysToOverdue ?? 0) - (b.daysToOverdue ?? 0));
       d.h2(`Reviews past their PQR due date (${fmtN(overdue.length)})`);
       if (overdue.length) { tabCap("Overdue reviews"); d.table(["APQR ref", "Product", "Planned", "Days late", "Annexes", "Final QA", "Bottleneck"], overdue.map((p) => [p.ref, p.product, fmtMonth(p.plannedMonth), { text: fmtN(-(p.daysToOverdue ?? 0)), color: "A52020", bold: true }, `${p.slotsOk}/10`, fqCell(p.fqSignal), p.bottleneck === "-" ? "" : p.bottleneck]), [11, 38, 11, 8, 8, 13, 11], { size: 15 }); }
@@ -308,7 +372,7 @@ export async function buildReport(choice = lastChoice) {
     /* ---------------- 8 actions */
     if (want("actions")) {
       d.pageBreak();
-      d.h1("8. QA actions");
+      d.h1(`${num.actions}. QA actions`);
       const acts = m.actions.slice().sort((a, b) => Number(a.done) - Number(b.done) || String(a.due).localeCompare(String(b.due)));
       if (acts.length) { tabCap("Follow-up actions"); d.table(["APQR ref", "Product", "Action", "Owner", "Target", "Status"], acts.map((a) => [a.ref, a.product, a.text, a.owner || "", fmtDate(a.due), a.done ? { text: `Done ${fmtDate(a.doneAt)}`, color: "0A6B0A" } : a.overdue ? { text: "Overdue", color: "A52020", bold: true } : "Open"]), [11, 30, 27, 13, 9, 10], { size: 15 }); }
       else d.p("No action recorded.");
@@ -317,7 +381,7 @@ export async function buildReport(choice = lastChoice) {
     /* ---------------- 9 changes */
     if (want("changes")) {
       d.pageBreak();
-      d.h1("9. Changes made in the app");
+      d.h1(`${num.changes}. Changes made in the app`);
       const edits = s.audit.filter((a) => a.entity !== "data");
       d.p(`${fmtN(k.appChanged)} records carry a change made in the app (stage, assignee, data collection owner or reviewer, closure). These changes must be mirrored in Scigeniq by the person who made them. ${fmtN(edits.length)} edits are recorded in the audit trail.`);
       const byField = {};
