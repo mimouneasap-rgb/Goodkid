@@ -12,6 +12,8 @@ import { initDrawer, openProduct, refreshDrawer, closeDrawer, isOpen, setProduct
 import { productView } from "./views-product.js";
 import { initPicker } from "./picker.js";
 import { productKey, todayIso } from "./engine.js";
+import { enhanceCards, bindCardExport, setExportFooter } from "./snap.js";
+import { openReportDialog } from "./report.js";
 
 const VIEWS = { dashboard, tracker, plan, annexes, finalqa, workflow, collection, tasks, workload, actions, insights, lists: listsView, data, product: productView };
 const NAV = [
@@ -122,6 +124,7 @@ function render() {
   }
   if ((store.hasData() || current === "data") && v.bind) v.bind(inner, render);
   bindChartToggles(inner, render);
+  enhanceCards(inner);
 }
 
 function teamBanner() {
@@ -244,7 +247,7 @@ function initGlobal() {
   document.addEventListener("click", (e) => {
     const a = e.target.closest("[data-action]");
     if (a) {
-      const fn = { import: act.pickFile, "export-xlsx": act.exportExcel, "export-json": act.exportJson, demo: act.loadDemo, clear: act.clearAll, "reset-seed": act.resetToSeed, "publish-team": act.publishTeam, "adopt-seed": () => { store.adoptSeed(); toast("Team version loaded", { kind: "success", action: "Undo", onAction: () => store.undo() }); }, "dismiss-seed": store.dismissNewer, print: () => window.print(), "report-date": act.editReportDate }[a.dataset.action];
+      const fn = { import: act.pickFile, "export-xlsx": act.exportExcel, "export-json": act.exportJson, demo: act.loadDemo, clear: act.clearAll, "reset-seed": act.resetToSeed, "publish-team": act.publishTeam, "adopt-seed": () => { store.adoptSeed(); toast("Team version loaded", { kind: "success", action: "Undo", onAction: () => store.undo() }); }, "dismiss-seed": store.dismissNewer, print: () => window.print(), "report-date": act.editReportDate, "export-docx": openReportDialog }[a.dataset.action];
       if (fn) { e.preventDefault(); fn(); }
       return;
     }
@@ -270,6 +273,10 @@ function initGlobal() {
   $("#file-input").addEventListener("change", (e) => { const f = e.target.files[0]; e.target.value = ""; act.handleFile(f); });
   $("#import-btn").innerHTML = `${icon("upload")}<span>Import</span>`;
   $("#import-btn").addEventListener("click", act.pickFile);
+  $("#report-btn").innerHTML = `${icon("word")}<span>Word report</span>`;
+  $("#report-btn").addEventListener("click", openReportDialog);
+  bindCardExport();
+  setExportFooter((title) => { const s = store.getState(); const m = store.getModel(); void title; return `${s.meta.programme || "APQR programme"} · report date ${fmtDate(m.report)} · exported ${fmtDate(todayIso())} · APQR Master Tracker`; });
   $("#report-chip").addEventListener("click", act.editReportDate);
   $("#theme-btn").addEventListener("click", toggleTheme);
   $("#menu-btn").innerHTML = String(icon("menu"));

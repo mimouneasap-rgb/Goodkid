@@ -12,9 +12,9 @@ export const ROLE_DEFS = [
   { key: "all", label: "All tasks", who: "in any role", help: "Every task the person appears on (assigned to, data collection owner or reviewer), counted once. Completed = closed. In progress = their part is active now. Pending = waiting on someone else or not started. Overdue = not closed and past the PQR due date." },
 ];
 const STATES = [
-  { key: "completed", label: "Completed", color: "var(--good)" },
-  { key: "inProgress", label: "In progress", color: "var(--d1)" },
-  { key: "pending", label: "Pending", color: "var(--s1)" },
+  { key: "completed", label: "Completed", color: "var(--lc-done)" },
+  { key: "inProgress", label: "In progress", color: "var(--lc-collect)" },
+  { key: "pending", label: "Pending", color: "var(--lc-review)" },
 ];
 const pv = { role: "dc", month: "", dept: "", groups: false, q: "", sort: "open" };
 const blank = () => ({ completed: 0, inProgress: 0, pending: 0, overdue: 0, total: 0 });

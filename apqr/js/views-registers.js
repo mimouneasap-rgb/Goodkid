@@ -397,6 +397,7 @@ export const data = {
         <div class="card-h"><div><h3>Export</h3><p>Take the tracker to Excel or keep a backup</p></div></div>
         <div style="display:grid;gap:10px">
           <button class="btn" data-action="export-xlsx" style="justify-content:flex-start;white-space:normal;height:auto;min-height:40px;padding:9px 14px;text-align:left">${icon("download")}Excel workbook (.xlsx) in the v3 layout: Dashboard, Tracker, Final QA, Workflow, Annexes, Plan, Task Register, Workload, Actions, Audit Trail</button>
+          <button class="btn" data-action="export-docx" style="justify-content:flex-start;white-space:normal;height:auto;min-height:40px;padding:9px 14px;text-align:left">${icon("word")}Detailed Word report (.docx): executive summary, KPIs, every key chart as an image, month, Final QA, annexe, department, data-collection and workload tables, overdue reviews, quality signals, actions, changes made in the app and the full register</button>
           <button class="btn" data-action="export-json" style="justify-content:flex-start;white-space:normal;height:auto;min-height:40px;padding:9px 14px;text-align:left">${icon("download")}Full backup (.json), to restore later or move to another computer</button>
           ${inViewer() ? "" : `<button class="btn" data-action="print" style="justify-content:flex-start">${icon("print")}Print / save the current page as PDF</button>`}
         </div>

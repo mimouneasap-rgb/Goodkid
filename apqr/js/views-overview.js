@@ -7,7 +7,7 @@ import * as store from "./store.js";
 import { personWorkloadSection, bindPersonWorkload } from "./views-people.js";
 
 export const RAG_COLOR = { COMPLETE: "var(--good)", "ON TRACK": "var(--info)", "DUE SOON": "var(--warn)", OVERDUE: "var(--crit)", "NOT STARTED - overdue": "#8f1d1d", "Not yet due": "var(--slot-nt)", "No tasks": "var(--line-2)" };
-export const FQ_COLOR = { Complete: "var(--good)", "Raised, not complete": "var(--info)", "NOT TRIGGERED - data ready": "var(--crit)", "Waiting on data collection": "var(--s1)", "Not triggered": "var(--slot-nt)" };
+export const FQ_COLOR = { Complete: "var(--lc-done)", "Raised, not complete": "var(--lc-collect)", "NOT TRIGGERED - data ready": "var(--crit)", "Waiting on data collection": "var(--lc-fq)", "Not triggered": "var(--slot-nt)" };
 const RAG_ORDER = ["COMPLETE", "ON TRACK", "DUE SOON", "OVERDUE", "NOT STARTED - overdue", "Not yet due"];
 const chartMode = {};
 const toggle = (id, modes = ["chart", "table"]) => raw(`<div class="seg-toggle" role="group" aria-label="View as">${modes.map((m) => `<button type="button" data-chart-mode="${id}:${m}" class="${(chartMode[id] || modes[0]) === m ? "on" : ""}" aria-pressed="${(chartMode[id] || modes[0]) === m}">${icon(m === "table" ? "table" : "chart")}${m === "table" ? "Table" : "Chart"}</button>`).join("")}</div>`);
@@ -53,7 +53,7 @@ export function pipelineHtml(m) {
   return `<div class="pipeline">${steps.map((s) => `<a class="pipe ${s.alert ? "alert" : ""}" href="${s.href}" style="text-decoration:none"><span class="pk">${esc(s.k)}</span><span class="pv">${fmtN(s.v)}<small>/ ${fmtN(s.of)}</small></span><span class="pbarv"><span style="width:${((s.v / Math.max(1, s.of)) * 100).toFixed(1)}%"></span></span><span class="pc">${s.c}</span></a>`).join("")}</div>`;
 }
 
-export const WF_COLOR = { "Not triggered": "var(--slot-nt)", "Collecting annexes": "var(--s1)", "Data complete": "var(--d7)", "Final QA done, not closed": "var(--warn)", Closed: "var(--good)" };
+export const WF_COLOR = { "Not triggered": "var(--slot-nt)", "Collecting annexes": "var(--lc-collect)", "Data complete": "var(--lc-review)", "Final QA done, not closed": "var(--lc-fq)", Closed: "var(--lc-done)" };
 /** Parent APQR workflow progress by planned month (stacked columns). */
 export function workflowMonthChart(m, height = 290, width = 760) {
   return stackedColumns(m.workflowByMonth.map((x) => ({ label: fmtMonthShort(x.month), sub: `${x.total} PQRs`, counts: x.counts, href: `#/annexes?month=${x.month}` })),
@@ -173,7 +173,7 @@ export const dashboard = {
       <section class="card span-7 reveal">
         <div class="card-h"><div><h3>Annexe burn-up</h3><p>Cumulative annexes raised and closed in Scigeniq, against the ${fmtN(k.requiredAnnexes)} required by the plan</p></div><div class="tools">${toggle("burn")}</div></div>
         ${chartMode.burn === "table" ? tableHtml(["Month", "Raised (cum.)", "Closed (cum.)", "Open"], months.map((mm, i) => [fmtMonthShort(mm + "-01"), fmtN(raised[i].y), fmtN(closed[i].y), fmtN(raised[i].y - closed[i].y)])) :
-          months.length ? lineChart(months, [{ key: "Raised", color: "var(--d1)", points: raised }, { key: "Closed", color: "var(--good)", points: closed, area: true }], { height: 250, target: k.requiredAnnexes }) : `<p class="muted">No dated tasks yet.</p>`}
+          months.length ? lineChart(months, [{ key: "Raised", color: "var(--lc-collect)", points: raised }, { key: "Closed", color: "var(--lc-done)", points: closed }], { height: 250, target: k.requiredAnnexes }) : `<p class="muted">No dated tasks yet.</p>`}
       </section>
       <section class="card span-5 reveal">
         <div class="card-h"><div><h3>Final QA compilation</h3><p>Where each planned review stands on the last step</p></div><div class="tools"><a class="btn btn-sm btn-ghost" href="#/finalqa">Open</a></div></div>
@@ -183,17 +183,17 @@ export const dashboard = {
 
       <section class="card span-4 reveal">
         <div class="card-h"><div><h3>Parent workflow stage</h3><p>Lifecycle of the APQR itself, across the plan</p></div><div class="tools"><a class="btn btn-sm btn-ghost" href="#/workflow">Open</a></div></div>
-        ${hbars(m.workflowStages.filter((x) => x.n).map((x) => ({ label: x.stage, attrs: `data-href="#/tracker?stage=${encodeURIComponent(x.stage)}"`, segments: [{ key: "Products", value: x.n, color: x.stage === "Closed" ? "var(--good)" : x.stage === "Not triggered" ? "var(--slot-nt)" : "var(--d1)" }] })), { labelWidth: 120, max: m.plan.length })}
+        ${hbars(m.workflowStages.filter((x) => x.n).map((x) => ({ label: x.stage, attrs: `data-href="#/tracker?stage=${encodeURIComponent(x.stage)}"`, segments: [{ key: "Products", value: x.n, color: stageColor(x.stage) }] })), { labelWidth: 120, max: m.plan.length })}
       </section>
       <section class="card span-4 reveal">
         <div class="card-h"><div><h3>Coverage by dosage form</h3><p>Planned, triggered and complete reviews</p></div></div>
-        <div class="legend"><span><i style="background:var(--good)"></i>Complete</span><span><i style="background:var(--d1)"></i>Triggered</span><span><i style="background:var(--slot-nt)"></i>Not triggered</span></div>
-        ${hbars(m.forms.map((f) => ({ label: f.form, segments: [{ key: "Complete", value: f.complete, color: "var(--good)" }, { key: "Triggered, in progress", value: f.triggered - f.complete, color: "var(--d1)" }, { key: "Not triggered", value: f.planned - f.triggered, color: "var(--slot-nt)" }] })), { labelWidth: 100, valueLabel: (r) => `${r.segments[0].value + r.segments[1].value}<small> / ${r.segments.reduce((n, x) => n + x.value, 0)}</small>` })}
+        <div class="legend"><span><i style="background:var(--lc-done)"></i>Complete</span><span><i style="background:var(--lc-collect)"></i>Triggered</span><span><i style="background:var(--slot-nt)"></i>Not triggered</span></div>
+        ${hbars(m.forms.map((f) => ({ label: f.form, segments: [{ key: "Complete", value: f.complete, color: "var(--lc-done)" }, { key: "Triggered, in progress", value: f.triggered - f.complete, color: "var(--lc-collect)" }, { key: "Not triggered", value: f.planned - f.triggered, color: "var(--slot-nt)" }] })), { labelWidth: 100, valueLabel: (r) => `${r.segments[0].value + r.segments[1].value}<small> / ${r.segments.reduce((n, x) => n + x.value, 0)}</small>` })}
       </section>
       <section class="card span-4 reveal">
         <div class="card-h"><div><h3>Top workloads</h3><p>Open annexes per assigned user</p></div><div class="tools"><a class="btn btn-sm btn-ghost" href="#/workload">All</a></div></div>
-        <div class="legend"><span><i style="background:var(--d1)"></i>Open</span><span><i style="background:var(--crit)"></i>Overdue</span></div>
-        ${top.length ? hbars(top.map((o) => ({ label: o.user, attrs: `data-href="#/tasks?assignee=${encodeURIComponent(o.user)}&closure=open"`, segments: [{ key: "Open (not overdue)", value: o.open - Math.min(o.open, o.overdue), color: "var(--d1)" }, { key: "Overdue", value: Math.min(o.open, o.overdue), color: "var(--crit)" }] })), { labelWidth: 120, valueLabel: (r) => `${r.segments[0].value + r.segments[1].value}${r.segments[1].value ? ` <small style="color:var(--crit-ink)">${r.segments[1].value} late</small>` : ""}` }) : '<p class="muted">No open annexes.</p>'}
+        <div class="legend"><span><i style="background:var(--lc-collect)"></i>Open</span><span><i style="background:var(--crit)"></i>Overdue</span></div>
+        ${top.length ? hbars(top.map((o) => ({ label: o.user, attrs: `data-href="#/tasks?assignee=${encodeURIComponent(o.user)}&closure=open"`, segments: [{ key: "Open (not overdue)", value: o.open - Math.min(o.open, o.overdue), color: "var(--lc-collect)" }, { key: "Overdue", value: Math.min(o.open, o.overdue), color: "var(--crit)" }] })), { labelWidth: 120, valueLabel: (r) => `${r.segments[0].value + r.segments[1].value}${r.segments[1].value ? ` <small style="color:var(--crit-ink)">${r.segments[1].value} late</small>` : ""}` }) : '<p class="muted">No open annexes.</p>'}
       </section>
 
       <section class="card span-6 reveal">
@@ -224,7 +224,7 @@ export const annexes = {
     const mo = annexMonth === "offplan" ? { month: "", planned: 0, triggered: m.offPlan.length, annexes: m.offPlanMatrix.total.total, pct: 0, status: "Not in plan", products: m.offPlan, matrix: m.offPlanMatrix, fqComplete: 0 } : m.months.find((x) => x.month === annexMonth);
     const mx = mo.matrix;
     const stages = mx.stages;
-    const groups = [...mx.rows, mx.total].map((r) => ({ label: r.dept === "Total" ? "Total general" : r.dept, values: stages.map((st) => ({ key: st, value: r.total ? r.counts[st] / r.total : 0, count: r.counts[st], color: stageColor(st, stages) })) }));
+    const groups = [...mx.rows, mx.total].map((r) => ({ label: r.dept === "Total" ? "Total general" : r.dept, values: stages.map((st) => ({ key: st, value: r.total ? r.counts[st] / r.total : 0, count: r.counts[st], color: stageColor(st) })) }));
 
     const heat = `<div style="overflow:auto"><table class="data"><thead><tr><th>Department</th>${m.months.map((x) => `<th class="c">${fmtMonthShort(x.month)}</th>`).join("")}</tr></thead><tbody>${[...DEPARTMENTS, "All"].map((d) => `<tr><td style="white-space:nowrap"><b>${d === "All" ? "All departments" : esc(d)}</b></td>${m.months.map((x) => {
       const r = d === "All" ? x.matrix.total : x.matrix.rows.find((y) => y.dept === d);
@@ -240,7 +240,7 @@ export const annexes = {
     <div class="grid g-12">
       <section class="card span-8 reveal">
         <div class="card-h"><div><h3>Actual APQR Annexes Progress for (${mo.month ? monthLabel(mo.month) : "products not in plan"})</h3><p>% of each department’s required annexes at each current stage; untriggered PQRs count as “Not triggered”</p></div></div>
-        ${mo.annexes === 0 ? `<p class="muted">No annexes for this month.</p>` : columns(groups, { height: 300, series: stages.map((st) => ({ label: st, color: stageColor(st, stages) })) }) + `<div style="margin-top:18px">${matrixTable(mx)}</div>`}
+        ${mo.annexes === 0 ? `<p class="muted">No annexes for this month.</p>` : columns(groups, { height: 300, series: stages.map((st) => ({ label: st, color: stageColor(st) })) }) + `<div style="margin-top:18px">${matrixTable(mx)}</div>`}
       </section>
       <section class="card span-4 reveal">
         <div class="card-h"><div><h3>${mo.month ? fmtMonth(mo.month) : "Not in plan"}</h3><p>Plan position for the month</p></div></div>
@@ -339,7 +339,7 @@ export const workflow = {
       </section>
       <section class="card span-5 reveal">
         <div class="card-h"><div><h3>Workflow stage across the plan</h3><p>${fmtN(m.plan.length)} planned products</p></div></div>
-        ${segBar(stages.filter((x) => x.n).map((x) => ({ label: x.stage, value: x.n, color: x.stage === "Closed" ? "var(--good)" : x.stage === "Not triggered" ? "var(--slot-nt)" : "var(--d1)" })), { height: 16, title: "Workflow stage" })}
+        ${segBar(stages.filter((x) => x.n).map((x) => ({ label: x.stage, value: x.n, color: stageColor(x.stage) })), { height: 16, title: "Workflow stage" })}
         <div style="margin-top:14px">${tableHtml(["Workflow stage", "Products", "% of plan"], stages.map((x) => [x.stage, fmtN(x.n), fmtPct(m.plan.length ? x.n / m.plan.length : 0, 1)]))}</div>
       </section>
       <section class="card span-7 reveal">
@@ -381,8 +381,8 @@ export const workload = {
     <div class="grid g-12" style="margin-top:18px">
       <section class="card span-5 reveal">
         <div class="card-h"><div><h3>Load by person</h3><p>Raised annexes: closed, open and overdue</p></div></div>
-        <div class="legend"><span><i style="background:var(--s-done)"></i>Closed</span><span><i style="background:var(--s1)"></i>Open</span><span><i style="background:var(--crit)"></i>Overdue</span></div>
-        ${hbars(top.map((o) => { const lateOpen = Math.min(o.open, o.overdue); return { label: o.user, sub: o.mainDept, attrs: `data-href="#/tasks?assignee=${encodeURIComponent(o.user)}"`, segments: [{ key: "Closed", value: o.closed, color: "var(--s-done)" }, { key: "Open", value: o.open - lateOpen, color: "var(--s1)" }, { key: "Overdue", value: lateOpen, color: "var(--crit)" }] }; }), { labelWidth: 130 })}
+        <div class="legend"><span><i style="background:var(--lc-done)"></i>Closed</span><span><i style="background:var(--lc-collect)"></i>Open</span><span><i style="background:var(--crit)"></i>Overdue</span></div>
+        ${hbars(top.map((o) => { const lateOpen = Math.min(o.open, o.overdue); return { label: o.user, sub: o.mainDept, attrs: `data-href="#/tasks?assignee=${encodeURIComponent(o.user)}"`, segments: [{ key: "Closed", value: o.closed, color: "var(--lc-done)" }, { key: "Open", value: o.open - lateOpen, color: "var(--lc-collect)" }, { key: "Overdue", value: lateOpen, color: "var(--crit)" }] }; }), { labelWidth: 130 })}
       </section>
       <section class="card span-7 table-card reveal">
         <div class="table-wrap" style="max-height:680px"><table class="data"><thead><tr>${th("user", "User")}${th("mainDept", "Main dept")}${th("annexes", "Annexes", "r")}${th("closed", "Closed", "r")}${th("open", "Open", "r")}${th("notRaised", "Not raised", "r")}${th("overdue", "Late", "r")}${th("pct", "% closed")}${th("finalQa", "Final QA", "r")}${th("approvals", "Approvals", "r")}${th("earliestDue", "Earliest due")}</tr></thead>

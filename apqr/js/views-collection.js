@@ -9,7 +9,7 @@ import * as act from "./actions.js";
 import { csv } from "./views-registers.js";
 import { peopleSelect } from "./lists.js";
 
-const STAGE_COLOR = { "Not triggered": "var(--slot-nt)", "Collecting Data": "var(--s1)", "Data Review": "var(--d7)", Completed: "var(--good)" };
+const STAGE_COLOR = { "Not triggered": "var(--slot-nt)", "Collecting Data": "var(--lc-collect)", "Data Review": "var(--lc-review)", Completed: "var(--lc-done)" };
 const PAGE = 100;
 const cv = { scope: "", dept: "", month: "", q: "", missing: "", stage: "open", page: 0, sel: new Set() };
 const opt = (v, label, sel) => `<option value="${esc(v)}"${String(v) === String(sel) ? " selected" : ""}>${esc(label)}</option>`;

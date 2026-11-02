@@ -6,13 +6,24 @@ import { SLOTS } from "./engine.js";
 
 export const DEPT_VAR = { Compliance: "--d1", Production: "--d2", QA: "--d3", QC: "--d4", RA: "--d5", "Supplier Qualification": "--d6", "Validation Metrology": "--d7", "Validation Process": "--d8" };
 export const deptColor = (d) => `var(${DEPT_VAR[d] || "--muted"})`;
-const STAGE_VARS = ["--s1", "--s2", "--s3", "--s4", "--s5"];
-export function stageColor(stage, stages) {
-  if (/complet|approved|closed/i.test(stage)) return "var(--s-done)";
-  if (/not triggered/i.test(stage)) return "var(--slot-nt)";
-  const i = stages.filter((s) => !/complet|approved|closed|not triggered/i.test(s)).indexOf(stage);
-  return `var(${STAGE_VARS[Math.max(0, i)] || "--s1"})`;
+// Lifecycle colours (validated order, both themes): collect → review → final QA → done;
+// "not triggered" is a hatched neutral. Status colours (RAG) stay reserved.
+export const LC = { nt: "var(--slot-nt)", collect: "var(--lc-collect)", review: "var(--lc-review)", fq: "var(--lc-fq)", done: "var(--lc-done)" };
+export function stageColor(stage) {
+  if (/complet|approved|closed/i.test(stage)) return LC.done;
+  if (/not triggered|not raised/i.test(stage)) return LC.nt;
+  if (/review/i.test(stage) && !/final/i.test(stage)) return LC.review;
+  if (/capa|final|approv/i.test(stage)) return LC.fq;
+  return LC.collect;
 }
+const isNt = (c) => /--slot-nt|--lc-nt/.test(String(c));
+let uid = 0;
+/** Per-chart <defs>: a soft top sheen and the hatch texture for the not-triggered state. */
+function defs(id) {
+  return `<defs><linearGradient id="sh${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".30"/><stop offset=".6" stop-color="#fff" stop-opacity="0"/></linearGradient>
+    <pattern id="ht${id}" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="6" height="6" style="fill:var(--slot-nt)"/><rect width="1.8" height="6" style="fill:var(--hatch)"/></pattern></defs>`;
+}
+const fillOf = (color, id) => (isNt(color) ? `url(#ht${id})` : color);
 
 /* ------------------------------------------------------------------- ring */
 
@@ -34,7 +45,7 @@ export function ring(value, { size = 160, stroke = 14, label = "", sub = "", col
 export function segBar(parts, { height = 14, title = "" } = {}) {
   const total = parts.reduce((s, p) => s + p.value, 0) || 1;
   return `<div class="segbar" style="--h:${height}px" role="img" aria-label="${esc(title)}">${parts.filter((p) => p.value > 0).map((p) =>
-    `<span class="seg" ${p.attrs || ""} style="flex:${p.value} 1 0;background:${p.color}" data-tip="${tip(p.label, [["Count", fmtN(p.value)], ["Share", fmtPct(p.value / total, 1)]], p.color)}"></span>`).join("")}</div>`;
+    `<span class="seg" ${p.attrs || ""} style="flex:${p.value} 1 0;background-color:${p.color}" data-tip="${tip(p.label, [["Count", fmtN(p.value)], ["Share", fmtPct(p.value / total, 1)]], p.color)}"></span>`).join("")}</div>`;
 }
 
 /* -------------------------------------------------------- horizontal bars */
@@ -50,7 +61,7 @@ export function hbars(rows, { max, valueLabel = (r) => fmtN(r.segments.reduce((s
     return `<div class="hbar-row" ${r.attrs || ""}>
       <div class="hbar-label" title="${esc(r.label)}">${esc(r.label)}${r.sub ? `<small>${esc(r.sub)}</small>` : ""}</div>
       <div class="hbar-track"><div class="hbar-fill" style="width:${((tot / m) * 100).toFixed(2)}%">${r.segments.filter((s) => s.value > 0).map((s) =>
-        `<span style="flex:${s.value} 1 0;background:${s.color}" data-tip="${tip(r.label, [[s.key, fmtN(s.value)], ["Total", fmtN(tot)]], s.color)}"></span>`).join("")}</div></div>
+        `<span style="flex:${s.value} 1 0;background-color:${s.color}" data-tip="${tip(r.label, [[s.key, fmtN(s.value)], ["Total", fmtN(tot)]], s.color)}"></span>`).join("")}</div></div>
       <div class="hbar-val">${valueLabel(r)}</div>
     </div>`;
   }).join("")}</div>`;
@@ -71,7 +82,8 @@ export function columns(groups, { height = 260, yMax = 1, pct = true, series = [
   const bw = Math.min(24, (band * 0.78) / k - 2);
   const y = (v) => padT + ih - (Math.min(v, yMax) / yMax) * ih;
   const ticks = pct ? [0, 0.25, 0.5, 0.75, 1].map((t) => t * yMax) : niceTicks(yMax);
-  let s = `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Clustered column chart">`;
+  const id = ++uid;
+  let s = `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Clustered column chart">${defs(id)}`;
   for (const t of ticks) s += `<line x1="${padL}" x2="${W - padR}" y1="${y(t)}" y2="${y(t)}" class="grid"/><text x="${padL - 6}" y="${y(t) + 4}" text-anchor="end" class="axis-t">${pct ? fmtPct(t) : fmtN(t)}</text>`;
   s += `<line x1="${padL}" x2="${W - padR}" y1="${y(0)}" y2="${y(0)}" class="baseline"/>`;
   groups.forEach((g, gi) => {
@@ -82,7 +94,8 @@ export function columns(groups, { height = 260, yMax = 1, pct = true, series = [
       const top = y(v.value), h = y(0) - top;
       if (v.value > 0) {
         const r = Math.min(4, h, bw / 2);
-        s += `<path d="M${x},${y(0)} V${top + r} Q${x},${top} ${x + r},${top} H${x + bw - r} Q${x + bw},${top} ${x + bw},${top + r} V${y(0)} Z" style="fill:${v.color}" class="col" data-tip="${tip(g.label, [[v.key, pct ? fmtPct(v.value, 1) : fmtN(v.value)], ...(v.count !== undefined ? [["Annexes", fmtN(v.count)]] : [])], v.color)}"/>`;
+        const dd = `M${x},${y(0)} V${top + r} Q${x},${top} ${x + r},${top} H${x + bw - r} Q${x + bw},${top} ${x + bw},${top + r} V${y(0)} Z`;
+        s += `<path d="${dd}" style="fill:${fillOf(v.color, id)};animation-delay:${gi * 45}ms" class="col" data-tip="${tip(g.label, [[v.key, pct ? fmtPct(v.value, 1) : fmtN(v.value)], ...(v.count !== undefined ? [["Annexes", fmtN(v.count)]] : [])], v.color)}"/><path d="${dd}" fill="url(#sh${id})" class="sheen" style="animation-delay:${gi * 45}ms"/>`;
         if (bw >= 10) s += `<text x="${x + bw / 2}" y="${top - 5}" text-anchor="middle" class="cap-t">${pct ? Math.round(v.value * 100) + "%" : fmtN(v.value)}</text>`;
       }
       s += `<rect x="${x - 1}" y="${padT}" width="${bw + 2}" height="${ih}" fill="transparent" data-tip="${tip(g.label, [[v.key, pct ? fmtPct(v.value, 1) : fmtN(v.value)], ...(v.count !== undefined ? [["Annexes", fmtN(v.count)]] : [])], v.color)}"/>`;
@@ -129,18 +142,21 @@ export function lineChart(xKeys, series, { height = 240, target } = {}) {
   const n = xKeys.length;
   const x = (i) => padL + (n <= 1 ? iw / 2 : (i / (n - 1)) * iw);
   const y = (v) => padT + ih - (v / yMax) * ih;
-  let s = `<svg class="chart line-chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Line chart">`;
+  const id = ++uid;
+  let s = `<svg class="chart line-chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Line chart"><defs>${series.map((se, i) => `<linearGradient id="ar${id}-${i}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style="stop-color:${se.color}" stop-opacity=".32"/><stop offset="1" style="stop-color:${se.color}" stop-opacity="0"/></linearGradient>`).join("")}</defs>`;
   for (const t of ticks) s += `<line x1="${padL}" x2="${W - padR}" y1="${y(t)}" y2="${y(t)}" class="grid"/><text x="${padL - 6}" y="${y(t) + 4}" text-anchor="end" class="axis-t">${fmtN(t)}</text>`;
   const every = Math.ceil(n / 9);
   xKeys.forEach((k, i) => { if (i % every === 0 || i === n - 1) s += `<text x="${x(i)}" y="${H - 10}" text-anchor="middle" class="axis-t">${fmtMonthShort(k + "-01")}</text>`; });
   if (target) s += `<line x1="${padL}" x2="${W - padR}" y1="${y(target)}" y2="${y(target)}" class="target"/><text x="${W - padR}" y="${y(target) - 6}" text-anchor="end" class="axis-t">Annexes raised ${fmtN(target)}</text>`;
-  for (const se of series) {
+  series.forEach((se, si) => {
     const pts = se.points.map((p, i) => `${x(i).toFixed(1)},${y(p.y).toFixed(1)}`);
-    if (se.area) s += `<path d="M${x(0)},${y(0)} L${pts.join(" L")} L${x(n - 1)},${y(0)} Z" style="fill:${se.color};opacity:.1"/>`;
-    s += `<polyline points="${pts.join(" ")}" fill="none" style="stroke:${se.color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`;
+    let len = 0;
+    se.points.forEach((p, i) => { if (i) len += Math.hypot(x(i) - x(i - 1), y(p.y) - y(se.points[i - 1].y)); });
+    if (se.area !== false) s += `<path class="area-fill" d="M${x(0)},${y(0)} L${pts.join(" L")} L${x(n - 1)},${y(0)} Z" fill="url(#ar${id}-${si})"/>`;
+    s += `<polyline class="line-path" points="${pts.join(" ")}" fill="none" style="stroke:${se.color};--len:${Math.ceil(len) + 2}" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>`;
     const last = se.points[n - 1];
-    if (last) s += `<circle cx="${x(n - 1)}" cy="${y(last.y)}" r="4.5" style="fill:${se.color};stroke:var(--surface)" stroke-width="2"/>`;
-  }
+    if (last) s += `<circle cx="${x(n - 1)}" cy="${y(last.y)}" r="5" style="fill:${se.color};stroke:var(--surface)" stroke-width="2.5"/>`;
+  });
   // hover columns
   xKeys.forEach((k, i) => {
     const rows = series.map((se) => [se.key, fmtN(se.points[i]?.y ?? 0)]);
@@ -191,7 +207,8 @@ export function stackedColumns(groups, series, { height = 280, width = 760, capL
   const band = iw / Math.max(1, groups.length);
   const bw = Math.min(46, band * 0.62);
   const y = (v) => padT + ih - (v / yMax) * ih;
-  let s = `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Stacked column chart">`;
+  const id = ++uid;
+  let s = `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Stacked column chart">${defs(id)}`;
   for (const t of ticks) s += `<line x1="${padL}" x2="${W - padR}" y1="${y(t)}" y2="${y(t)}" class="grid"/><text x="${padL - 6}" y="${y(t) + 4}" text-anchor="end" class="axis-t">${fmtN(t)}</text>`;
   s += `<line x1="${padL}" x2="${W - padR}" y1="${y(0)}" y2="${y(0)}" class="baseline"/>`;
   groups.forEach((g, gi) => {
@@ -208,10 +225,12 @@ export function stackedColumns(groups, series, { height = 280, width = 760, capL
       const isTop = si === visible.length - 1;
       const r = isTop ? Math.min(4, h, bw / 2) : 0;
       const yb = y0 - (si > 0 ? 2 : 0);
-      s += `<path d="M${x},${yb} V${top + r} ${r ? `Q${x},${top} ${x + r},${top} H${x + bw - r} Q${x + bw},${top} ${x + bw},${top + r}` : `H${x + bw}`} V${yb} Z" style="fill:${se.color}" class="col" data-tip="${tip(g.label, [[se.label, fmtN(v)], ["Share", fmtPct(v / Math.max(1, totals[gi]))], ["Total", fmtN(totals[gi])]], se.color)}"/>`;
+      const dd = `M${x},${yb} V${top + r} ${r ? `Q${x},${top} ${x + r},${top} H${x + bw - r} Q${x + bw},${top} ${x + bw},${top + r}` : `H${x + bw}`} V${yb} Z`;
+      s += `<path d="${dd}" style="fill:${fillOf(se.color, id)};animation-delay:${gi * 45}ms" class="col" data-tip="${tip(g.label, [[se.label, fmtN(v)], ["Share", fmtPct(v / Math.max(1, totals[gi]))], ["Total", fmtN(totals[gi])]], se.color)}"/>`;
       void gap;
       acc += v;
     });
+    if (totals[gi] && visible.length) { const top = y(totals[gi]); const r = Math.min(4, y(0) - top, bw / 2); s += `<path d="M${x},${y(0)} V${top + r} Q${x},${top} ${x + r},${top} H${x + bw - r} Q${x + bw},${top} ${x + bw},${top + r} V${y(0)} Z" fill="url(#sh${id})" class="sheen" style="animation-delay:${gi * 45}ms"/>`; }
     if (g.href) s += `</a>`;
     if (totals[gi]) s += `<text x="${x + bw / 2}" y="${y(totals[gi]) - 6}" text-anchor="middle" class="cap-t">${capLabel(g, totals[gi])}</text>`;
     s += `<text x="${x + bw / 2}" y="${H - padB + 16}" text-anchor="middle" class="axis-l">${esc(g.label)}</text>`;

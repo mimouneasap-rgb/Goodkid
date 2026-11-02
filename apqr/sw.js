@@ -1,11 +1,9 @@
 // Service worker: makes the tracker installable and usable offline.
 // Bump VERSION after changing app files so clients pick up the new shell.
-const VERSION = "apqr-v3";
+const VERSION = "apqr-v4";
 const SHELL = [
   "./", "index.html", "manifest.webmanifest", "css/apqr.css",
-  "js/app.js", "js/actions.js", "js/team.js", "js/charts.js", "js/demo.js", "js/drawer.js", "js/engine.js",
-  "js/exporter.js", "js/importers.js", "js/store.js", "js/ui.js", "js/views-overview.js",
-  "js/views-registers.js", "js/xlsx.js",
+  "js/actions.js", "js/app.js", "js/charts.js", "js/demo.js", "js/docx.js", "js/drawer.js", "js/engine.js", "js/exporter.js", "js/importers.js", "js/lists.js", "js/picker.js", "js/report.js", "js/snap.js", "js/store.js", "js/team.js", "js/ui.js", "js/views-collection.js", "js/views-lists.js", "js/views-overview.js", "js/views-people.js", "js/views-product.js", "js/views-registers.js", "js/xlsx.js",
   "icons/icon.svg", "icons/icon-192.png", "icons/icon-512.png", "icons/maskable-512.png", "icons/apple-touch-icon.png",
 ];
 const FONTS = "apqr-fonts";

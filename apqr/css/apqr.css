@@ -25,7 +25,10 @@
   /* departments: validated categorical order (slots 1–8) */
   --d1: #2a78d6; --d2: #eb6834; --d3: #1baf7a; --d4: #eda100; --d5: #e87ba4; --d6: #008300; --d7: #6250d6; --d8: #e34948;
   /* annexe slot states */
-  --slot-ok: #0ca30c; --slot-open: #3987e5; --slot-missing: #d03b3b; --slot-nt: #d3d8e6;
+  /* lifecycle (validated set, fixed order: collect → review → final QA → done; not-triggered is a hatched neutral) */
+  --lc-collect: #2a78d6; --lc-review: #e87ba4; --lc-fq: #eda100; --lc-done: #008300; --lc-nt: #cdd3e1;
+  --hatch: rgb(13 19 48 / .16);
+  --slot-ok: var(--lc-done); --slot-open: var(--lc-collect); --slot-missing: #d03b3b; --slot-nt: var(--lc-nt);
   /* stages: ordinal blue, completed darkest */
   --s1: #86b6ef; --s2: #3987e5; --s3: #256abf; --s4: #1c5cab; --s5: #184f95; --s-done: #104281;
   /* status (reserved) */
@@ -64,7 +67,7 @@
     --ink: #eef0ff; --ink-2: #c3c8e6; --muted: #8f96bd; --faint: #646b92; --line: #1f2850; --line-2: #2a3466;
     --accent: #818cf8; --accent-2: #a5b4fc; --accent-ink: #0a0f2a; --accent-soft: #1f2459; --focus: #a5b4fc;
     --d1: #3987e5; --d2: #d95926; --d3: #199e70; --d4: #c98500; --d5: #d55181; --d6: #008300; --d7: #9085e9; --d8: #e66767;
-    --slot-nt: #2a3466;
+    --slot-nt: #34406f; --lc-nt: #34406f; --lc-collect: #3987e5; --lc-review: #d55181; --lc-fq: #c98500; --lc-done: #199e70; --hatch: rgb(255 255 255 / .13);
     --s1: #1c5cab; --s2: #2a78d6; --s3: #3987e5; --s4: #5598e7; --s5: #6da7ec; --s-done: #9ec5f4;
     --good-bg: #0f2e1a; --warn-bg: #33270a; --crit-bg: #3a1218; --info-bg: #10264a; --none-bg: #1a2142;
     --good-ink: #5ee05e; --warn-ink: #ffd27a; --crit-ink: #ff8a8a; --info-ink: #8cc0ff; --none-ink: #a8aed0;
@@ -79,7 +82,7 @@
   --ink: #eef0ff; --ink-2: #c3c8e6; --muted: #8f96bd; --faint: #646b92; --line: #1f2850; --line-2: #2a3466;
   --accent: #818cf8; --accent-2: #a5b4fc; --accent-ink: #0a0f2a; --accent-soft: #1f2459; --focus: #a5b4fc;
   --d1: #3987e5; --d2: #d95926; --d3: #199e70; --d4: #c98500; --d5: #d55181; --d6: #008300; --d7: #9085e9; --d8: #e66767;
-  --slot-nt: #2a3466;
+  --slot-nt: #34406f; --lc-nt: #34406f; --lc-collect: #3987e5; --lc-review: #d55181; --lc-fq: #c98500; --lc-done: #199e70; --hatch: rgb(255 255 255 / .13);
   --s1: #1c5cab; --s2: #2a78d6; --s3: #3987e5; --s4: #5598e7; --s5: #6da7ec; --s-done: #9ec5f4;
   --good-bg: #0f2e1a; --warn-bg: #33270a; --crit-bg: #3a1218; --info-bg: #10264a; --none-bg: #1a2142;
   --good-ink: #5ee05e; --warn-ink: #ffd27a; --crit-ink: #ff8a8a; --info-ink: #8cc0ff; --none-ink: #a8aed0;
@@ -206,7 +209,8 @@ a { color: var(--accent); }
 .card-h h2, .card-h h3 { margin: 0; font-size: 15px; font-weight: 800; letter-spacing: -.01em; }
 .card-h p { margin: 2px 0 0; color: var(--muted); font-size: 12.5px; }
 .card-h .spacer { flex: 1; }
-.card-h .tools { display: flex; gap: 6px; margin-left: auto; flex-wrap: wrap; }
+.card-h > div:first-child { min-width: 0; flex: 1 1 auto; }
+.card-h .tools { display: flex; gap: 6px; margin-left: auto; flex-wrap: nowrap; align-items: center; flex: none; }
 .section-title { display: flex; align-items: baseline; gap: 10px; margin: 30px 2px 12px; }
 .section-title h2 { margin: 0; font-size: 17px; font-weight: 800; letter-spacing: -.015em; }
 .section-title p { margin: 0; color: var(--muted); font-size: 13px; }
@@ -329,9 +333,38 @@ button.kpi:hover { transform: translateY(-2px); box-shadow: var(--shadow-2); }
 .chart .axis-t { fill: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
 .chart .axis-l { fill: var(--ink-2); font-size: 11.5px; font-weight: 600; }
 .chart .cap-t { fill: var(--ink-2); font-size: 10.5px; font-weight: 700; font-variant-numeric: tabular-nums; }
-.chart .col { transition: opacity .15s; }
-.chart:hover .col { opacity: .75; }
-.chart .col:hover { opacity: 1; }
+.chart .col { transition: opacity .15s, filter .15s; transform-box: fill-box; transform-origin: 50% 100%; animation: colIn .7s cubic-bezier(.2, .8, .2, 1) both; }
+.chart .sheen { pointer-events: none; transform-box: fill-box; transform-origin: 50% 100%; animation: colIn .7s cubic-bezier(.2, .8, .2, 1) both; }
+.chart:hover .col { opacity: .62; }
+.chart .col:hover { opacity: 1; filter: saturate(1.15) brightness(1.04); }
+@keyframes colIn { from { transform: scaleY(0); } }
+.chart .area-fill { pointer-events: none; }
+.chart .line-path { stroke-dasharray: var(--len, 0); animation: lineIn 1.2s cubic-bezier(.2, .8, .2, 1) both; }
+@keyframes lineIn { from { stroke-dashoffset: var(--len, 0); } to { stroke-dashoffset: 0; } }
+/* sheen on HTML bars; hatched texture marks the "not triggered / not raised" state everywhere it appears */
+.segbar .seg, .hbar-fill span { background-image: linear-gradient(180deg, rgb(255 255 255 / .28), rgb(255 255 255 / 0) 70%) !important; }
+.hbar-fill { transform-origin: 0 50%; animation: barIn .8s cubic-bezier(.2, .8, .2, 1) both; }
+@keyframes barIn { from { transform: scaleX(0); } }
+[style*="--slot-nt"]:not(path):not(rect):not(circle), [style*="--lc-nt"]:not(path):not(rect):not(circle) { background-image: repeating-linear-gradient(135deg, var(--hatch) 0 1.6px, transparent 1.6px 5px) !important; }
+@media (prefers-reduced-motion: reduce) { .chart .col, .chart .sheen, .chart .line-path, .hbar-fill, .ring-val { animation: none !important; } }
+/* export-to-PNG button injected into every chart card */
+.png-btn { width: 32px; height: 32px; display: inline-grid; place-items: center; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); color: var(--muted); cursor: pointer; box-shadow: var(--shadow-1); flex: none; transition: color .15s, border-color .15s, background .15s; }
+.png-btn:hover { color: var(--accent); border-color: var(--accent-2); background: var(--accent-soft); }
+.png-btn .ic { width: 16px; height: 16px; }
+.png-btn.busy { pointer-events: none; opacity: .6; }
+.png-btn.busy .ic { animation: spin 1s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.report-busy { position: fixed; inset: 0; z-index: 500; display: grid; place-items: center; background: var(--overlay); backdrop-filter: blur(4px); color: #fff; }
+.report-busy > div { display: grid; justify-items: center; gap: 10px; padding: 28px 40px; border-radius: 22px; background: rgba(10, 18, 48, .85); box-shadow: var(--shadow-3); font-weight: 700; }
+.report-busy small { color: #c9cff3; font-weight: 600; }
+.report-busy .bar { width: 260px; height: 6px; border-radius: 99px; background: rgba(255, 255, 255, .15); overflow: hidden; }
+.report-busy .bar span { display: block; height: 100%; width: 0; border-radius: 99px; background: linear-gradient(90deg, #5eead4, #a78bfa); transition: width .25s; }
+@media (max-width: 1560px) { #report-btn span { display: none; } #report-btn { padding: 0 12px; } }
+.no-anim, .no-anim * { animation: none !important; transition: none !important; }
+.offscreen-render { position: fixed; left: -12000px; top: 0; width: 1000px; pointer-events: none; }
+.rep-opts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 16px; }
+.rep-opts label { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-2); cursor: pointer; }
+.rep-opts label small { display: block; color: var(--muted); font-weight: 500; font-size: 11.5px; }
 .line-chart .hover-col .crosshair, .line-chart .hover-col .cross-dot { opacity: 0; transition: opacity .1s; }
 .line-chart .hover-col:hover .crosshair, .line-chart .hover-col:hover .cross-dot { opacity: 1; }
 .crosshair { stroke: var(--axis); stroke-width: 1; }
@@ -595,7 +628,7 @@ dialog.modal[open] { animation: pop .22s cubic-bezier(.2, .8, .2, 1); }
   .top { padding: 10px 16px; gap: 8px; flex-wrap: wrap; }
   .search { order: 5; flex-basis: 100%; }
   .search kbd { display: none; }
-  #import-btn span, #back-btn span { display: none; }
+  #import-btn span, #back-btn span, #report-btn span { display: none; }
   .chip-date small { display: none; }
   .view { padding: 16px 16px 48px; }
   .hero { padding: 22px 18px; grid-template-columns: 1fr; border-radius: 22px; }

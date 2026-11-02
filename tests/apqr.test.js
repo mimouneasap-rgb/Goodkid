@@ -6,6 +6,8 @@ import { compute, eomonth, edate, monthYearToEnd, houseDept, productKey, snapsho
 import { parseDate, classifyDept, productFromParent, transformScigeniq, guessMapping, detect, importTrackerWorkbook, mergeTasks } from "../apqr/js/importers.js";
 import { buildWorkbook } from "../apqr/js/exporter.js";
 import { demoState } from "../apqr/js/demo.js";
+import { unzip } from "../apqr/js/xlsx.js";
+import { Docx } from "../apqr/js/docx.js";
 
 const PRODUCT = "ALPHA (Testolol) 10 mg F/C Tablets (30 TAB)-SITE";
 
@@ -266,4 +268,23 @@ test("managed lists: seeded from data, rename propagates, delete keeps or replac
   s.tasks.push(task({ assignee: "Amine Tebbi", title: "RA Data Collection", ref: "APQR-T-9" }));
   assert.ok(L.addMissingFromData(s) >= 1);
   assert.ok(s.lists.people.some((x) => x.name === "Amine Tebbi"));
+});
+
+test("Word writer builds a valid package with tables, image, landscape section and fields", async () => {
+  const png = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13]);
+  const d = new Docx({ title: "T & <report>", header: "H", footer: "F" });
+  d.toc().h1("1. Summary").p("**Bold** and plain").bullet("point").table(["A", "B"], [["x", { text: "y", fill: "#FDE5E5", bold: true }]], [1, 1]).image(png, 200, 100, { caption: "Figure 1" });
+  d.orientation(true).table(["Wide"], [["row"]], [1]).orientation(false).p("end");
+  const blob = await d.build();
+  assert.equal(blob.type, "application/vnd.openxmlformats-officedocument.wordprocessingml.document");
+  const z = await unzip(new Uint8Array(await blob.arrayBuffer()));
+  const names = z.names;
+  for (const n of ["[Content_Types].xml", "word/document.xml", "word/styles.xml", "word/numbering.xml", "word/header1.xml", "word/footer1.xml", "word/media/image1.png", "word/_rels/document.xml.rels"]) assert.ok(names.includes(n), n);
+  const doc = await z.text("word/document.xml");
+  assert.match(doc, /TOC \\o "1-2"/);
+  assert.match(doc, /w:orient="landscape"/);
+  assert.match(doc, /r:embed="rIdImg1"/);
+  assert.match(doc, /<w:b\/>.*Bold/);
+  assert.equal((doc.match(/<w:sectPr>/g) || []).length, 3);
+  assert.match(await z.text("docProps/core.xml"), /T &amp; &lt;report&gt;/);
 });
