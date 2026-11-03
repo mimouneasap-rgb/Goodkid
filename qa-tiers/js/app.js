@@ -1,7 +1,8 @@
 // App shell: navigation rail, hash router and the home page (the Tier 1 →
 // Tier 2 → Tier 3 cascade).
 
-import { store, HAS_REAL, isRealBoard } from "./store.js";
+import { store, HAS_REAL, demoAllowed } from "./store.js";
+import { EDITION } from "./edition.js";
 import * as E from "./engine.js";
 import { T1_REGISTERS, T2_REGISTERS, T1_ORDER, T2_ORDER } from "./schema.js";
 import { ring } from "./charts.js";
@@ -14,6 +15,8 @@ import { esc, pill, fmtLong, fmtMonth, closeDrawer, initTooltips, modal, toast, 
 import { createSync } from "./sync.js";
 import { decorateCharts } from "./export.js";
 import { renderReportPage } from "./report.js";
+import { renderClose, renderArchive } from "./archive.js";
+import { renderStart, renderGuide, initGuides, startTour, tourFor, startProgress, endTour } from "./guides.js";
 
 store.load();
 E.linkTier1(() => store.t1);
@@ -44,6 +47,7 @@ function navHTML() {
     <a class="brand" href="#/home"><span class="brand-mark">QA</span><span><b>Tier Boards</b><small>${esc(store.t2.setup.site.split("—")[0].trim())}</small></span></a>
     <nav class="nav">
       ${a("home", "⌂", "Overview")}
+      ${showStart() ? `<a href="#/start" data-nav="start"><span class="ic">①</span>Start here<span class="badge soft">${startProgress().done}/${startProgress().total}</span></a>` : ""}
       <a href="#/learn" data-nav="learn"><span class="ic">🎓</span>Masterclass<span class="badge soft">${lp.done}/${lp.total}</span></a>
       <div class="nav-group"><div class="nav-title" style="--dot:var(--s2)"><i class="tier-dot"></i>Tier 1 · Huddle 08:30</div>
         ${a("t1/board", "◫", "Huddle board")}
@@ -59,7 +63,7 @@ function navHTML() {
         ${a("t2/analytics", "◔", "Analytics")}
         ${a("t2/setup", "⚙", "Setup")}
       </div>
-      <div class="nav-group"><div class="nav-title">Reports & data</div>${a("report", "⤓", "Word report")}${a("audit", "⎘", "Change history")}</div>
+      <div class="nav-group"><div class="nav-title">Reports & data</div>${a("report", "⤓", "Reports centre")}${a("close", "✓", "Month-end close")}${a("archive", "🗄", "Archive")}${a("guide", "?", "How-to guides")}${a("audit", "⎘", "Change history")}</div>
     </nav>
     <div class="rail-foot">
       <div class="row" role="group" aria-label="Theme">${["system", "light", "dark"].map((t) => `<button class="rail-btn" data-theme-btn="${t}" aria-pressed="${(store.prefs.theme || "system") === t}">${t[0].toUpperCase() + t.slice(1)}</button>`).join("")}</div>
@@ -85,6 +89,12 @@ function markNav() {
   });
 }
 
+/** "Start here" is offered while a board that began blank is being set up. */
+function showStart() {
+  const sp = startProgress();
+  return String(store.t2.dataset || "").startsWith("blank") && sp.done < sp.total;
+}
+
 /* ── Home ──────────────────────────────────────────────── */
 function renderHome(root) {
   const t1 = store.t1, t2 = store.t2;
@@ -107,7 +117,11 @@ function renderHome(root) {
     return `<a class="nav-tile card" href="#/${k}"><span class="no">${tier === "t1" ? "TIER 1" : "TIER 2"} · ${esc(sc.no)}</span><b>${esc(sc.short)}</b><span>${n} overdue item${n > 1 ? "s" : ""} or data-check flag${n > 1 ? "s" : ""}</span></a>`;
   }).join("");
 
-  root.innerHTML = `
+  const sp = startProgress();
+  const startCard = showStart() ? `<a class="card card-pad" href="#/start" style="display:flex;gap:16px;align-items:center;margin-bottom:16px;text-decoration:none;color:var(--ink);border-color:var(--accent)">
+      <span class="brand-mark" style="width:44px;height:44px;font-size:18px">①</span><span style="flex:1"><b style="font:600 17px var(--font-display)">Start here — set up your ${esc(fmtMonth(t2.setup.month))} boards</b><br><span class="muted" style="font-size:13px">${sp.items.filter((x) => !x[2]).map((x) => x[1]).join(" · ")}</span></span>
+      <span class="chip" style="color:var(--ink);background:var(--accent-soft)">${sp.done} / ${sp.total} done ›</span></a>` : "";
+  root.innerHTML = `${startCard}
     <section class="hero" style="padding:26px 28px">
       <div class="hero-grid"><div>
         <div class="eyebrow">${esc(t2.setup.site)} · Quality Assurance</div>
@@ -150,8 +164,9 @@ function renderHome(root) {
     <div class="card-head" style="margin:22px 0 10px"><h2 style="font-size:15px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-2)">Go to</h2></div>
     <div class="tiles">
       ${[["t1/board", "TIER 1", "Huddle board", "SQDCP letters · 20 KPIs"], ["t2/board", "TIER 2", "Dashboard", "Q-calendar · 9 KPIs · top 5"], ["t2/calendar", "TIER 2", "Daily Log", "Q-calendar engine & priorities"],
-        ["t2/analytics", "TIER 2", "Analytics", "8 live charts"], ["t2/trend", "TIER 2", "KPI Trend", "12-month history"], ["t1/skills", "TIER 1", "Skills matrix", "Who can do what"],
-        ["t2/setup", "TIER 2", "Setup", "Month, targets, lists"], ["learn", "LEARN", "Masterclass", "8 modules · practice · quiz"]]
+        ["t2/analytics", "TIER 2", "Analytics", "13 live charts · filters · exports"], ["t2/trend", "TIER 2", "KPI Trend", "12-month history"], ["t1/skills", "TIER 1", "Skills matrix", "Who can do what"],
+        ["report", "REPORTS", "Reports centre", "Daily · weekly · monthly (Word)"], ["close", "MONTH-END", "Month-end close", "10 steps · pack · archive"], ["archive", "MONTH-END", "Archive", "Past month-end boards"],
+        ["guide", "HELP", "How-to guides", "Every routine, step by step"], ["t2/setup", "TIER 2", "Setup", "Month, targets, lists"], ["learn", "LEARN", "Masterclass", "Modules · practice · quiz"]]
         .map(([h, n, b, s]) => `<a class="card nav-tile" href="#/${h}"><span class="no">${n}</span><b>${b}</b><span>${s}</span></a>`).join("")}
     </div>`;
 }
@@ -212,13 +227,31 @@ function route({ soft = false } = {}) {
   else if (a === "t2" && b === "setup") { renderSetupT2(view); titles.push("Tier 2 setup"); }
   else if (a === "t2" && b === "reg" && T2_REGISTERS[c]) { renderRegister(view, { tier: "t2", reg: c, query }); titles.push(T2_REGISTERS[c].title); }
   else if (a === "audit") { renderAudit(view); titles.push("Change history"); }
-  else if (a === "report") { renderReportPage(view); titles.push("Management report"); }
+  else if (a === "report") { renderReportPage(view, { type: query.type }); titles.push("Reports centre"); }
+  else if (a === "close") { renderClose(view, { navigate }); titles.push("Month-end close"); }
+  else if (a === "archive") { renderArchive(view, { navigate }); titles.push("Archive"); }
+  else if (a === "start") { renderStart(view); titles.push("Start here"); }
+  else if (a === "guide") { renderGuide(view); titles.push("How-to guides"); }
   else { renderHome(view); titles.push("Overview"); }
   document.title = `${titles[0]} · QA Tier Boards`;
   $(".topbar b").textContent = titles[0];
   markNav();
+  paintViewBar();
   decorateCharts($("#main")); // views may swap their own container while drawing
   if (soft) scrollTo(0, y); else if (!query.keep) scrollTo(0, 0);
+}
+
+/** The banner of a read-only view (an archived month, the practice sandbox). */
+function paintViewBar() {
+  const main = $("#main");
+  main.querySelector(":scope > .viewbar")?.remove();
+  const v = store.viewing;
+  if (!v) return;
+  const bar = document.createElement("div");
+  bar.className = "viewbar";
+  bar.innerHTML = `<span>${v.kind === "practice" ? "🎓" : "🗄"}</span><span><b>${esc(v.label)}</b> · read-only — ${v.kind === "practice" ? "practice on the September 2026 demo; nothing is saved" : "nothing can be changed while you look; reports and exports use this archive"}</span><span class="spacer"></span><button class="btn sm" data-exitview>Return to the live board</button>`;
+  bar.querySelector("[data-exitview]").onclick = () => { store.exitView(); navigate(v.kind === "practice" ? "#/learn/practice" : "#/archive"); };
+  main.prepend(bar);
 }
 
 /* ── Team sync ─────────────────────────────────────────── */
@@ -255,8 +288,8 @@ function firstRun(sync) {
     <div class="lcards">
       ${HAS_REAL ? `<button class="lcard" data-start="real" style="text-align:left;cursor:pointer"><b>The El Kendi data</b><span>Imported 30/10/2026: shop-floor batch records, sampling, line clearance and IPC, oncology deviations, the APQR programme and the QA personnel list.</span></button>` : ""}
       <button class="lcard" data-start="mine" style="text-align:left;cursor:pointer"><b>The boards in this browser</b><span>Everything you have entered or changed here so far.</span></button>
-      ${HAS_REAL ? "" : `<button class="lcard" data-start="demo" style="text-align:left;cursor:pointer"><b>The September 2026 demo</b><span>Made-up training data for the masterclass.</span></button>`}
-      <button class="lcard" data-start="blank" style="text-align:left;cursor:pointer"><b>Empty registers</b><span>Keeps setup, targets, roster and lists; registers start empty.</span></button>
+      ${demoAllowed() ? `<button class="lcard" data-start="demo" style="text-align:left;cursor:pointer"><b>The September 2026 demo</b><span>Made-up training data for the masterclass.</span></button>` : ""}
+      <button class="lcard" data-start="blank" style="text-align:left;cursor:pointer;${EDITION.start === "blank" && !HAS_REAL ? "border-color:var(--accent);background:var(--accent-soft)" : ""}"><b>${EDITION.start === "blank" && !HAS_REAL ? `A blank ${esc(EDITION.label)} board (recommended)` : "Empty registers"}</b><span>${EDITION.start === "blank" && !HAS_REAL ? "Empty registers for the month, with the standard lists, KPI targets and QA activity catalogue. Then follow Start here." : "Keeps setup, targets, roster and lists; registers start empty."}</span></button>
     </div><p class="muted" style="margin:0;font-size:12.5px">The first upload sends several hundred records; keep the page open until the status in the menu says “Shared with your team · live”.</p>`,
   { onClose: () => { setupDialog = null; } });
   setupDialog.el.addEventListener("click", async (e) => {
@@ -273,6 +306,7 @@ function firstRun(sync) {
     setupDialog.close();
     route({ soft: true });
     toast("Shared board created — your team now sees the same data");
+    if (b.dataset.start === "blank") navigate("#/start");
   });
 }
 
@@ -283,13 +317,13 @@ function join(sync) {
   store.applyRemote("t1"); store.applyRemote("t2");
   team.mode = sync.readOnly ? "readonly" : "live"; paintTeam();
   route({ soft: true });
-  if (HAS_REAL) offerRealData(); else offerDemo();
+  if (HAS_REAL) offerRealData(); else if (EDITION.start === "demo") offerDemo();
 }
 
 /** Once, to the owner: the shared board holds site data this version does not
  * include — return it to the September 2026 demo for everyone? */
 async function offerDemo() {
-  if (isRealBoard() || !store.t2.dataset || store.t2.dataset === "demo-2026-09" || store.prefs.demoOffered === store.t2.dataset) return;
+  if (!demoAllowed() || !store.t2.dataset || store.t2.dataset === "demo-2026-09" || store.prefs.demoOffered === store.t2.dataset) return;
   const owner = store.user ? await store.user.isOwner().catch(() => false) : false;
   if (!owner) return;
   const { el, close } = modal(`<div class="eyebrow">Demo version</div><h2>Return the shared board to the demo?</h2>
@@ -328,6 +362,7 @@ async function connectTeam() {
   if (!db) { team.mode = "local"; paintTeam(); return; }
   const user = await api.use("user").catch(() => null);
   store.user = user;
+  store.db = db;
   const dirty = new Set();
   let timer = null;
   const sync = createSync({
@@ -384,7 +419,34 @@ document.addEventListener("click", (e) => {
   e.preventDefault();
   navigate(a.getAttribute("href"));
 }, true);
-store.onChange(() => renderNav());
+store.onChange((tier, kind) => {
+  if (kind === "blocked") { toast(store.viewing?.kind === "practice" ? "Practice mode — nothing is saved" : "Read-only archive — return to the live board to make changes"); return; }
+  renderNav();
+  if (kind === "view") route({ soft: true });
+});
+initGuides(navigate);
+const help = document.createElement("button");
+help.className = "help-fab";
+help.type = "button";
+help.title = "Help: a guided tour of this page, or the how-to guides";
+help.textContent = "?";
+help.onclick = () => {
+  const { el, close } = modal(`<div class="row"><div><div class="eyebrow">Help</div><h2>What do you want to do?</h2></div><span class="spacer"></span><button class="btn ghost" data-x aria-label="Close">✕</button></div>
+    <div class="lcards">
+      <button class="lcard" data-h="tour" style="text-align:left;cursor:pointer"><b>▶ Guided tour of this page</b><span>Each control highlighted, step by step.</span></button>
+      <button class="lcard" data-h="#/guide" style="text-align:left;cursor:pointer"><b>How-to guides</b><span>Every routine: daily, weekly, month-end, exports.</span></button>
+      <button class="lcard" data-h="#/start" style="text-align:left;cursor:pointer"><b>Start here</b><span>Set up a blank board: identity, team, products, targets.</span></button>
+      <button class="lcard" data-h="#/learn" style="text-align:left;cursor:pointer"><b>Masterclass</b><span>Every register and column explained, practice and quiz.</span></button>
+    </div>`);
+  el.querySelector("[data-x]").onclick = close;
+  el.addEventListener("click", (e) => {
+    const b = e.target.closest("[data-h]");
+    if (!b) return;
+    close();
+    if (b.dataset.h === "tour") startTour(tourFor(current.path)); else navigate(b.dataset.h);
+  });
+};
+document.body.append(help);
 document.addEventListener("click", (e) => {
   if (e.target.closest("[data-menu]")) document.body.classList.add("nav-open");
   if (e.target.closest("[data-scrim]")) document.body.classList.remove("nav-open");

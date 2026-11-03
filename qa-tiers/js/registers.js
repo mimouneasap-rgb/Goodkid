@@ -7,6 +7,8 @@ import * as E from "./engine.js";
 import { T1_REGISTERS, T2_REGISTERS, LOCKED_LISTS } from "./schema.js";
 import { stackedH } from "./charts.js";
 import { PRACTICE } from "./learn.js";
+import { saveFile } from "./export.js";
+import { DEMO_T1, DEMO_T2 } from "./demo-data.js";
 import { esc, pill, fmtDate, pct, fmtNum, toast, confirmDialog, promptDialog, drawer, download, toCSV, $, $$, today } from "./ui.js";
 
 const has = (v) => v !== "" && v != null;
@@ -225,7 +227,7 @@ export function openEditor({ tier, reg, index = null, prefill = null, onSaved, p
     : `${isNew ? "" : `<button class="btn danger" data-del>Delete</button><button class="btn" data-dup>Duplicate</button>`}
     <span class="spacer"></span><span class="muted" style="font-size:12px">Ctrl + Enter saves</span><button class="btn" data-cancel>Cancel</button><button class="btn primary" data-save>${isNew ? "Add record" : "Save changes"}</button>`;
   const sub = `<div class="meta-row"><span>${esc(sc.no)} · ${esc(sc.title)}</span>${sc.source ? `<span>Source: <b>${esc(sc.source)}</b></span>` : ""}<span>Cream = you type · ƒx = automatic</span></div>`;
-  const { el, close } = drawer({ title: `${practice ? "Practice · " : ""}${isNew ? `New · ${esc(sc.title)}` : `Edit · ${esc(label(rec))}`}`, sub, body, footer, wide: reg === "load" });
+  const { el, close } = drawer({ title: `${practice ? "Practice · " : ""}${isNew ? `New · ${esc(sc.title)}` : `Edit · ${esc(label(rec))}`}`, sub, body, footer, wide: reg === "load", onClose: practice && store.viewing?.kind === "practice" ? () => store.exitView() : undefined });
   const form = $("form", el);
 
   const read = () => {
@@ -362,15 +364,21 @@ function loadPanel(comp, setup) {
 const viewState = {};
 
 export function renderRegister(root, { tier, reg, query = {} }) {
+  // practice events are written for the September 2026 demo: a board holding
+  // other data practises in a read-only sandbox of the demo
+  if (query.practice != null && PRACTICE[+query.practice] && !store.viewing && store.t2.dataset !== "demo-2026-09") {
+    store.enterView(JSON.parse(JSON.stringify(DEMO_T1)), JSON.parse(JSON.stringify(DEMO_T2)), { kind: "practice", label: "Practice sandbox · September 2026 demo" }, { silent: true });
+  }
   const sc = schemaOf(tier, reg);
   const s = store[tier];
   const key = `${tier}.${reg}`;
-  const vs = viewState[key] ??= { q: "", status: "", officer: "", flagged: false, sort: null, dir: 1, limit: 80 };
+  const vs = viewState[key] ??= { q: "", status: "", officer: "", flagged: false, sort: null, dir: 1, limit: 80, by: {}, from: "", to: "", quick: "" };
   if (query.flag) vs.flagged = true;
   const fx = fxSpec(tier, reg);
   const fieldsByKey = Object.fromEntries(sc.fields.map((f) => [f.key, f]));
   const dateKey = sc.dateKey || (fieldsByKey.opened ? "opened" : fieldsByKey.date ? "date" : fieldsByKey.mfg ? "mfg" : null);
 
+  const officersFilter = tier === "t1" && !!fieldsByKey.officer;
   const draw = () => {
     const comp = computeAll(tier, reg);
     const rows = s[reg].map((r, i) => ({ r, c: comp[i], i }));
@@ -392,6 +400,15 @@ export function renderRegister(root, { tier, reg, query = {} }) {
     if (vs.status) list = list.filter((x) => (x.c.live || x.c.status || x.r.status || x.r.att) === vs.status);
     if (vs.officer) list = list.filter((x) => x.r.officer === vs.officer);
     if (vs.flagged) list = list.filter((x) => x.c.check && x.c.check !== "OK");
+    for (const [k, v] of Object.entries(vs.by)) if (v) list = list.filter((x) => String(x.r[k] ?? "") === v);
+    if (dateKey && vs.from) list = list.filter((x) => has(x.r[dateKey]) && x.r[dateKey] >= vs.from);
+    if (dateKey && vs.to) list = list.filter((x) => has(x.r[dateKey]) && x.r[dateKey] <= vs.to);
+    if (vs.quick === "open") list = list.filter((x) => x.c.open);
+    if (vs.quick === "overdue") list = list.filter((x) => x.c.live === "Overdue");
+    if (vs.quick === "month" && dateKey) list = list.filter((x) => has(x.r[dateKey]) && x.r[dateKey] >= mS && x.r[dateKey] <= mE);
+    if (vs.quick === "soon") list = list.filter((x) => x.c.open && has(x.r.due) && E.diffDays(x.r.due, ref) >= 0 && E.diffDays(x.r.due, ref) <= 7);
+    const moreN = Object.values(vs.by).filter(Boolean).length + (vs.from ? 1 : 0) + (vs.to ? 1 : 0);
+    const listFields = sc.fields.filter((f) => (f.list || f.type === "roster") && f.key !== "status" && !(f.key === "officer" && officersFilter));
     const sortKey = vs.sort ?? (sc.sortDesc ? dateKey : null);
     const dir = vs.sort ? vs.dir : sc.sortDesc ? -1 : 1;
     if (sortKey) {
@@ -431,7 +448,9 @@ export function renderRegister(root, { tier, reg, query = {} }) {
       ...(reg === "load" || reg === "dl" || reg === "hd" ? [] : [["Overdue", overdue, overdue ? "R" : "G"]]),
       ...(fresh != null ? [[tier === "t1" ? "Month to date" : "New this month", fresh, ""]] : []),
     ];
-    const officers = tier === "t1" && fieldsByKey.officer ? s.roster.map((o) => o.name) : [];
+    const officers = officersFilter ? s.roster.map((o) => o.name) : [];
+    const valuesOf = (k) => [...new Set(rows.map((x) => x.r[k]).filter(has).map(String))].sort((a, b) => a.localeCompare(b));
+    const quick = [["", "All"], ["open", "Open"], ["overdue", "Overdue"], ...(fieldsByKey.due ? [["soon", "Due ≤ 7 days"]] : []), ...(dateKey ? [["month", tier === "t1" ? "This month" : "Raised this month"]] : [])];
     root.innerHTML = `
       <div class="reg-head">
         <div class="reg-no">${esc(sc.no)}</div>
@@ -453,8 +472,14 @@ export function renderRegister(root, { tier, reg, query = {} }) {
         <select data-status aria-label="Filter by status"><option value="">All statuses</option>${liveValues.map((v) => `<option ${v === vs.status ? "selected" : ""}>${esc(v)}</option>`).join("")}</select>
         ${officers.length ? `<select data-officer aria-label="Filter by officer"><option value="">All officers</option>${officers.map((o) => `<option ${o === vs.officer ? "selected" : ""}>${esc(o)}</option>`).join("")}</select>` : ""}
         <label class="row" style="gap:6px;font-size:13px"><input type="checkbox" data-flagged ${vs.flagged ? "checked" : ""}> Flagged only</label>
+        ${reg === "load" ? "" : `<div class="seg-ctl" role="group" aria-label="Quick filter">${quick.map(([v, l]) => `<button type="button" data-quick="${v}" aria-pressed="${vs.quick === v}">${l}</button>`).join("")}</div>`}
         <span class="spacer"></span><span class="muted" style="font-size:12.5px">${list.length} of ${total} shown · click a row to edit · ƒx columns are automatic</span>
       </div>
+      ${listFields.length || dateKey ? `<details class="fbar card" data-moref ${moreN ? "open" : ""} style="margin-bottom:12px"><summary><span class="fbar-t">⚲ More filters</span>${moreN ? `<span class="badge">${moreN}</span><span class="spacer"></span><button class="btn sm ghost" type="button" data-moreclear>Clear</button>` : `<span class="muted" style="font-size:12.5px">every drop-down field and the date range</span>`}</summary>
+        <div class="fgrid">
+          ${dateKey ? `<label class="fctl"><span>${esc(fieldsByKey[dateKey]?.label || "Date")} from</span><input type="date" data-from value="${esc(vs.from)}"></label><label class="fctl"><span>to</span><input type="date" data-to value="${esc(vs.to)}"></label>` : ""}
+          ${listFields.map((f) => { const vals = valuesOf(f.key); return vals.length ? `<label class="fctl"><span>${esc(f.label)}</span><select data-by="${f.key}"><option value="">All</option>${vals.map((v) => `<option ${vs.by[f.key] === v ? "selected" : ""}>${esc(v)}</option>`).join("")}</select></label>` : ""; }).join("")}
+        </div></details>` : ""}
       <div class="table-wrap"><table class="data"><thead><tr>${head}</tr></thead><tbody>${body || `<tr><td colspan="${cols.length + fx.length}"><div class="empty">No record matches — clear the filters or add a new record.</div></td></tr>`}</tbody></table></div>
       ${list.length > vs.limit ? `<div style="text-align:center;margin-top:12px"><button class="btn" data-more>Show all ${list.length} records</button></div>` : ""}`;
 
@@ -462,14 +487,23 @@ export function renderRegister(root, { tier, reg, query = {} }) {
     $("[data-status]", root).onchange = (e) => { vs.status = e.target.value; draw(); };
     $("[data-officer]", root)?.addEventListener("change", (e) => { vs.officer = e.target.value; draw(); });
     $("[data-flagged]", root).onchange = (e) => { vs.flagged = e.target.checked; draw(); };
+    $$("[data-quick]", root).forEach((b) => b.onclick = () => { vs.quick = b.dataset.quick; draw(); });
+    $("[data-moref]", root)?.addEventListener("change", (e) => {
+      const t = e.target;
+      if (t.dataset.by) vs.by[t.dataset.by] = t.value;
+      if (t.matches("[data-from]")) vs.from = t.value;
+      if (t.matches("[data-to]")) vs.to = t.value;
+      draw();
+    });
+    $("[data-moreclear]", root)?.addEventListener("click", (e) => { e.preventDefault(); vs.by = {}; vs.from = ""; vs.to = ""; draw(); });
     $("[data-flagbtn]", root)?.addEventListener("click", () => { if (flaggedN || vs.flagged) { vs.flagged = !vs.flagged; draw(); } });
     $("[data-more]", root)?.addEventListener("click", () => { vs.limit = Infinity; draw(); });
     $("[data-new]", root).onclick = () => openEditor({ tier, reg, onSaved: draw });
     $("[data-csv]", root).onclick = () => {
       const comp2 = computeAll(tier, reg);
       const csv = toCSV([[...sc.fields.map((f) => f.label), ...fx.map((x) => `fx ${x.label}`)],
-        ...s[reg].map((r, i) => [...sc.fields.map((f) => (f.type === "pct" && has(r[f.key]) ? Math.round(r[f.key] * 100) + "%" : r[f.key] ?? "")), ...fx.map((x) => comp2[i][x.key] ?? "")])]);
-      download(`${tier.toUpperCase()}_${sc.title.replace(/\W+/g, "_")}.csv`, csv, "text/csv");
+        ...list.map(({ r, i }) => [...sc.fields.map((f) => (f.type === "pct" && has(r[f.key]) ? Math.round(r[f.key] * 100) + "%" : r[f.key] ?? "")), ...fx.map((x) => comp2[i][x.key] ?? "")])]);
+      saveFile(`${tier.toUpperCase()}_${sc.title.replace(/\W+/g, "_")}_${today()}.csv`, new Blob(["\ufeff" + csv], { type: "text/csv" }));
     };
     $$("th[data-sort]", root).forEach((th) => th.onclick = () => {
       const k = th.dataset.sort;

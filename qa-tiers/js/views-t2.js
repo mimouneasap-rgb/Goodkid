@@ -4,7 +4,9 @@
 import { store } from "./store.js";
 import * as E from "./engine.js";
 import { T2_REGISTERS, T2_DAILY_FIELDS } from "./schema.js";
-import { hbars, stackedH, donut, ring, line, spark } from "./charts.js";
+import { hbars, stackedH, donut, ring, line, spark, columns } from "./charts.js";
+import { applyFilters, merge, pageFilters, setPageFilters, chartFilters, setChartFilters, filterBar, wireControls, chipsHTML, describe, activeCount, openChartFilter, productName } from "./filters.js";
+import { CHART_DATA, decorateCharts } from "./export.js";
 import { openEditor, inputHTML, readField, wireInputs } from "./registers.js";
 import { esc, pill, fmtDate, fmtLong, fmtMonth, fmtKpi, pct, fmtNum, toast, drawer, modal, fresh, $, $$, dow } from "./ui.js";
 
@@ -63,9 +65,10 @@ export function tier1Escalations() {
 
 /* ── Dashboard ──────────────────────────────────────────── */
 
-export function renderBoard(root) {
+export function renderBoard(root, { filters = null } = {}) {
   root = fresh(root);
-  const s = S(), st = s.setup;
+  const boardF = filters || pageFilters("board");
+  const s = applyFilters("t2", S(), boardF), st = s.setup;
   const comp = E.t2Computed(s);
   const { kpis, other, pulse } = E.t2Kpis(s, comp);
   const cal = E.t2Calendar(s);
@@ -99,7 +102,8 @@ export function renderBoard(root) {
     </div>
   </section>
 
-  <div class="grid split-pulse">
+  ${filters ? "" : filterBar(boardF, { title: "Filter the board", period: false, dims: ["owner", "area", "product", "cls", "source", "dept"], note: "Every KPI, the Q-calendar and the lists below recalculate on the records that pass — e.g. one person's board, or one product's. Registers that do not record a field are counted unfiltered." })}
+  <div class="grid split-pulse" style="margin-top:14px">
     <div class="card card-pad ring-wrap" data-tip="${esc(`**Quality Pulse** = (G + ½A) ÷ (G + A + R)\n= (${pulse.g} + ${pulse.a / 2}) ÷ ${pulse.g + pulse.a + pulse.r}\n≥ 85 % green · ≥ 65 % amber · below that red`)}">
       <div class="ring-label">Quality Pulse</div>
       ${ring(pulse.score, pulse.rag, { size: 150, label: "Quality pulse" })}
@@ -161,6 +165,11 @@ export function renderBoard(root) {
     <p class="muted" style="margin:10px 0 0;font-size:12px">Escalation rule: ${esc(st.escalationRule)} · Board review ${fmtDate(st.reviewDate)}</p>
   </div>`;
 
+  const fb = $("[data-fbar]", root);
+  if (fb) {
+    wireControls(fb, (F) => { setPageFilters("board", F); renderBoard(root); decorateCharts(root.parentElement || root); });
+    $("[data-freset]", fb)?.addEventListener("click", (e) => { e.preventDefault(); setPageFilters("board", {}); renderBoard(root); decorateCharts(root.parentElement || root); });
+  }
   $("[data-asof]", root).onchange = (e) => { if (e.target.value) { store.patch("t2", ["setup", "statusDate"], e.target.value, "Status date"); renderBoard(root); } };
   $("[data-standup]", root).onclick = () => standup(() => renderBoard(root));
   root.addEventListener("click", (e) => {
@@ -380,52 +389,231 @@ export function freezeMonth(after) {
 
 /* ── Analytics ──────────────────────────────────────────── */
 
-export function renderAnalytics(root) {
-  const s = S();
-  const comp = E.t2Computed(s);
-  const cal = E.t2Calendar(s);
-  const IN_PROGRESS = ["In Progress", "Effectiveness Check", "In Course", "In Approval", "In Review", "Under Review", "On Hold"];
-  const mix = ["dev", "capa", "cc", "act", "insp", "rel", "doc", "apqr", "esc"].filter((reg) => s[reg]).map((reg) => {
-    const g = { o: 0, p: 0, c: 0, x: 0 };
-    s[reg].forEach((r, i) => {
-      const c = comp[reg][i];
-      if (c.live === "Overdue") g.x++; else if (!c.open) g.c++; else if (IN_PROGRESS.includes(r.status)) g.p++; else g.o++;
-    });
-    return { label: T2_REGISTERS[reg].short, parts: [{ value: g.o, cls: "f-s1", name: "Open / not started" }, { value: g.p, cls: "f-A", name: "In progress" }, { value: g.x, cls: "f-R", name: "Overdue" }, { value: g.c, cls: "f-G", name: "Closed / done" }] };
-  });
-  const countBy = (reg, key, order) => {
-    const m = new Map((order || []).map((k) => [k, 0]));
-    s[reg].forEach((r) => { if (has(r[key])) m.set(r[key], (m.get(r[key]) || 0) + 1); });
-    return [...m.entries()];
-  };
-  const cls = countBy("dev", "cls", s.lists.DevClass);
-  const clsCls = { Minor: "f-q1", Major: "f-q2", Critical: "f-q3" }; // severity is ordered: one hue, light → dark
-  const days = [1, 2, 3].map((c) => cal.filter((d) => d.code === c).length);
-  const { kpis } = E.t2Kpis(s, comp);
-  const m = +s.setup.month.slice(5, 7) - 1;
-  const pctK = kpis.map((k, i) => ({ k, i })).filter(({ k }) => k.unit === "%");
-  const palette = ["f-s1", "f-s2", "f-s3", "f-s4", "f-s5"];
-  const series = pctK.map(({ k, i }, n) => ({ name: k.name, cls: palette[n % 5], values: s.trend.rows[i].map((v, j) => (j === m && k.actual !== "" ? k.actual : v)) }));
-  const load = s.load.map((r, i) => ({ label: r.member, value: comp.load[i].util || 0, cls: comp.load[i].status === "Overloaded" ? "f-R" : comp.load[i].status === "High load" ? "f-A" : "f-G", tip: `**${r.member}**\n${fmtNum(comp.load[i].workload)} planned (calculated) ÷ ${comp.load[i].available} available = ${pct(comp.load[i].util)}\n${comp.load[i].status}` }));
-  const bars = (pairs, c = "f-s1") => hbars(pairs.filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]).map(([label, value]) => ({ label, value, cls: c })));
-  const card = (no, title, q, body, extra = "") => `<div class="card card-pad"><div class="card-head"><h2><span class="mono" style="color:var(--accent)">${no}</span> ${esc(title)}</h2></div><p class="muted" style="margin:-6px 0 12px;font-size:12.5px">${esc(q)}</p>${body}${extra}</div>`;
+const IN_PROGRESS = ["In Progress", "Effectiveness Check", "In Course", "In Approval", "In Review", "Under Review", "On Hold", "QA Approval"];
+/** One fixed colour per register, the same in every chart (colour follows the entity). */
+export const REG_SLOT = { act: "f-s1", dev: "f-s2", capa: "f-s3", cc: "f-s4", rel: "f-s5", apqr: "f-s6", tasks: "f-s7", insp: "f-s8" };
+const slotOf = (reg) => REG_SLOT[reg] || "f-other";
+const QMS = ["dev", "capa", "cc", "insp", "act", "esc", "doc"];
+const DATE_KEY = { dev: "opened", capa: "opened", cc: "opened", insp: "opened", act: "opened", esc: "opened", doc: "opened", apqr: "opened", rel: "mfg", trn: "date", tasks: "opened" };
+const CLOSE_KEY = { dev: "closed", capa: "closed", cc: "closed", insp: "closed", act: "closed", esc: "closed", doc: "closed", apqr: "closed", rel: "decision", tasks: "closed" };
+const OWNER_KEY = { dev: "owner", capa: "owner", cc: "owner", insp: "owner", act: "owner", esc: "owner", doc: "owner", apqr: "owner", rel: "officer", tasks: "member", trn: "trainer" };
+const legend = (items) => `<div class="chart-legend">${items.map(([cls, name]) => `<span><i class="bg-${cls.slice(2)}"></i>${esc(name)}</span>`).join("")}</div>`;
+const regLabel = (reg) => T2_REGISTERS[reg]?.short || reg;
 
+/** The analytics charts. Each declares the filters that make sense for it and
+ * returns its SVG plus the table behind it (for the CSV export). */
+export const CHARTS = [
+  { id: "mix", title: "Workload by process", q: "Where is work starting but not finishing?", dims: ["owner", "area", "product", "reg"],
+    build({ s, comp }) {
+      const rows = ["dev", "capa", "cc", "act", "insp", "rel", "doc", "apqr", "esc"].filter((reg) => s[reg]).map((reg) => {
+        const g = { o: 0, p: 0, c: 0, x: 0 };
+        s[reg].forEach((r, i) => { const c = comp[reg][i]; if (c.live === "Overdue") g.x++; else if (!c.open) g.c++; else if (IN_PROGRESS.includes(r.status)) g.p++; else g.o++; });
+        return { reg, g };
+      });
+      return {
+        body: stackedH(rows.map(({ reg, g }) => ({ label: regLabel(reg), parts: [{ value: g.o, cls: "f-s1", name: "Open / not started" }, { value: g.p, cls: "f-A", name: "In progress" }, { value: g.x, cls: "f-R", name: "Overdue" }, { value: g.c, cls: "f-G", name: "Closed / done" }] }))),
+        extra: legend([["f-s1", "Open / not started"], ["f-A", "In progress"], ["f-R", "Overdue"], ["f-G", "Closed / done"]]),
+        data: { head: ["Process", "Open / not started", "In progress", "Overdue", "Closed / done", "Total"], rows: rows.map(({ reg, g }) => [regLabel(reg), g.o, g.p, g.x, g.c, g.o + g.p + g.x + g.c]) },
+      };
+    } },
+  { id: "devcls", title: "Deviations by classification", q: "Is the severity mix shifting?", dims: ["owner", "area", "product", "root", "state"],
+    build({ s }) {
+      const order = s.lists.DevClass || ["Minor", "Major", "Critical"];
+      const m = new Map(order.map((k) => [k, 0]));
+      s.dev.forEach((r) => { if (has(r.cls)) m.set(r.cls, (m.get(r.cls) || 0) + 1); });
+      const cls = [...m.entries()];
+      const C = { Minor: "f-q1", Major: "f-q2", Critical: "f-q3" }; // ordered severity: one hue, light → dark
+      return {
+        body: `<div class="row" style="justify-content:space-around">${donut(cls.map(([n, v]) => ({ name: n, value: v, cls: C[n] || "f-other" })), { center: String(s.dev.length), sub: "deviations" })}
+          <div class="chart-legend" style="display:grid">${cls.map(([n, v]) => `<span><i class="bg-${(C[n] || "f-other").slice(2)}"></i>${esc(n)} · <b>${v}</b></span>`).join("")}</div></div>`,
+        data: { head: ["Classification", "Deviations"], rows: cls },
+      };
+    } },
+  { id: "devwhere", title: "Deviations by area", q: "Which area — or product — generates the events?", dims: ["owner", "cls", "product", "root", "state"],
+    build({ s }) {
+      const byArea = s.dev.some((r) => r.area);
+      const m = {};
+      s.dev.forEach((r) => {
+        let k;
+        if (byArea) k = r.area || "No area";
+        else { const full = productName(r.product); k = (full.match(/^(.*?\d+(?:[.,]\d+)?\s*mg)/i)?.[1] || full).replace(/\s+/g, " ") || "No product"; }
+        m[k] = (m[k] || 0) + 1;
+      });
+      const none = byArea ? "No area" : "No product";
+      const pairs = Object.entries(m).sort((a, b) => (a[0] === none) - (b[0] === none) || b[1] - a[1]);
+      return {
+        title: byArea ? "Deviations by area" : "Deviations by product",
+        body: hbars(pairs.map(([label, value]) => ({ label, value, cls: label === none ? "f-other" : "f-s2" }))),
+        data: { head: [byArea ? "Area" : "Product", "Deviations"], rows: pairs },
+      };
+    } },
+  { id: "qdays", title: "Q-calendar days by status", q: "How many days carried an overdue item?", dims: ["owner", "area", "product"],
+    build({ s }) {
+      const cal = E.t2Calendar(s);
+      const days = [1, 2, 3].map((c) => cal.filter((d) => d.code === c).length);
+      return {
+        body: `<div class="row" style="justify-content:space-around">${donut([{ name: "No issue", value: days[0], cls: "f-G" }, { name: "In progress", value: days[1], cls: "f-A" }, { name: "Critical", value: days[2], cls: "f-R" }], { center: String(days[0] + days[1] + days[2]), sub: "days assessed" })}
+          <div class="chart-legend" style="display:grid"><span><i class="bg-G"></i>No issue · <b>${days[0]}</b></span><span><i class="bg-A"></i>In progress · <b>${days[1]}</b></span><span><i class="bg-R"></i>Critical · <b>${days[2]}</b></span></div></div>`,
+        data: { head: ["Date", "Status", ...E.T2_PROCESSES.map((p) => p.label)], rows: cal.filter((d) => d.status).map((d) => [d.date, d.status, ...d.procs.map((p) => p.status || "")]) },
+      };
+    } },
+  { id: "trend", title: "KPI trend, 12 months", q: "Are the % KPIs improving over 3 months?", dims: [],
+    build({ s, comp }) {
+      const { kpis } = E.t2Kpis(s, comp);
+      const m = +s.setup.month.slice(5, 7) - 1;
+      const pctK = kpis.map((k, i) => ({ k, i })).filter(({ k }) => k.unit === "%");
+      const series = pctK.map(({ k, i }, n) => ({ name: k.name, cls: `f-s${(n % 8) + 1}`, values: s.trend.rows[i].map((v, j) => (j === m && k.actual !== "" ? k.actual : v)) }));
+      return {
+        body: line(series, { labels: E.MONTHS, pctAxis: true, current: m, empty: "No KPI history yet — the live month appears once its KPIs have data, and each month-end freeze adds a point" }),
+        extra: legend(series.map((x) => [x.cls, x.name])),
+        data: { head: ["KPI", ...E.MONTHS], rows: series.map((x) => [x.name, ...x.values.map((v) => (v == null || v === "" ? "" : Math.round(v * 1000) / 10 + " %"))]) },
+      };
+    } },
+  { id: "util", title: "QA team utilisation", q: "Who is above the load threshold?", dims: ["owner"],
+    build({ s, comp }) {
+      const load = s.load.map((r, i) => ({ label: r.member, value: comp.load[i].util || 0, cls: comp.load[i].status === "Overloaded" ? "f-R" : comp.load[i].status === "High load" ? "f-A" : "f-G", tip: `**${r.member}**\n${fmtNum(comp.load[i].workload)} planned (calculated) ÷ ${comp.load[i].available} available = ${pct(comp.load[i].util)}\n${comp.load[i].status}` }));
+      return {
+        body: s.load.length ? hbars(load, { fmt: (v) => pct(v), max: Math.max(1.1, ...load.map((l) => l.value)), marks: [{ v: s.setup.highLoad, cls: "thr-a", label: pct(s.setup.highLoad) }, { v: s.setup.overLoad, cls: "thr-r", label: pct(s.setup.overLoad) }] }) : `<div class="empty">Add the team in register 07 · QA load</div>`,
+        data: { head: ["Team member", "Role", "Workload (pd)", "Available (d)", "Utilisation", "Delayed", "Status"], rows: s.load.map((r, i) => [r.member, r.role || "", fmtNum(comp.load[i].workload), comp.load[i].available, pct(comp.load[i].util), comp.load[i].delayed, comp.load[i].status]) },
+      };
+    } },
+  { id: "capasrc", title: "CAPA by source", q: "What feeds the CAPA system?", dims: ["owner", "type", "state"],
+    build({ s }) {
+      const m = new Map((s.lists.CAPASource || []).map((k) => [k, 0]));
+      s.capa.forEach((r) => { if (has(r.source)) m.set(r.source, (m.get(r.source) || 0) + 1); });
+      const pairs = [...m.entries()].filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]);
+      return { body: hbars(pairs.map(([label, value]) => ({ label, value, cls: "f-s3" }))), data: { head: ["Source", "CAPA"], rows: pairs } };
+    } },
+  { id: "root", title: "Root-cause categories", q: "Which cause needs a trend CAPA?", dims: ["owner", "area", "product", "cls", "state"],
+    build({ s }) {
+      const m = new Map((s.lists.RootCause || []).map((k) => [k, 0]));
+      s.dev.forEach((r) => { if (has(r.root)) m.set(r.root, (m.get(r.root) || 0) + 1); });
+      const pairs = [...m.entries()].filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]);
+      return { body: hbars(pairs.map(([label, value]) => ({ label, value, cls: "f-s2" }))), data: { head: ["Root cause", "Deviations"], rows: pairs } };
+    } },
+  { id: "flow", title: "Raised vs closed, 12 weeks", q: "Is the backlog growing or shrinking week by week?", dims: ["reg", "owner", "area", "product"],
+    build({ s }) {
+      const ref = s.setup.statusDate;
+      const weeks = Array.from({ length: 12 }, (_, k) => { const end = E.addDays(ref, -7 * (11 - k)); return [E.addDays(end, -6), end]; });
+      const regs = QMS.filter((r) => s[r]);
+      const count = (key) => weeks.map(([a, b]) => regs.reduce((n, reg) => n + s[reg].filter((r) => has(r[key[reg]]) && r[key[reg]] >= a && r[key[reg]] <= b).length, 0));
+      const raised = count(DATE_KEY), closed = count(CLOSE_KEY);
+      const labels = weeks.map(([, b]) => fmtDate(b).slice(0, 6));
+      const series = [{ name: "Raised", cls: "f-s1", values: raised }, { name: "Closed", cls: "f-s3", values: closed }];
+      return {
+        body: line(series, { labels, empty: "Nothing raised or closed in the last 12 weeks" }),
+        extra: legend([["f-s1", "Raised"], ["f-s3", "Closed"]]) + `<p class="muted" style="margin:6px 0 0;font-size:12px">Weeks end on the as-of date. Registers: ${regs.map(regLabel).join(", ")}.</p>`,
+        data: { head: ["Week from", "Week to", "Raised", "Closed", "Net change"], rows: weeks.map(([a, b], i) => [a, b, raised[i], closed[i], raised[i] - closed[i]]) },
+      };
+    } },
+  { id: "ageing", title: "Ageing of open items", q: "How old is the open backlog, register by register?", dims: ["reg", "owner", "area", "product"],
+    build({ s, comp }) {
+      const ref = s.setup.statusDate;
+      const B = [["0–30 d", "f-a1"], ["31–60 d", "f-a2"], ["61–90 d", "f-a3"], ["> 90 d", "f-a4"]];
+      const rows = [...QMS, "apqr"].filter((r) => s[r]?.length).map((reg) => {
+        const g = [0, 0, 0, 0];
+        s[reg].forEach((r, i) => {
+          if (!comp[reg][i].open || !has(r[DATE_KEY[reg]])) return;
+          const age = E.diffDays(ref, r[DATE_KEY[reg]]);
+          g[age <= 30 ? 0 : age <= 60 ? 1 : age <= 90 ? 2 : 3]++;
+        });
+        return { reg, g };
+      }).filter((x) => x.g.some(Boolean));
+      return {
+        body: rows.length ? stackedH(rows.map(({ reg, g }) => ({ label: regLabel(reg), parts: g.map((v, k) => ({ value: v, cls: B[k][1], name: B[k][0] })) }))) : `<div class="empty">No open item</div>`,
+        extra: legend(B.map(([n, c]) => [c, n])) + `<p class="muted" style="margin:6px 0 0;font-size:12px">Age = as-of date − date raised.</p>`,
+        data: { head: ["Register", ...B.map((b) => b[0]), "Open"], rows: rows.map(({ reg, g }) => [regLabel(reg), ...g, g.reduce((a, b) => a + b, 0)]) },
+      };
+    } },
+  { id: "overdueowner", title: "Overdue items by person", q: "Who needs support to clear the overdue items?", dims: ["reg", "area", "product"],
+    build({ s, comp }) {
+      const m = {};
+      for (const reg of [...QMS, "apqr", "rel", "tasks"]) (s[reg] || []).forEach((r, i) => {
+        if (comp[reg]?.[i]?.live !== "Overdue") return;
+        const o = r[OWNER_KEY[reg]] || "No owner";
+        m[o] ??= { n: 0, by: {} }; m[o].n++; m[o].by[reg] = (m[o].by[reg] || 0) + 1;
+      });
+      const pairs = Object.entries(m).sort((a, b) => b[1].n - a[1].n).slice(0, 14);
+      return {
+        body: hbars(pairs.map(([label, x]) => ({ label, value: x.n, cls: "f-R", tip: `**${label}** · ${x.n} overdue\n${Object.entries(x.by).map(([r, n]) => `${regLabel(r)} ${n}`).join(" · ")}` })), { labelW: 150 }),
+        data: { head: ["Person", "Overdue", ...[...QMS, "apqr", "rel", "tasks"].map(regLabel)], rows: pairs.map(([o, x]) => [o, x.n, ...[...QMS, "apqr", "rel", "tasks"].map((r) => x.by[r] || 0)]) },
+      };
+    } },
+  { id: "ontime", title: "On-time closure by register", q: "Of the items closed, how many met their due date?", dims: ["owner", "area", "product"],
+    build({ s }) {
+      const rows = [...QMS, "apqr", "tasks"].filter((r) => s[r]?.length).map((reg) => {
+        const closed = s[reg].filter((r) => has(r[CLOSE_KEY[reg]]) && has(r.due));
+        const ok = closed.filter((r) => r[CLOSE_KEY[reg]] <= r.due).length;
+        return { reg, n: closed.length, ok, v: closed.length ? ok / closed.length : null };
+      }).filter((x) => x.n);
+      return {
+        body: hbars(rows.map((x) => ({ label: regLabel(x.reg), value: x.v, cls: x.v >= 0.9 ? "f-G" : x.v >= 0.75 ? "f-A" : "f-R", tip: `**${regLabel(x.reg)}**\n${x.ok} of ${x.n} closed on or before the due date (${pct(x.v)})` })), { fmt: (v) => pct(v), max: 1, marks: [{ v: 0.9, cls: "thr-a", label: "90 %" }] }),
+        extra: `<p class="muted" style="margin:6px 0 0;font-size:12px">Green ≥ 90 % · amber ≥ 75 % · red below. Counts closed items that carry a due date.</p>`,
+        data: { head: ["Register", "Closed with a due date", "On time", "On-time rate"], rows: rows.map((x) => [regLabel(x.reg), x.n, x.ok, pct(x.v)]) },
+      };
+    } },
+  { id: "intake", title: "Records raised per month", q: "Which months bring the most new work?", dims: ["owner", "area", "product"],
+    build({ s }) {
+      const y = String(s.trend.year || s.setup.month.slice(0, 4));
+      const regs = ["dev", "capa", "cc", "act"].filter((r) => s[r]);
+      const other = ["insp", "esc", "doc"].filter((r) => s[r]);
+      const cols = E.MONTHS.map((mn, j) => {
+        const mm = `${y}-${String(j + 1).padStart(2, "0")}`;
+        const n = (reg) => s[reg].filter((r) => String(r[DATE_KEY[reg]] || "").startsWith(mm)).length;
+        return { label: `${mn} ${y}`, short: mn, parts: [...regs.map((reg) => ({ value: n(reg), cls: slotOf(reg), name: regLabel(reg) })), { value: other.reduce((a, r) => a + n(r), 0), cls: "f-other", name: "Other (inspections, escalations, documents)" }] };
+      });
+      return {
+        body: columns(cols, { height: 210 }),
+        extra: legend([...regs.map((r) => [slotOf(r), regLabel(r)]), ["f-other", "Other"]]),
+        data: { head: ["Month", ...regs.map(regLabel), "Other"], rows: cols.map((c) => [c.label, ...c.parts.map((p) => p.value)]) },
+      };
+    } },
+];
+
+/** Render one chart on a filtered board, with a cache shared by the page. */
+function chartCard(spec, no, pageF, cache, ownFilters = true) {
+  const own = ownFilters ? chartFilters(spec.id) : {};
+  const F = merge(pageF, own);
+  const key = JSON.stringify(F);
+  let hit = cache.get(key);
+  if (!hit) { const s = applyFilters("t2", S(), F, { comp: cache.baseComp }); hit = { s, comp: s === S() ? cache.baseComp : E.t2Computed(s) }; cache.set(key, hit); }
+  const out = spec.build(hit);
+  CHART_DATA.set(spec.id, { title: out.title || spec.title, ...out.data, filters: describe(F) });
+  const ownN = activeCount({ ...own, period: own.period === "inherit" ? "all" : own.period });
+  return `<div class="card card-pad" data-chart="${spec.id}"><div class="card-head"><h2><span class="mono" style="color:var(--accent)">${no}</span> ${esc(out.title || spec.title)}</h2>
+      ${spec.dims.length ? `<button class="btn sm ghost cf-btn ${ownN ? "on" : ""}" type="button" data-cfilter="${spec.id}" title="Filter this chart">⚲ Filter${ownN ? ` · ${ownN}` : ""}</button>` : ""}</div>
+    <p class="muted" style="margin:-6px 0 8px;font-size:12.5px">${esc(spec.q)}</p>${chipsHTML(F)}${out.body}${out.extra || ""}</div>`;
+}
+
+export function renderAnalytics(root, { filters = null, only = null, ownFilters = true } = {}) {
+  const pageF = filters || pageFilters("analytics");
+  const cache = new Map();
+  cache.baseComp = E.t2Computed(S());
+  const n = activeCount(pageF);
+  const interactive = !filters;
   root.innerHTML = `
-    <div class="page-head"><div><div class="eyebrow">Tier 2 · Analytics</div><h1>Eight live charts</h1><p>Every chart is recalculated from the registers. Hover any bar or point for the figures.</p></div></div>
-    <div class="grid g2">
-      ${card(1, "Workload by process", "Where is work starting but not finishing?", stackedH(mix),
-        `<div class="chart-legend"><span><i class="bg-s1"></i>Open / not started</span><span><i class="bg-A"></i>In progress</span><span><i class="bg-R"></i>Overdue</span><span><i class="bg-G"></i>Closed / done</span></div>`)}
-      ${card(2, "Deviations by classification", "Is the severity mix shifting?", `<div class="row" style="justify-content:space-around">${donut(cls.map(([n, v]) => ({ name: n, value: v, cls: clsCls[n] || "f-s2" })), { center: String(s.dev.length), sub: "deviations" })}
-        <div class="chart-legend" style="display:grid">${cls.map(([n, v]) => `<span><i class="bg-${(clsCls[n] || "f-s2").slice(2)}"></i>${esc(n)} · <b>${v}</b></span>`).join("")}</div></div>`)}
-      ${s.dev.some((r) => r.area)
-        ? card(3, "Deviations by area", "Which area generates the events?", bars(countBy("dev", "area", s.lists.Areas)))
-        : card(3, "Deviations by product", "Which product generates the events? (no area is recorded on these events)", hbars(Object.entries(s.dev.reduce((m, r) => { const full = String(r.product || "").split(" / ")[0].trim(); const k = (full.match(/^(.*?\d+(?:[.,]\d+)?\s*mg)/i)?.[1] || full).replace(/\s+/g, " ") || "No product"; m[k] = (m[k] || 0) + 1; return m; }, {})).sort((a, b) => (a[0] === "No product") - (b[0] === "No product") || b[1] - a[1]).map(([label, value]) => ({ label, value, cls: label === "No product" ? "f-other" : "f-s1" }))))}
-      ${card(4, "Q-calendar days by status", "How many days carried an overdue item?", `<div class="row" style="justify-content:space-around">${donut([{ name: "No issue", value: days[0], cls: "f-G" }, { name: "In progress", value: days[1], cls: "f-A" }, { name: "Critical", value: days[2], cls: "f-R" }], { center: String(days[0] + days[1] + days[2]), sub: "days assessed" })}
-        <div class="chart-legend" style="display:grid"><span><i class="bg-G"></i>No issue · <b>${days[0]}</b></span><span><i class="bg-A"></i>In progress · <b>${days[1]}</b></span><span><i class="bg-R"></i>Critical · <b>${days[2]}</b></span></div></div>`)}
-      ${card(5, "KPI trend, 12 months", "Are the % KPIs improving over 3 months?", line(series, { labels: E.MONTHS, pctAxis: true, current: m }),
-        `<div class="chart-legend">${series.map((x) => `<span><i class="bg-${x.cls.slice(2)}"></i>${esc(x.name)}</span>`).join("")}</div>`)}
-      ${card(6, "QA team utilisation", "Who is above the load threshold?", hbars(load, { fmt: (v) => pct(v), max: Math.max(1.1, ...load.map((l) => l.value)), marks: [{ v: s.setup.highLoad, cls: "thr-a", label: pct(s.setup.highLoad) }, { v: s.setup.overLoad, cls: "thr-r", label: pct(s.setup.overLoad) }] }))}
-      ${card(7, "CAPA by source", "What feeds the CAPA system?", bars(countBy("capa", "source", s.lists.CAPASource)))}
-      ${card(8, "Root-cause categories", "Which cause needs a trend CAPA?", bars(countBy("dev", "root", s.lists.RootCause)))}
-    </div>`;
+    <div class="page-head"><div><div class="eyebrow">Tier 2 · Analytics</div><h1>${CHARTS.length} live charts</h1><p>Every chart is recalculated from the registers. Filter the whole page, or one chart with its ⚲ Filter button; hover any bar or point for the figures; ⤓ exports a chart as PNG, SVG or CSV.</p></div>
+      ${interactive ? `<div class="row"><button class="btn" data-export-all title="Every chart of this page in one ZIP file">⤓ All charts (ZIP)</button></div>` : ""}</div>
+    ${interactive ? filterBar(pageF, { title: "Page filters", dims: ["owner", "area", "product", "cls", "sev", "source", "dept", "state", "reg"], note: "A filter applies to the registers that record that field; the others are counted unfiltered. Period: records raised (or active, closed, due) in the period." }) : ""}
+    <div class="grid g2" style="margin-top:${interactive ? 14 : 0}px">${CHARTS.map((c, i) => (!only || only.includes(c.id) ? chartCard(c, i + 1, pageF, cache, ownFilters) : "")).join("")}</div>`;
+  if (!interactive) return;
+  const fbar = $("[data-fbar]", root);
+  wireControls(fbar, (F) => { setPageFilters("analytics", F); renderAnalytics(root); decorateCharts(root); });
+  $("[data-freset]", root)?.addEventListener("click", (e) => { e.preventDefault(); setPageFilters("analytics", {}); renderAnalytics(root); decorateCharts(root); });
+  root.addEventListener("click", (e) => {
+    const b = e.target.closest("[data-cfilter]");
+    if (!b || !root.contains(b)) return;
+    const spec = CHARTS.find((c) => c.id === b.dataset.cfilter);
+    const card = b.closest(".card");
+    const open = (card) => openChartFilter(card, { id: spec.id, dims: spec.dims, onApply: (F, close) => {
+      setChartFilters(spec.id, F);
+      const tmp = document.createElement("div");
+      tmp.innerHTML = chartCard(spec, CHARTS.indexOf(spec) + 1, pageFilters("analytics"), Object.assign(new Map(), { baseComp: E.t2Computed(S()) }));
+      const next = tmp.firstElementChild;
+      card.replaceWith(next);
+      decorateCharts(next.parentElement);
+      if (!close) open(next);
+    } });
+    open(b.closest(".card"));
+  });
 }

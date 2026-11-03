@@ -1,7 +1,9 @@
 // Setup pages of both boards: identity, rules, roster, KPI targets, the
 // drop-down lists, the month-end roll-over and data backup.
 
-import { store, HAS_REAL, isRealBoard } from "./store.js";
+import { store, HAS_REAL, demoAllowed } from "./store.js";
+import { EDITION } from "./edition.js";
+import { saveFile } from "./export.js";
 import * as E from "./engine.js";
 import { LOCKED_LISTS, LIST_LABELS, T1_REGISTERS, T2_REGISTERS } from "./schema.js";
 import { freezeMonth } from "./views-t2.js";
@@ -132,11 +134,11 @@ function dataCard(tier) {
     <p class="muted" style="margin:0 0 12px;font-size:13px">${store.sync ? "This board is shared: every change is saved for the whole team and appears live on their screens." : "Data is saved in this browser."} Export a backup regularly, or to move the boards to another device. The eQMS stays the GMP record of truth — this board mirrors it.</p>
     <div class="row"><button class="btn" data-export>⬇ Export backup (both tiers)</button>
     <label class="btn">⬆ Import backup<input type="file" accept=".json,application/json" data-import hidden></label>
-    ${HAS_REAL ? `<button class="btn" data-real>Load the El Kendi data (imported 30/10/2026)</button>` : ""}${isRealBoard() ? "" : `<button class="btn" data-reset>Load the September 2026 demo</button>`}<button class="btn danger" data-blank>Start a blank ${label}</button></div></div>`;
+    ${HAS_REAL ? `<button class="btn" data-real>Load the El Kendi data (imported 30/10/2026)</button>` : ""}${demoAllowed() ? `<button class="btn" data-reset>Load the September 2026 demo</button>` : ""}<button class="btn danger" data-blank>${EDITION.start === "blank" && !HAS_REAL ? `Restart a blank ${EDITION.label} ${label}` : `Start a blank ${label}`}</button></div></div>`;
 }
 
 function bindData(root, tier, rerender) {
-  $("[data-export]", root).onclick = () => download(`QA_Tier_Boards_backup_${today()}.json`, store.exportJSON(), "application/json");
+  $("[data-export]", root).onclick = () => saveFile(`QA_Tier_Boards_backup_${today()}.json`, new Blob([store.exportJSON()], { type: "application/json" }));
   $("[data-import]", root).onchange = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -246,7 +248,7 @@ export function renderSetupT2(root) {
     store.log("t2", { reg: "daily", ref: fmtMonth(st.month), action: "delete", changes: [] });
     store.save("t2"); toast("Daily Log cleared");
   };
-  $("[data-version]", root).onclick = () => download(`QA_Tier2_${st.month.slice(0, 7)}.json`, store.exportJSON(), "application/json");
+  $("[data-version]", root).onclick = () => saveFile(`QA_Boards_${st.month.slice(0, 7)}_version.json`, new Blob([store.exportJSON()], { type: "application/json" }));
 }
 
 /* ── Tier 1 setup ───────────────────────────────────────── */

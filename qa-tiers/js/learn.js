@@ -307,16 +307,21 @@ export const MODULES = [
     id: "monthend", no: 6, title: "Month-end & troubleshooting", min: 15,
     lead: "Freeze the month, roll to the next one, and fix the problems you will meet.",
     lessons: [
-      { title: "Month-end roll-over in six steps", blocks: [
+      { title: "Month-end close in ten steps", blocks: [
         cards([
-          { n: 1, title: "Print the board", text: "Dashboard → Print A3 → save as PDF for the Tier 3 pack." },
-          { n: 2, title: "Freeze the KPIs", text: "KPI Trend → ❄ Freeze: every Live value is pasted into the month column." },
-          { n: 3, title: "Roll the month", text: "Setup → Month-end → set the next reporting month. Update the remarks." },
-          { n: 4, title: "Clear the Daily Log", text: "Only overrides, priorities, remarks and attendees of the closed month — if you reuse it." },
-          { n: 5, title: "Keep the registers", text: "Never clear registers. Closed records stay for traceability and trending." },
-          { n: 6, title: "Save a version", text: "Setup → ⬇ Save version: QA_Tier2_<YYYY-MM>.json in the controlled folder." },
+          { n: 1, title: "Clear the flags", text: "Every ⚠ data-check flag fixed in both boards." },
+          { n: 2, title: "Complete the logs", text: "Tier 2 Daily Log and Tier 1 daily logs for every working day." },
+          { n: 3, title: "Fix the as-of date", text: "Last working day of the month — every overdue count uses it." },
+          { n: 4, title: "Write the remarks", text: "Count · trend · escalations · next month's focus." },
+          { n: 5, title: "Freeze the KPIs", text: "Live values pasted into the month column of KPI Trend." },
+          { n: 6, title: "Monthly pack (Word)", text: "Reports → Monthly: commentary, sign-off names, Create." },
+          { n: 7, title: "Chart pictures", text: "Analytics → All charts (ZIP) for the Tier 3 slides." },
+          { n: 8, title: "Archive the boards", text: "A frozen read-only copy in the shared archive." },
+          { n: 9, title: "File the pack", text: "One ZIP for the controlled folder; sign the printed report." },
+          { n: 10, title: "Roll the month", text: "Calendar and ‘this month’ counts move on. Registers are kept." },
         ]),
-        link("Open the month-end panel in Setup", "#/t2/setup"),
+        callout("The <b>Month-end close</b> page runs these steps in order: each one shows whether the boards already show it done, and the team's ticks are shared."),
+        link("Open the month-end close", "#/close"),
       ] },
       { title: "Troubleshooting guide", blocks: [
         table(["Symptom", "Likely cause", "Fix"], [
@@ -326,7 +331,8 @@ export const MODULES = [
           ["Item missing from the dashboard top 5", "Status closed, or no due date", "Check the status; add a due date"],
           ["Value not in the drop-down", "Value not in the list", "＋ Add a value… in the form, or Setup › Lists"],
           ["No trend arrow on a KPI", "Previous month empty in KPI Trend", "Freeze last month, or type its values in KPI Trend"],
-          ["Data lost on another computer", "Data lives in the browser", "Export a backup and import it on the other device"],
+          ["Data lost on another computer", "Data lives in the browser", "Use the shared board, or export a backup and import it on the other device"],
+          ["Need last month's board", "The live board has moved on", "Archive → Open read-only (or open the JSON of the filed pack)"],
         ]),
       ] },
       { title: "Data integrity rules for the board — ALCOA+", blocks: [
@@ -406,27 +412,77 @@ export const MODULES = [
     lessons: [
       { title: "Export any chart as a PNG", blocks: [
         cards([
-          { n: 1, title: "Find the button", text: "Every chart, the Q-calendar and the SQDCP letters carry a ⤓ PNG button in their title bar." },
-          { n: 2, title: "High resolution", text: "The picture is drawn at three times the screen size, in the current theme, with its legend and a footer naming the site and the data date." },
-          { n: 3, title: "Use it", text: "Paste it into a Tier 3 deck, an e-mail or a deviation report — it stays sharp when enlarged." },
+          { n: 1, title: "Find the button", text: "Every chart, the Q-calendar and the SQDCP letters carry a ⤓ Export button in their title bar." },
+          { n: 2, title: "Pick the picture", text: "Screen 2×, high 3× or print 4× (≈ 300 dpi); light print colours or as on screen; card, page, white or transparent background; footer on or off." },
+          { n: 3, title: "Or the drawing / the figures", text: "Copy picture (paste straight into a slide), SVG vector (any size), or CSV — the table behind the chart." },
+          { n: 4, title: "Every chart at once", text: "Analytics → ⤓ All charts (ZIP): every chart as PNG with its CSV." },
         ]),
         callout("Charts use one validated colour palette: eight series colours chosen so each stays distinguishable for colour-blind readers, and the status colours green · amber · red reserved for RAG. Severity (Minor → Major → Critical) is one hue from light to dark."),
         link("Open Analytics", "#/t2/analytics"),
       ] },
-      { title: "The management report (Word)", blocks: [
-        flow([
-          { small: "1", title: "Set the dates", text: "Tier 2 as-of date and Tier 1 board date" },
-          { small: "2", title: "Pick the sections", text: "Summary, KPIs, charts, registers, QA load, Tier 1, data quality" },
-          { small: "3", title: "Create", text: "A .docx built from the live data in seconds" },
-          { small: "4", title: "File it", text: "With the Tier 3 pack, in the controlled folder" },
+      { title: "Filters for every metric", blocks: [
+        table(["Where", "Filters", "Use it for"], [
+          ["Analytics — page", "Period (today … year to date, custom; raised / active / closed / due in it) · person · area · product · classification · severity · source · department · status · register", "One person's, one product's or one area's picture"],
+          ["Analytics — one chart", "⚲ Filter in the chart's title bar, on top of the page filters", "Compare: this month's severity mix beside the all-time one"],
+          ["Dashboard", "Person · area · product · classification · source · department", "Every KPI, the Q-calendar and the top 5 lists for that slice"],
+          ["Registers", "Quick buttons + every drop-down field + date range", "Find, then export exactly what is shown as CSV"],
+          ["Reports", "The same dimensions + the report's period", "A report per product, per area or per person"],
         ]),
-        text("The report opens with a cover and an executive summary (Quality Pulse, board health, what is off target, everything overdue today), then the KPI table with RAG colours, the charts as images, one section per register listing open items overdue first, QA load per person, the Tier 1 board and a data-quality table. It ends with the KPI definitions and sources."),
-        callout("Make it at month-end, before the Tier 3 review — and any day a manager asks “where do we stand?”."),
-        link("Open the report page", "#/report"),
+        callout("The chips under a chart title always say what it shows — and they are in the exported picture too, so a filtered chart never travels without its filter."),
       ] },
       { title: "Practice without touching the data", blocks: [
         text("Every practice event of module 8 opens its form in practice mode. Enter the event, press <b>Check my entry</b>: each field is marked ✓ or ✗ against the answer key, with the expected value beside yours. Nothing is saved — the shared board keeps its data."),
         link("Go to the practice events", "#/learn/practice"),
+      ] },
+    ],
+  },
+  {
+    id: "rhythm", no: 10, title: "Daily, weekly & monthly reporting", min: 20,
+    lead: "Three report rhythms built from the same live boards: the daily report after the stand-up, the weekly review, the monthly management pack.",
+    lessons: [
+      { title: "The reports centre", blocks: [
+        flow([
+          { small: "1", title: "Pick the report", text: "Daily · Weekly review · Monthly pack" },
+          { small: "2", title: "Period & filters", text: "The day, the week ending on, or the month · person, area, product…" },
+          { small: "3", title: "Commentary", text: "Key messages · decisions · support needed · focus" },
+          { small: "4", title: "Sign-off", text: "Prepared · reviewed · approved, document no. & version" },
+          { small: "5", title: "Create / copy", text: "Word document, or the text summary for an e-mail or chat" },
+        ]),
+        table(["Report", "When", "What is in it"], [
+          ["Daily report", "After the 10:30 stand-up", "Tier 1 SQDCP letters and tiles of the day · Q-calendar per process with the reason · meeting, Top 3, remarks · raised today · due today & tomorrow · overdue · escalations · pictures · commentary · sign-off"],
+          ["Weekly review", "Last working day of the week", "Raised and closed per register vs last week · KPIs · Q-calendar & SQDCP week · overdue · due next 7 days · QA load · escalations · 4 charts · commentary · sign-off"],
+          ["Monthly management pack", "Month-end, before Tier 3", "Cover · document control · contents · executive summary · the month vs last month · KPIs · every chart · every register · QA load · Tier 1 · data quality · commentary · sign-off · definitions"],
+        ]),
+        link("Open the reports centre", "#/report"),
+      ] },
+      { title: "Routines and the text summary", blocks: [
+        text("Each daily and weekly report carries its <b>routine</b>: the checklist of the period (Tier 1 log entered, huddle held, red letters actioned, Daily Log, overrides justified, escalations raised, report sent…). Where the boards can tell, the item says so (“✓ the boards show it is done”). The ticks are shared with the team and stamped with the time."),
+        text("The <b>summary to paste</b> is the same report in plain text — KPIs, SQDCP letters, Top 3, what was raised, what is due, what is overdue, your commentary — ready for an e-mail, Teams or WhatsApp. Copy it, or save it as .txt."),
+        callout("Write the commentary as you go: it is saved for that day, week or month, and goes into both the Word document and the summary."),
+      ] },
+    ],
+  },
+  {
+    id: "archive", no: 11, title: "Store the month-end boards", min: 10,
+    lead: "Keep every month exactly as it stood at the close — in the app for the team, and in the controlled folder for the record.",
+    lessons: [
+      { title: "Two copies, two purposes", blocks: [
+        cards([
+          { title: "🗄 In the app — the archive", text: "Close step 8 freezes both boards into the shared archive. Anyone in the team can re-open that month read-only, re-make its report, export its charts." },
+          { title: "📁 In the controlled folder — the pack", text: "Close step 9 makes one ZIP: the Word pack, the chart pictures, every register as CSV, the boards snapshot (JSON) and a README with the filing path." },
+        ]),
+        table(["Step", "Do", "Why"], [
+          ["File", "Controlled folder → QA Tier Boards → YYYY → YYYY-MM Month", "Everyone finds every month in the same place"],
+          ["Sign", "Print the report, sign the sign-off table, keep the signed PDF beside the ZIP", "Attributable, approved record of the review"],
+          ["Freeze", "Never edit a filed pack — re-issue as v1.1 with the reason", "Original and enduring (ALCOA+)"],
+          ["Retain", "As long as the site's document-retention SOP requires", "Inspection-ready trending history"],
+          ["Remember", "The eQMS stays the GMP record of truth", "The boards are a management aid"],
+        ]),
+        link("Open the archive", "#/archive"),
+      ] },
+      { title: "Look back", blocks: [
+        text("Archive → <b>Open read-only</b> shows an archived month on every page — dashboard, registers, analytics, reports — under a navy banner. Nothing can be changed while you look; <b>Return to the live board</b> ends the view. A filed pack's JSON opens the same way with <b>Open a file</b>."),
+        callout("Restoring (rare): Setup → Data & backup → Import backup with the JSON replaces the live boards for everyone."),
       ] },
     ],
   },
@@ -585,7 +641,8 @@ export function renderLearnHome(root) {
         ["Enter every register correctly", "Fill each column of the 16 registers, the Daily Log and QA Load."],
         ["Clear the data checks", "Read the Data Check flags and fix them before 10:00."],
         ["Read the boards", "Explain every tile, colour, letter and KPI."],
-        ["Close the month", "Run the month-end roll-over and keep the history clean."],
+        ["Close the month", "Run the month-end close, make the pack and archive the boards."],
+        ["Report every rhythm", "Daily report, weekly review and monthly pack — filtered, commented and signed."],
       ].map(([t, x], i) => `<div class="lcard"><span class="n">${i + 1}</span><b>${t}</b><span>${x}</span></div>`).join("")}</div></div>
     <div class="modules">${MODULES.map((m) => `<a class="card module ${store.prefs.learned?.[m.id] ? "done" : ""}" href="#/learn/${m.id}">
       <span class="m-no">${store.prefs.learned?.[m.id] ? "✓" : m.no}</span><h3>${esc(m.title)}</h3><p>${esc(m.lead)}</p>

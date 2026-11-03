@@ -52,7 +52,7 @@ export function stackedH(rows, { width = 520, labelW = 120, barH = 20, gap = 9 }
       if (!p.value) continue;
       const w = (p.value / top) * plotW;
       s += `<rect x="${x}" y="${y}" width="${Math.max(1, w - 1.5)}" height="${barH}" rx="4" class="${p.cls}" data-tip="**${esc(r.label)} · ${esc(p.name)}**\n${p.value} of ${total}"/>`;
-      if (w > 22) s += `<text class="seg" x="${x + w / 2}" y="${y + barH / 2 + 4}" text-anchor="middle">${p.value}</text>`;
+      if (w > 22) s += `<text class="seg on-${p.cls.replace("f-", "")}" x="${x + w / 2}" y="${y + barH / 2 + 4}" text-anchor="middle">${p.value}</text>`;
       x += w;
     }
     s += `<text class="val" x="${x + 6}" y="${y + barH / 2 + 4}">${Math.round(total * 10) / 10}</text>`;
@@ -118,9 +118,9 @@ export function ring(score, rag, { size = 132, thick = 12, label = "" } = {}) {
 }
 
 /** Line chart over 12 months: series [{name, values, cls}], target line optional. */
-export function line(series, { labels, width = 640, height = 230, pctAxis = false, target = null, current = -1 } = {}) {
+export function line(series, { labels, width = 640, height = 230, pctAxis = false, target = null, current = -1, empty = "No history yet — freeze a month in KPI Trend" } = {}) {
   const all = series.flatMap((s) => s.values.filter((v) => v != null && v !== ""));
-  if (!all.length) return `<div class="empty">No history yet — freeze a month in KPI Trend</div>`;
+  if (!all.length || (!pctAxis && all.every((v) => !v))) return `<div class="empty">${esc(empty)}</div>`;
   let lo = Math.min(...all, target ?? Infinity), hi = Math.max(...all, target ?? -Infinity);
   if (pctAxis) { lo = Math.max(0, Math.floor((lo - 0.05) * 10) / 10); hi = Math.min(1.1, Math.ceil((hi + 0.03) * 10) / 10); }
   else { lo = 0; hi = niceMax(Math.max(1, hi)).top; }

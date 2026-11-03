@@ -4,7 +4,8 @@
 
 import { DEMO_T1, DEMO_T2 } from "./demo-data.js";
 import { REAL_T1, REAL_T2 } from "./real-data.js";
-import { DEFAULT_ACTIVITIES } from "./engine.js";
+import { DEFAULT_ACTIVITIES, monthEnd } from "./engine.js";
+import { EDITION } from "./edition.js";
 import { ensureKeys, stateFrom } from "./sync.js";
 
 const KEYS = { t1: "qaTiers.t1.v1", t2: "qaTiers.t2.v1", prefs: "qaTiers.prefs.v1" };
@@ -65,8 +66,43 @@ export const HAS_REAL = !!(REAL_T1 && REAL_T2);
 /** Whether the boards hold site data — shipped with this copy, or already on the shared board.
  * A real board never offers the demo, whichever copy of the app opens it. */
 export const isRealBoard = () => HAS_REAL || store.t2?.dataset === "elkendi-2026-10-30" || store.t1?.dataset === "elkendi-2026-10-30";
+/** The September 2026 demo is offered only by a demo edition on a board without site data. */
+export const demoAllowed = () => !isRealBoard() && EDITION.start === "demo";
+/** Where a new board starts when nothing says otherwise. */
+export const DEFAULT_SOURCE = HAS_REAL ? "real" : EDITION.start;
 
-function fresh(tier, source = "real") {
+const T1_REGS = ["dl", "br", "fn", "ac", "hd", "tr"];
+const T2_REGS = ["dev", "capa", "cc", "insp", "rel", "doc", "load", "apqr", "trn", "esc", "tasks", "act"];
+const isoToday = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
+
+/** An empty board for the edition's reporting month: the standard lists,
+ * KPI targets, skills and QA activity catalogue, no records, no people. */
+function blankState(tier) {
+  const s = seedLists(tier, clone(tier === "t1" ? DEMO_T1 : DEMO_T2));
+  const m = EDITION.month, end = monthEnd(m), t = isoToday();
+  const day = t >= m && t <= end ? t : m;
+  if (tier === "t2") {
+    for (const r of T2_REGS) s[r] = [];
+    s.daily = {};
+    s.trend = { year: +m.slice(0, 4), rows: s.trend.rows.map(() => Array(12).fill(null)) };
+    Object.assign(s.setup, { month: m, statusDate: day, reviewDate: end, owner: "", ownerRole: "", remarks: "", otherStatus: "" });
+    s.lists.People = []; s.lists.Products = [];
+    s.activities = clone(DEFAULT_ACTIVITIES);
+    s.tasks = [];
+  } else {
+    for (const r of T1_REGS) s[r] = [];
+    s.roster = []; s.skills = [];
+    Object.assign(s.setup, { selDate: day, lastIncident: "", owner: "" });
+    s.lists.Owners = []; s.lists.Products = [];
+  }
+  s.close = {}; s.routine = {};
+  s.audit = [];
+  s.dataset = `blank-${m.slice(0, 7)}`;
+  return s;
+}
+
+function fresh(tier, source = DEFAULT_SOURCE) {
+  if (source === "blank" || (source === "real" && !HAS_REAL && EDITION.start === "blank")) return blankState(tier);
   const real = source === "real" && HAS_REAL;
   const s = clone(tier === "t1" ? (real ? REAL_T1 : DEMO_T1) : (real ? REAL_T2 : DEMO_T2));
   s.audit = [];
@@ -92,6 +128,10 @@ export const store = {
   listeners: new Set(),
   /** The team sync, once the shared database is connected (see sync.js). */
   sync: null,
+  /** Read-only view of another copy of the boards (an archived month, the
+   * practice sandbox): { kind, label }. The live boards wait in `live`. */
+  viewing: null,
+  live: null,
 
   load() {
     for (const tier of ["t1", "t2"]) {
@@ -102,6 +142,7 @@ export const store = {
     this.prefs = { ...this.prefs, ...(read(KEYS.prefs) || {}) };
   },
   save(tier) {
+    if (tier && this.viewing) { this.listeners.forEach((fn) => fn(tier, "blocked")); return; }
     if (tier) {
       ensureKeys(tier, this[tier]);
       write(KEYS[tier], this[tier]);
@@ -119,18 +160,35 @@ export const store = {
   applyRemote(tier) {
     if (tier === "audit") { this.listeners.forEach((fn) => fn(tier, "remote")); return; }
     if (!this.sync?.ready(tier)) return;
-    const raw = stateFrom(tier, this.sync.remote[tier], this[tier]);
+    const host = this.viewing ? this.live : this; // a teammate's change lands on the live board, not on the view
+    const raw = stateFrom(tier, this.sync.remote[tier], host[tier]);
     this.sync.rebase(tier, raw);
     const next = seedLists(tier, raw);
-    next.audit = this[tier]?.audit || [];
-    this[tier] = ensureKeys(tier, next);
-    write(KEYS[tier], this[tier]);
-    this.sync.push(tier, this[tier]); // lists added by this version, if any
-    this.listeners.forEach((fn) => fn(tier, "remote"));
+    next.audit = host[tier]?.audit || [];
+    host[tier] = ensureKeys(tier, next);
+    write(KEYS[tier], host[tier]);
+    this.sync.push(tier, host[tier]); // lists added by this version, if any
+    if (!this.viewing) this.listeners.forEach((fn) => fn(tier, "remote"));
   },
   onChange(fn) { this.listeners.add(fn); },
 
+  /** Show another copy of the boards, read-only. */
+  enterView(t1, t2, info, { silent = false } = {}) {
+    if (!this.viewing) this.live = { t1: this.t1, t2: this.t2 };
+    this.t1 = seedLists("t1", t1); this.t2 = seedLists("t2", t2);
+    this.viewing = info;
+    if (!silent) this.listeners.forEach((fn) => fn(null, "view"));
+  },
+  /** Back to the live boards (with any teammate changes that arrived meanwhile). */
+  exitView() {
+    if (!this.viewing) return;
+    this.t1 = this.live.t1; this.t2 = this.live.t2;
+    this.viewing = null; this.live = null;
+    this.listeners.forEach((fn) => fn(null, "view"));
+  },
+
   log(tier, entry) {
+    if (this.viewing) return;
     const a = this[tier].audit;
     const row = { ts: new Date().toISOString(), ...entry };
     a.unshift(row);
@@ -170,9 +228,16 @@ export const store = {
     this.save(tier);
   },
 
-  reset(tier, source = "real") { this[tier] = ensureKeys(tier, fresh(tier, source)); this.save(tier); },
+  reset(tier, source = DEFAULT_SOURCE) { this[tier] = ensureKeys(tier, fresh(tier, source)); this.save(tier); },
   /** Empty registers, keeping setup, lists, KPI targets and roster. */
   blank(tier) {
+    if (EDITION.start === "blank" && !HAS_REAL) { // a clean start for the edition month, keeping this board's setup
+      const keep = this[tier];
+      const s = blankState(tier);
+      for (const k of ["setup", "lists", "kpis", "roster", "activities", "skillNames"]) if (keep?.[k] !== undefined) s[k] = clone(keep[k]);
+      if (tier === "t2") s.trend.year = keep?.trend?.year ?? s.trend.year;
+      this[tier] = s; this.save(tier); return;
+    }
     const s = fresh(tier, "real");
     const regs = tier === "t1" ? ["dl", "br", "fn", "ac", "hd", "tr"] : ["dev", "capa", "cc", "insp", "rel", "doc", "apqr", "trn", "esc", "tasks", "act"];
     for (const r of regs) s[r] = [];
