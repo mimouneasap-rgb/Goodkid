@@ -9,7 +9,6 @@ import { T1_REGISTERS, T2_REGISTERS, T2_ORDER, T1_ORDER } from "./schema.js";
 import { ring } from "./charts.js";
 import { esc, pct, toast, confirmDialog, fresh, $, $$ } from "./ui.js";
 
-const enc = (o) => encodeURIComponent(JSON.stringify(o));
 const cards = (items, cls = "") => ({ type: "cards", items, cls });
 const table = (head, rows) => ({ type: "table", head, rows });
 const callout = (html, cls = "") => ({ type: "callout", html, cls });
@@ -401,30 +400,66 @@ export const MODULES = [
       ] },
     ],
   },
+  {
+    id: "reports", no: 9, title: "Reports & exports", min: 10,
+    lead: "Take the boards to Tier 3: every chart as a high-resolution picture, and the full management report as a Word document.",
+    lessons: [
+      { title: "Export any chart as a PNG", blocks: [
+        cards([
+          { n: 1, title: "Find the button", text: "Every chart, the Q-calendar and the SQDCP letters carry a ⤓ PNG button in their title bar." },
+          { n: 2, title: "High resolution", text: "The picture is drawn at three times the screen size, in the current theme, with its legend and a footer naming the site and the data date." },
+          { n: 3, title: "Use it", text: "Paste it into a Tier 3 deck, an e-mail or a deviation report — it stays sharp when enlarged." },
+        ]),
+        callout("Charts use one validated colour palette: eight series colours chosen so each stays distinguishable for colour-blind readers, and the status colours green · amber · red reserved for RAG. Severity (Minor → Major → Critical) is one hue from light to dark."),
+        link("Open Analytics", "#/t2/analytics"),
+      ] },
+      { title: "The management report (Word)", blocks: [
+        flow([
+          { small: "1", title: "Set the dates", text: "Tier 2 as-of date and Tier 1 board date" },
+          { small: "2", title: "Pick the sections", text: "Summary, KPIs, charts, registers, QA load, Tier 1, data quality" },
+          { small: "3", title: "Create", text: "A .docx built from the live data in seconds" },
+          { small: "4", title: "File it", text: "With the Tier 3 pack, in the controlled folder" },
+        ]),
+        text("The report opens with a cover and an executive summary (Quality Pulse, board health, what is off target, everything overdue today), then the KPI table with RAG colours, the charts as images, one section per register listing open items overdue first, QA load per person, the Tier 1 board and a data-quality table. It ends with the KPI definitions and sources."),
+        callout("Make it at month-end, before the Tier 3 review — and any day a manager asks “where do we stand?”."),
+        link("Open the report page", "#/report"),
+      ] },
+      { title: "Practice without touching the data", blocks: [
+        text("Every practice event of module 8 opens its form in practice mode. Enter the event, press <b>Check my entry</b>: each field is marked ✓ or ✗ against the answer key, with the expected value beside yours. Nothing is saved — the shared board keeps its data."),
+        link("Go to the practice events", "#/learn/practice"),
+      ] },
+    ],
+  },
 ];
 
 /* ── Practice & quiz data ───────────────────────────────── */
 
-const PRACTICE = [
-  { when: "14 Oct", text: "A Major deviation is raised: tablet hardness out of trend at compression start-up, batch B2610-03. Owner QA Officer 1, due 13-Nov.",
-    answer: "Register 01 · No. from eQMS · 14-Oct-26 · ‘Tablet hardness OOT at compression start-up’ · Compression · ONC-T01 / B2610-03 · Major · Under investigation · QA Officer 1 · Open · due 13-Nov-26 · closure blank.",
-    href: `#/t2/reg/dev?new=1&prefill=${enc({ opened: "2026-10-14", desc: "Tablet hardness OOT at compression start-up", area: "Compression", product: "ONC-T01 / B2610-03", cls: "Major", root: "Under investigation", owner: "QA Officer 1", status: "Open", due: "2026-11-13", capa: "No", esc: "No" })}` },
-  { when: "15 Oct", text: "QA approves the closure of deviation DEV-26-052 today.",
-    answer: "Register 01 · find DEV-26-052 → Status = Closed · Closure Date = 15-Oct-26. Check ƒx Closed On Time and Data Check = OK.", href: "#/t2/reg/dev?id=DEV-26-052" },
-  { when: "14 Oct", text: "Internal audit IA-26-10 requires a CAPA: retrain packaging staff on line clearance WI-PK-033, due 30-Nov.",
-    answer: "Register 02 · No. from eQMS · 14-Oct-26 · Audit · IA-26-10 · ‘Retrain packaging staff on line clearance WI-PK-033’ · Corrective · Packaging · Open · due 30-Nov-26 · Effectiveness = Pending.",
-    href: `#/t2/reg/capa?new=1&prefill=${enc({ opened: "2026-10-14", source: "Audit", link: "IA-26-10", desc: "Retrain packaging staff on line clearance WI-PK-033", type: "Corrective", owner: "Packaging", status: "Open", due: "2026-11-30", eff: "Pending" })}` },
-  { when: "14 Oct", text: "Gemba walk: uncontrolled copy of WI-PK-033 at packaging line 2. Copy removed. Supervisor to verify all lines by 17-Oct.",
-    answer: "Register 04 · INS-1014-1 · 14-Oct-26 · Packaging · your name · ‘Uncontrolled copy of WI-PK-033 at line 2 workstation’ · Documentation · Medium · ‘Copy removed, line briefed’ · Packaging Supervisor · Open · due 17-Oct-26.",
-    href: `#/t2/reg/insp?new=1&prefill=${enc({ id: "INS-1014-1", opened: "2026-10-14", area: "Packaging", inspector: "QA Officer 1", desc: "Uncontrolled copy of WI-PK-033 at line 2 workstation", cat: "Documentation", sev: "Medium", action: "Copy removed, line briefed", owner: "Packaging Supervisor", status: "Open", due: "2026-10-17" })}` },
-  { when: "17 Oct", text: "Batch B2610-05 released. Manufacture ended 12-Oct, BMR received 13-Oct, CoA 16-Oct, one BMR correction.",
-    answer: "Register 05 · B2610-05 · product · Mfg 12-Oct · BMR 13-Oct · CoA 16-Oct · Released · decision 17-Oct · errors 1 · RFT No · releasing officer. ƒx lead time 5 d; ‘Released Late’ depends on the Setup target.",
-    href: `#/t2/reg/rel?new=1&prefill=${enc({ id: "B2610-05", product: "ONC-T01 Tab 500 mg", mfg: "2026-10-12", bmr: "2026-10-13", coa: "2026-10-16", status: "Released", decision: "2026-10-17", errors: 1, rft: "No", officer: "Release Officer" })}` },
-  { when: "Oct", text: "QA Officer 2 will be on leave three days this month.",
-    answer: "Register 07 · QA Officer 2 row → Planned leave = 3 (until the days are logged as Leave in the Tier 1 daily log). ƒx Available Days and Utilisation recalculate; check the Load Status.", href: "#/t2/reg/load?id=QA%20Officer%202" },
-  { when: "14 Oct", text: "The team decides CAPA is Critical today: a vendor delay needs Tier 3 support.",
-    answer: "Daily Log 14-Oct → Override CAPA = Critical · Escalated to Tier 3 = Yes · reason in Remarks. Register 10 · ESC-26-xxx · 14-Oct-26 · CAPA · CAPA number · ‘Vendor delay blocks CAPA’ · ‘Purchasing decision on alternative vendor’ · Site Quality Head · owner · Open · response due date.",
-    href: "#/t2/calendar?day=2026-10-14", href2: `#/t2/reg/esc?new=1&prefill=${enc({ opened: "2026-10-14", source: "CAPA", desc: "Vendor delay blocks CAPA", support: "Purchasing decision on alternative vendor", to: "Site Quality Head", owner: "QA Lead", status: "Open", due: "2026-10-21" })}` },
+/** Practice events. Each opens its form in practice mode: the trainee enters
+ * the event, "Check my entry" marks each field against `expect`, nothing is
+ * saved. Matchers: { eq } exact value, { has } contains (case-insensitive),
+ * { any: true } any value, { empty: true } left blank. */
+export const PRACTICE = [
+  { when: "14 Oct", reg: "dev", text: "A Major deviation is raised: tablet hardness out of trend at compression start-up, batch B2610-03. Owner: the QA officer on the line. Due 13-Nov.",
+    answer: "Register 01 · No. from the eQMS · 14-Oct-26 · ‘Tablet hardness OOT at compression start-up’ · the compression room · product / B2610-03 · Major · Under investigation · owner · Open · due 13-Nov-26 · closure blank.",
+    expect: { opened: { eq: "2026-10-14" }, desc: { has: "hardness" }, area: { has: "compress" }, product: { has: "B2610-03" }, cls: { eq: "Major" }, root: { eq: "Under investigation" }, owner: { any: true }, status: { eq: "Open" }, due: { eq: "2026-11-13" }, closed: { empty: true } } },
+  { when: "15 Oct", reg: "dev", edit: "firstOpen", text: "QA approves the closure of an open deviation today. Close the first open one in the register.",
+    answer: "Register 01 · open record → Status = Closed · Closure Date = 15-Oct-26. ƒx Closed On Time and Data Check = OK follow.",
+    expect: { status: { eq: "Closed" }, closed: { eq: "2026-10-15" } } },
+  { when: "14 Oct", reg: "capa", text: "Internal audit IA-26-10 requires a CAPA: retrain packaging staff on line clearance WI-PK-033, due 30-Nov.",
+    answer: "Register 02 · No. from the eQMS · 14-Oct-26 · Audit · IA-26-10 · ‘Retrain packaging staff on line clearance WI-PK-033’ · Corrective · owner · Open · due 30-Nov-26 · Effectiveness = Pending.",
+    expect: { opened: { eq: "2026-10-14" }, source: { eq: "Audit" }, link: { has: "IA-26-10" }, desc: { has: "retrain" }, type: { eq: "Corrective" }, status: { eq: "Open" }, due: { eq: "2026-11-30" }, eff: { eq: "Pending" } } },
+  { when: "14 Oct", reg: "insp", text: "Gemba walk: uncontrolled copy of WI-PK-033 at packaging line 2. Copy removed. The packaging supervisor verifies all lines by 17-Oct.",
+    answer: "Register 04 · INS-1014-1 · 14-Oct-26 · packaging area · your name · ‘Uncontrolled copy of WI-PK-033 at line 2 workstation’ · Documentation · Medium · ‘Copy removed, line briefed’ · supervisor · Open · due 17-Oct-26.",
+    expect: { id: { has: "INS-1014" }, opened: { eq: "2026-10-14" }, area: { has: "packag" }, inspector: { any: true }, desc: { has: "WI-PK-033" }, cat: { eq: "Documentation" }, sev: { eq: "Medium" }, action: { any: true }, owner: { any: true }, status: { eq: "Open" }, due: { eq: "2026-10-17" } } },
+  { when: "17 Oct", reg: "rel", text: "Batch B2610-05 is released today. Manufacture ended 12-Oct, BMR received 13-Oct, CoA 16-Oct, one BMR correction.",
+    answer: "Register 05 · B2610-05 · product · Mfg 12-Oct · BMR 13-Oct · CoA 16-Oct · Released · decision 17-Oct · errors 1 · RFT No · releasing officer. ƒx lead time 5 d.",
+    expect: { id: { eq: "B2610-05" }, product: { any: true }, mfg: { eq: "2026-10-12" }, bmr: { eq: "2026-10-13" }, coa: { eq: "2026-10-16" }, status: { eq: "Released" }, decision: { eq: "2026-10-17" }, errors: { eq: 1 }, rft: { eq: "No" }, officer: { any: true } } },
+  { when: "Oct", reg: "load", edit: "first", text: "A team member will be on leave three days this month, not yet in the Tier 1 log. Record it on the first row of QA Load.",
+    answer: "Register 07 · that person's row → Planned leave not yet logged = 3. ƒx Available Days and Utilisation recalculate; check the Load Status.",
+    expect: { absence: { eq: 3 } } },
+  { when: "14 Oct", reg: "esc", text: "A vendor delay blocks a CAPA: the team escalates it to Tier 3 for a purchasing decision on an alternative vendor.",
+    answer: "Register 10 · ESC-… · 14-Oct-26 · CAPA · the CAPA number · ‘Vendor delay blocks CAPA’ · ‘Purchasing decision on alternative vendor’ · Tier 3 contact · owner · Open · response due date. On the Daily Log of 14-Oct: Override CAPA = Critical, Escalated to Tier 3 = Yes.",
+    expect: { opened: { eq: "2026-10-14" }, source: { eq: "CAPA" }, link: { has: "CAPA" }, desc: { has: "vendor" }, support: { has: "purchas" }, to: { any: true }, owner: { any: true }, status: { eq: "Open" }, due: { any: true } } },
 ];
 
 const QUIZ = [
@@ -507,10 +542,9 @@ function flaggedBlock() {
 }
 
 function practiceBlock() {
-  const shared = !!store.sync, real = store.t2.dataset !== "demo-2026-09";
-  return `${real ? `<div class="callout warn">These events are written for the <b>September 2026 demo</b> (DEV-26-052, QA Officer 2…). ${shared ? "This board is shared with your team and holds real data: <b>do not practise on it</b> — open the app from a copy that is not shared, then Setup › Load the September 2026 demo." : "Load it first: Setup › Load the September 2026 demo, and Load the El Kendi data again when you are done."}</div>` : ""}<div class="callout">Set up the demo first: <b>Reporting month = 01-Oct-2026 · Data as of = 17-Oct-2026</b>. <button class="btn sm primary" data-practice-setup ${shared && real ? "disabled" : ""}>Set it up for me</button> <span class="muted">(Reload the demo in Setup afterwards to get September back.)</span></div>
-    <div class="stack" style="gap:10px">${PRACTICE.map((p, i) => `<div class="card practice"><div class="when">${esc(p.when)}</div><div><b>Event ${i + 1}</b><p style="margin:2px 0 0">${esc(p.text)}</p><div class="answer" hidden data-ans="${i}"><b>Answer key · </b>${esc(p.answer)}</div></div>
-      <div class="row" style="justify-content:flex-end"><a class="btn sm primary" href="${p.href}">Do it ›</a>${p.href2 ? `<a class="btn sm" href="${p.href2}">Escalation ›</a>` : ""}<button class="btn sm" data-show="${i}">Answer</button></div></div>`).join("")}</div>`;
+  return `<div class="callout"><b>Practice mode.</b> Each event opens its form in practice mode: enter the event, then press <b>Check my entry</b> — every field is marked right or wrong against the answer key. <b>Nothing is saved</b>, so you can practise on the live board without touching its data.</div>
+    <div class="stack" style="gap:10px">${PRACTICE.map((p, i) => `<div class="card practice"><div class="when">${esc(p.when)}</div><div><b>Event ${i + 1} · ${esc((T2_REGISTERS[p.reg] || {}).title || "")}</b><p style="margin:2px 0 0">${esc(p.text)}</p><div class="answer" hidden data-ans="${i}"><b>Answer key · </b>${esc(p.answer)}</div></div>
+      <div class="row" style="justify-content:flex-end"><a class="btn sm primary" href="#/t2/reg/${p.reg}?practice=${i}">Practise ›</a><button class="btn sm" data-show="${i}">Answer</button></div></div>`).join("")}</div>`;
 }
 
 function quizBlock() {
@@ -556,7 +590,7 @@ export function renderLearnHome(root) {
     <div class="modules">${MODULES.map((m) => `<a class="card module ${store.prefs.learned?.[m.id] ? "done" : ""}" href="#/learn/${m.id}">
       <span class="m-no">${store.prefs.learned?.[m.id] ? "✓" : m.no}</span><h3>${esc(m.title)}</h3><p>${esc(m.lead)}</p>
       <div class="m-foot"><span>${m.lessons.length} lessons</span><span>${m.min} min</span></div></a>`).join("")}</div>
-    <div class="callout" style="margin-top:16px">${store.t2.dataset === "demo-2026-09" ? "The boards hold the September 2026 demo data — practise freely." : "The boards hold real El Kendi data. The practice events in module 8 are written for the September 2026 demo: do them on a copy of the app that is not shared with the team."}</div>`;
+    <div class="callout" style="margin-top:16px">The practice events of module 8 open their forms in <b>practice mode</b>: you enter the event, the app checks every field against the answer key, and nothing is saved — the boards keep their data.</div>`;
 }
 
 export function renderModule(root, id) {
@@ -622,10 +656,6 @@ export function renderModule(root, id) {
       const y = scrollY; renderModule(root, id); scrollTo(0, y);
     }
     if (e.target.closest("[data-quizreset]")) { store.prefs.quiz = {}; store.save(); const y = scrollY; renderModule(root, id); scrollTo(0, y); }
-    if (e.target.closest("[data-practice-setup]")) {
-      const ok = await confirmDialog({ title: "Set up the practice?", body: "<p>Tier 2 Setup becomes <b>Reporting month = October 2026</b> and <b>Data as of = 17-Oct-2026</b>. The registers are kept.</p>", ok: "Set it up" });
-      if (ok) { store.patch("t2", ["setup", "month"], "2026-10-01", "Reporting month"); store.patch("t2", ["setup", "statusDate"], "2026-10-17", "Status date"); toast("Practice set up: October 2026, as of 17-Oct"); }
-    }
   });
 }
 

@@ -62,6 +62,9 @@ const REAL_ROLES = {
 /** A new board: the imported El Kendi data (default) or the September 2026 demo. */
 /** Whether this copy of the app carries site data (see real-data.js). */
 export const HAS_REAL = !!(REAL_T1 && REAL_T2);
+/** Whether the boards hold site data — shipped with this copy, or already on the shared board.
+ * A real board never offers the demo, whichever copy of the app opens it. */
+export const isRealBoard = () => HAS_REAL || store.t2?.dataset === "elkendi-2026-10-30" || store.t1?.dataset === "elkendi-2026-10-30";
 
 function fresh(tier, source = "real") {
   const real = source === "real" && HAS_REAL;

@@ -25,7 +25,7 @@ export function hbars(items, { width = 420, fmt = (v) => v, max, marks = [], lab
   items.forEach((it, i) => {
     const y = i * (barH + gap) + 4;
     const w = Math.max(it.value > 0 ? 3 : 0, x(it.value) - labelW);
-    s += `<text class="lbl" x="${labelW - 8}" y="${y + barH / 2 + 4}" text-anchor="end">${esc(trunc(it.label, 20))}</text>`;
+    s += `<text class="lbl" x="${labelW - 8}" y="${y + barH / 2 + 4}" text-anchor="end">${esc(trunc(it.label, Math.floor((labelW - 12) / 6.6)))}</text>`;
     s += `<rect x="${labelW}" y="${y}" width="${plotW}" height="${barH}" rx="5" class="f-N" opacity=".12"/>`;
     s += `<rect x="${labelW}" y="${y}" width="${w}" height="${barH}" rx="5" class="${it.cls || "f-s1"}" data-tip="${esc(it.tip || `**${it.label}**\n${fmt(it.value)}`)}"/>`;
     s += `<text class="val" x="${labelW + w + 6}" y="${y + barH / 2 + 4}">${esc(fmt(it.value))}</text>`;
@@ -52,7 +52,7 @@ export function stackedH(rows, { width = 520, labelW = 120, barH = 20, gap = 9 }
       if (!p.value) continue;
       const w = (p.value / top) * plotW;
       s += `<rect x="${x}" y="${y}" width="${Math.max(1, w - 1.5)}" height="${barH}" rx="4" class="${p.cls}" data-tip="**${esc(r.label)} · ${esc(p.name)}**\n${p.value} of ${total}"/>`;
-      if (w > 18) s += `<text x="${x + w / 2}" y="${y + barH / 2 + 4}" text-anchor="middle" style="fill:#fff;font-weight:600">${p.value}</text>`;
+      if (w > 22) s += `<text class="seg" x="${x + w / 2}" y="${y + barH / 2 + 4}" text-anchor="middle">${p.value}</text>`;
       x += w;
     }
     s += `<text class="val" x="${x + 6}" y="${y + barH / 2 + 4}">${Math.round(total * 10) / 10}</text>`;
@@ -142,10 +142,10 @@ export function line(series, { labels, width = 640, height = 230, pctAxis = fals
       if (v == null || v === "") { pen = false; return; }
       d += `${pen ? "L" : "M"}${x(i)},${y(v)}`; pen = true;
     });
-    s += `<path d="${d}" fill="none" stroke-width="2.4" class="${se.cls.replace("f-", "st-")}" stroke-linejoin="round" stroke-linecap="round"/>`;
+    s += `<path d="${d}" fill="none" stroke-width="2" class="${se.cls.replace("f-", "st-")}" stroke-linejoin="round" stroke-linecap="round"/>`;
     se.values.forEach((v, i) => {
       if (v == null || v === "") return;
-      s += `<circle cx="${x(i)}" cy="${y(v)}" r="${i === current ? 5 : 3.5}" class="${se.cls}" stroke="var(--surface)" stroke-width="1.5" data-tip="**${esc(se.name)} · ${esc(labels[i])}**\n${fmt(v)}"/>`;
+      s += `<circle cx="${x(i)}" cy="${y(v)}" r="${i === current ? 5.5 : 4}" class="${se.cls}" stroke="var(--surface)" stroke-width="2" data-tip="**${esc(se.name)} · ${esc(labels[i])}**\n${fmt(v)}"/>`;
     });
   }
   return `${s}</svg>`;

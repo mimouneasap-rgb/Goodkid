@@ -94,7 +94,7 @@ export function renderBoard(root) {
       </div>
       <div style="display:grid;gap:10px;justify-items:end">
         <div class="ladder"><div>Tier 1<small>08:30 huddle</small></div><div class="on">Tier 2<small>you are here</small></div><div>Tier 3<small>site management</small></div></div>
-        <div class="row"><button class="btn primary" data-standup>▶ Run the 15-min stand-up</button></div>
+        <div class="row"><button class="btn primary" data-standup>▶ Run the 15-min stand-up</button><a class="btn" href="#/report">⤓ Word report</a></div>
       </div>
     </div>
   </section>
@@ -385,13 +385,13 @@ export function renderAnalytics(root) {
   const comp = E.t2Computed(s);
   const cal = E.t2Calendar(s);
   const IN_PROGRESS = ["In Progress", "Effectiveness Check", "In Course", "In Approval", "In Review", "Under Review", "On Hold"];
-  const mix = ["dev", "capa", "cc", "insp", "rel", "doc", "apqr", "esc"].map((reg) => {
+  const mix = ["dev", "capa", "cc", "act", "insp", "rel", "doc", "apqr", "esc"].filter((reg) => s[reg]).map((reg) => {
     const g = { o: 0, p: 0, c: 0, x: 0 };
     s[reg].forEach((r, i) => {
       const c = comp[reg][i];
       if (c.live === "Overdue") g.x++; else if (!c.open) g.c++; else if (IN_PROGRESS.includes(r.status)) g.p++; else g.o++;
     });
-    return { label: T2_REGISTERS[reg].short, parts: [{ value: g.o, cls: "f-s2", name: "Open / not started" }, { value: g.p, cls: "f-A", name: "In progress" }, { value: g.x, cls: "f-R", name: "Overdue" }, { value: g.c, cls: "f-G", name: "Closed / done" }] };
+    return { label: T2_REGISTERS[reg].short, parts: [{ value: g.o, cls: "f-s1", name: "Open / not started" }, { value: g.p, cls: "f-A", name: "In progress" }, { value: g.x, cls: "f-R", name: "Overdue" }, { value: g.c, cls: "f-G", name: "Closed / done" }] };
   });
   const countBy = (reg, key, order) => {
     const m = new Map((order || []).map((k) => [k, 0]));
@@ -399,7 +399,7 @@ export function renderAnalytics(root) {
     return [...m.entries()];
   };
   const cls = countBy("dev", "cls", s.lists.DevClass);
-  const clsCls = { Minor: "f-G", Major: "f-A", Critical: "f-R" };
+  const clsCls = { Minor: "f-q1", Major: "f-q2", Critical: "f-q3" }; // severity is ordered: one hue, light → dark
   const days = [1, 2, 3].map((c) => cal.filter((d) => d.code === c).length);
   const { kpis } = E.t2Kpis(s, comp);
   const m = +s.setup.month.slice(5, 7) - 1;
@@ -414,16 +414,18 @@ export function renderAnalytics(root) {
     <div class="page-head"><div><div class="eyebrow">Tier 2 · Analytics</div><h1>Eight live charts</h1><p>Every chart is recalculated from the registers. Hover any bar or point for the figures.</p></div></div>
     <div class="grid g2">
       ${card(1, "Workload by process", "Where is work starting but not finishing?", stackedH(mix),
-        `<div class="chart-legend"><span><i class="bg-s2"></i>Open / not started</span><span><i class="bg-A"></i>In progress</span><span><i class="bg-R"></i>Overdue</span><span><i class="bg-G"></i>Closed / done</span></div>`)}
+        `<div class="chart-legend"><span><i class="bg-s1"></i>Open / not started</span><span><i class="bg-A"></i>In progress</span><span><i class="bg-R"></i>Overdue</span><span><i class="bg-G"></i>Closed / done</span></div>`)}
       ${card(2, "Deviations by classification", "Is the severity mix shifting?", `<div class="row" style="justify-content:space-around">${donut(cls.map(([n, v]) => ({ name: n, value: v, cls: clsCls[n] || "f-s2" })), { center: String(s.dev.length), sub: "deviations" })}
         <div class="chart-legend" style="display:grid">${cls.map(([n, v]) => `<span><i class="bg-${(clsCls[n] || "f-s2").slice(2)}"></i>${esc(n)} · <b>${v}</b></span>`).join("")}</div></div>`)}
-      ${card(3, "Deviations by area", "Which area generates the events?", bars(countBy("dev", "area", s.lists.Areas), "f-s2"))}
+      ${s.dev.some((r) => r.area)
+        ? card(3, "Deviations by area", "Which area generates the events?", bars(countBy("dev", "area", s.lists.Areas)))
+        : card(3, "Deviations by product", "Which product generates the events? (no area is recorded on these events)", hbars(Object.entries(s.dev.reduce((m, r) => { const full = String(r.product || "").split(" / ")[0].trim(); const k = (full.match(/^(.*?\d+(?:[.,]\d+)?\s*mg)/i)?.[1] || full).replace(/\s+/g, " ") || "No product"; m[k] = (m[k] || 0) + 1; return m; }, {})).sort((a, b) => (a[0] === "No product") - (b[0] === "No product") || b[1] - a[1]).map(([label, value]) => ({ label, value, cls: label === "No product" ? "f-other" : "f-s1" }))))}
       ${card(4, "Q-calendar days by status", "How many days carried an overdue item?", `<div class="row" style="justify-content:space-around">${donut([{ name: "No issue", value: days[0], cls: "f-G" }, { name: "In progress", value: days[1], cls: "f-A" }, { name: "Critical", value: days[2], cls: "f-R" }], { center: String(days[0] + days[1] + days[2]), sub: "days assessed" })}
         <div class="chart-legend" style="display:grid"><span><i class="bg-G"></i>No issue · <b>${days[0]}</b></span><span><i class="bg-A"></i>In progress · <b>${days[1]}</b></span><span><i class="bg-R"></i>Critical · <b>${days[2]}</b></span></div></div>`)}
       ${card(5, "KPI trend, 12 months", "Are the % KPIs improving over 3 months?", line(series, { labels: E.MONTHS, pctAxis: true, current: m }),
         `<div class="chart-legend">${series.map((x) => `<span><i class="bg-${x.cls.slice(2)}"></i>${esc(x.name)}</span>`).join("")}</div>`)}
       ${card(6, "QA team utilisation", "Who is above the load threshold?", hbars(load, { fmt: (v) => pct(v), max: Math.max(1.1, ...load.map((l) => l.value)), marks: [{ v: s.setup.highLoad, cls: "thr-a", label: pct(s.setup.highLoad) }, { v: s.setup.overLoad, cls: "thr-r", label: pct(s.setup.overLoad) }] }))}
-      ${card(7, "CAPA by source", "What feeds the CAPA system?", bars(countBy("capa", "source", s.lists.CAPASource), "f-s4"))}
-      ${card(8, "Root-cause categories", "Which cause needs a trend CAPA?", bars(countBy("dev", "root", s.lists.RootCause), "f-s5"))}
+      ${card(7, "CAPA by source", "What feeds the CAPA system?", bars(countBy("capa", "source", s.lists.CAPASource)))}
+      ${card(8, "Root-cause categories", "Which cause needs a trend CAPA?", bars(countBy("dev", "root", s.lists.RootCause)))}
     </div>`;
 }

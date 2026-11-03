@@ -29,14 +29,16 @@
   --fx: #e8edf6;
   --fx-ink: #1b3462;
 
-  --g: #17985a; --g-bg: #dcf2e6; --g-ink: #0f6b3f;
-  --a: #e3a008; --a-bg: #fdf1cf; --a-ink: #8a5f00;
-  --r: #d63939; --r-bg: #fbdfdf; --r-ink: #a52222;
+  --g: #0ca30c; --g-bg: #dcf2e6; --g-ink: #0f6b3f;
+  --a: #fab219; --a-bg: #fdf1cf; --a-ink: #8a5f00;
+  --r: #d03b3b; --r-bg: #fbdfdf; --r-ink: #a52222;
   --n: #a3adbb; --n-bg: #eceef2; --n-ink: #5d6878;
   --wk: #c9cdd4;
   --future: #ffffff;
 
-  --s1: #0c8f8a; --s2: #3a6fd8; --s3: #e3a008; --s4: #b65bd1; --s5: #e0644f; --s6: #6b7689; --s7: #7d9a2b; --s8: #2fa7d8; --s9: #c2477f;
+  /* categorical series: validated 8-slot palette (fixed order, CVD-checked on this surface) */
+  --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100; --s5: #e87ba4; --s6: #008300; --s7: #6250d6; --s8: #e34948; --s-other: #9aa1ab;
+  --q1: #86b6ef; --q2: #2a78d6; --q3: #104281;
 
   --shadow-1: 0 1px 0 rgba(15, 28, 46, .04), 0 1px 3px rgba(15, 28, 46, .07);
   --shadow-2: 0 18px 50px rgba(8, 18, 34, .28);
@@ -56,10 +58,12 @@
     --navy: #070d17; --navy-2: #0f1a2b; --navy-line: #1a2840;
     --accent: #2fc1b9; --accent-2: #5ed5cf; --accent-ink: #04201f; --accent-soft: #10302f;
     --cream: #2a2516; --cream-line: #4d4224; --fx: #18263d; --fx-ink: #b9cdf2;
-    --g: #2fbf78; --g-bg: #10301f; --g-ink: #7fe0ad;
-    --a: #f0b429; --a-bg: #362a0b; --a-ink: #f6cf6f;
-    --r: #f05252; --r-bg: #3d1517; --r-ink: #ff9b9b;
+    --g: #0ca30c; --g-bg: #10301f; --g-ink: #7fe0ad;
+    --a: #fab219; --a-bg: #362a0b; --a-ink: #f6cf6f;
+    --r: #d03b3b; --r-bg: #3d1517; --r-ink: #ff9b9b;
     --n: #5c6a80; --n-bg: #1d2738; --n-ink: #9aa7bc; --wk: #2a3548; --future: #121b28;
+    --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s5: #d55181; --s6: #008300; --s7: #9085e9; --s8: #e66767; --s-other: #6b7585;
+    --q1: #1c5cab; --q2: #3987e5; --q3: #86b6ef;
     --shadow-1: 0 1px 0 rgba(0, 0, 0, .3), 0 1px 3px rgba(0, 0, 0, .4);
     --overlay: rgba(0, 0, 0, .62);
     color-scheme: dark;
@@ -71,10 +75,12 @@
   --navy: #070d17; --navy-2: #0f1a2b; --navy-line: #1a2840;
   --accent: #2fc1b9; --accent-2: #5ed5cf; --accent-ink: #04201f; --accent-soft: #10302f;
   --cream: #2a2516; --cream-line: #4d4224; --fx: #18263d; --fx-ink: #b9cdf2;
-  --g: #2fbf78; --g-bg: #10301f; --g-ink: #7fe0ad;
-  --a: #f0b429; --a-bg: #362a0b; --a-ink: #f6cf6f;
-  --r: #f05252; --r-bg: #3d1517; --r-ink: #ff9b9b;
+  --g: #0ca30c; --g-bg: #10301f; --g-ink: #7fe0ad;
+  --a: #fab219; --a-bg: #362a0b; --a-ink: #f6cf6f;
+  --r: #d03b3b; --r-bg: #3d1517; --r-ink: #ff9b9b;
   --n: #5c6a80; --n-bg: #1d2738; --n-ink: #9aa7bc; --wk: #2a3548; --future: #121b28;
+    --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s5: #d55181; --s6: #008300; --s7: #9085e9; --s8: #e66767; --s-other: #6b7585;
+    --q1: #1c5cab; --q2: #3987e5; --q3: #86b6ef;
   --shadow-1: 0 1px 0 rgba(0, 0, 0, .3), 0 1px 3px rgba(0, 0, 0, .4);
   --overlay: rgba(0, 0, 0, .62);
   color-scheme: dark;
@@ -436,11 +442,18 @@ td .cell-in.wide { min-width: 220px; }
 .lv2 { background: var(--a-bg); color: var(--a-ink); } .lv3 { background: var(--g-bg); color: var(--g-ink); }
 .lv4 { background: var(--g); color: #fff; }
 
+/* Chart export */
+.png-btn { margin-left: auto; font-size: 12px; color: var(--muted); }
+.png-btn:hover { color: var(--accent); }
+.png-float { position: absolute; top: 10px; right: 10px; }
+
 /* Charts */
 svg.chart { display: block; width: 100%; height: auto; overflow: visible; }
 svg.chart text { fill: var(--muted); font: 11px var(--font-body); }
 svg.chart text.lbl { fill: var(--ink-2); font-size: 12px; }
 svg.chart text.val { fill: var(--ink); font: 600 12px var(--font-display); }
+/* value inside a segment: white with a dark halo, readable on every series colour */
+svg.chart text.seg { fill: #fff; font: 700 11.5px var(--font-display); paint-order: stroke; stroke: rgba(10, 14, 22, .55); stroke-width: 2.6px; stroke-linejoin: round; }
 svg.chart .grid { stroke: var(--line); }
 svg.chart .axis { stroke: var(--line-strong); }
 svg.chart .target { stroke: var(--ink-2); stroke-dasharray: 4 3; }
@@ -449,8 +462,11 @@ svg.chart .thr-r { stroke: var(--r); stroke-dasharray: 4 3; }
 svg.chart [data-tip] { cursor: default; }
 svg.chart [data-tip]:hover { opacity: .82; }
 .f-G { fill: var(--g); } .f-A { fill: var(--a); } .f-R { fill: var(--r); } .f-N { fill: var(--n); } .f-W { fill: var(--wk); }
-.f-s7 { fill: var(--s7); } .f-s8 { fill: var(--s8); } .f-s9 { fill: var(--s9); } .bg-s9 { background: var(--s9); }
-.bg-s7 { background: var(--s7); } .bg-s8 { background: var(--s8); }
+.f-s7 { fill: var(--s7); } .f-s8 { fill: var(--s8); } .f-other { fill: var(--s-other); }
+.bg-s7 { background: var(--s7); } .bg-s8 { background: var(--s8); } .bg-other { background: var(--s-other); }
+.f-q1 { fill: var(--q1); } .f-q2 { fill: var(--q2); } .f-q3 { fill: var(--q3); }
+.bg-q1 { background: var(--q1); } .bg-q2 { background: var(--q2); } .bg-q3 { background: var(--q3); }
+.st-s6 { stroke: var(--s6); } .st-s7 { stroke: var(--s7); } .st-s8 { stroke: var(--s8); } .st-q1 { stroke: var(--q1); } .st-q2 { stroke: var(--q2); } .st-q3 { stroke: var(--q3); } .st-other { stroke: var(--s-other); }
 .f-s1 { fill: var(--s1); } .f-s2 { fill: var(--s2); } .f-s3 { fill: var(--s3); } .f-s4 { fill: var(--s4); } .f-s5 { fill: var(--s5); } .f-s6 { fill: var(--s6); }
 .st-s1 { stroke: var(--s1); } .st-s2 { stroke: var(--s2); } .st-s3 { stroke: var(--s3); } .st-s4 { stroke: var(--s4); } .st-s5 { stroke: var(--s5); }
 .st-G { stroke: var(--g); } .st-A { stroke: var(--a); } .st-R { stroke: var(--r); } .st-N { stroke: var(--n); }

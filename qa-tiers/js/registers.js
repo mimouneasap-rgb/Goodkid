@@ -6,6 +6,7 @@ import { store } from "./store.js";
 import * as E from "./engine.js";
 import { T1_REGISTERS, T2_REGISTERS, LOCKED_LISTS } from "./schema.js";
 import { stackedH } from "./charts.js";
+import { PRACTICE } from "./learn.js";
 import { esc, pill, fmtDate, pct, fmtNum, toast, confirmDialog, promptDialog, drawer, download, toCSV, $, $$, today } from "./ui.js";
 
 const has = (v) => v !== "" && v != null;
@@ -191,7 +192,18 @@ export function wireInputs(root, tier, fields, onChange) {
 
 /* ── Editor drawer ──────────────────────────────────────── */
 
-export function openEditor({ tier, reg, index = null, prefill = null, onSaved }) {
+/** Mark a practice entry against its answer key. */
+function checkPractice(expect, draft, sc) {
+  return Object.entries(expect).map(([key, m]) => {
+    const f = sc.fields.find((x) => x.key === key);
+    const v = draft[key];
+    const ok = m.any ? has(v) : m.empty ? !has(v) : m.has ? has(v) && String(v).toLowerCase().includes(m.has.toLowerCase()) : String(v ?? "") === String(m.eq);
+    const want = m.any ? "any value" : m.empty ? "left blank" : m.has ? `contains “${m.has}”` : f?.type === "date" ? fmtDate(m.eq) : String(m.eq);
+    return { key, label: f?.label || key, ok, want, got: has(v) ? (f?.type === "date" ? fmtDate(v) : String(v)) : "—" };
+  });
+}
+
+export function openEditor({ tier, reg, index = null, prefill = null, onSaved, practice = null }) {
   const sc = schemaOf(tier, reg);
   const s = store[tier];
   const idKey = sc.idKey || "id";
@@ -207,11 +219,13 @@ export function openEditor({ tier, reg, index = null, prefill = null, onSaved })
     groups += `<label class="field${full}" data-f="${f.key}"><span>${esc(f.label)}${f.req ? '<i class="req">*</i>' : ""}</span>
       ${inputHTML(tier, f, rec[f.key])}${f.help ? `<small>${esc(f.help)}</small>` : ""}</label>`;
   }
-  const body = `<div data-fx></div><div data-flag></div><form class="form-grid" autocomplete="off">${groups}</form>${reg === "load" ? `<div data-breakdown style="margin-top:18px"></div>` : ""}${tier === "t2" && ["dev", "capa", "cc"].includes(reg) && !isNew ? linkedActionsHTML(rec.id) : ""}${tier === "t2" && reg === "act" && rec.parent ? parentLinkHTML(rec.parent) : ""}`;
-  const footer = `${isNew ? "" : `<button class="btn danger" data-del>Delete</button><button class="btn" data-dup>Duplicate</button>`}
+  const body = `${practice ? `<div class="callout" style="margin-bottom:12px"><b>Practice · event ${practice.n + 1}.</b> ${esc(practice.text)}</div><div data-practice></div>` : ""}<div data-fx></div><div data-flag></div><form class="form-grid" autocomplete="off">${groups}</form>${reg === "load" ? `<div data-breakdown style="margin-top:18px"></div>` : ""}${tier === "t2" && ["dev", "capa", "cc"].includes(reg) && !isNew ? linkedActionsHTML(rec.id) : ""}${tier === "t2" && reg === "act" && rec.parent ? parentLinkHTML(rec.parent) : ""}`;
+  const footer = practice
+    ? `<span class="pill info">Practice mode — nothing is saved</span><span class="spacer"></span><button class="btn" data-cancel>Close</button><button class="btn primary" data-check>✓ Check my entry</button>`
+    : `${isNew ? "" : `<button class="btn danger" data-del>Delete</button><button class="btn" data-dup>Duplicate</button>`}
     <span class="spacer"></span><span class="muted" style="font-size:12px">Ctrl + Enter saves</span><button class="btn" data-cancel>Cancel</button><button class="btn primary" data-save>${isNew ? "Add record" : "Save changes"}</button>`;
   const sub = `<div class="meta-row"><span>${esc(sc.no)} · ${esc(sc.title)}</span>${sc.source ? `<span>Source: <b>${esc(sc.source)}</b></span>` : ""}<span>Cream = you type · ƒx = automatic</span></div>`;
-  const { el, close } = drawer({ title: isNew ? `New · ${esc(sc.title)}` : `Edit · ${esc(label(rec))}`, sub, body, footer, wide: reg === "load" });
+  const { el, close } = drawer({ title: `${practice ? "Practice · " : ""}${isNew ? `New · ${esc(sc.title)}` : `Edit · ${esc(label(rec))}`}`, sub, body, footer, wide: reg === "load" });
   const form = $("form", el);
 
   const read = () => {
@@ -254,6 +268,20 @@ export function openEditor({ tier, reg, index = null, prefill = null, onSaved })
     toast(isNew ? `${label(draft)} added` : `${label(draft)} saved`);
     onSaved?.(i);
   };
+  if (practice) {
+    $("[data-check]", el).onclick = () => {
+      const res = checkPractice(practice.expect, read(), sc);
+      const right = res.filter((r) => r.ok).length;
+      $$(".field.err", el).forEach((x) => x.classList.remove("err"));
+      res.filter((r) => !r.ok).forEach((r) => $(`[data-f="${r.key}"]`, el)?.classList.add("err"));
+      $("[data-practice]", el).innerHTML = `<div class="${right === res.length ? "ok-msg" : "flag-msg"}">${right === res.length ? "✓ Correct — every field matches the answer key. In real life this record is ready to save." : `${right} of ${res.length} fields right — fix the fields marked in red.`}</div>
+        <table class="plain" style="margin-bottom:12px"><thead><tr><th>Field</th><th>Your entry</th><th>Expected</th><th></th></tr></thead><tbody>${res.map((r) => `<tr><td>${esc(r.label)}</td><td>${esc(r.got)}</td><td class="muted">${esc(r.want)}</td><td>${r.ok ? pill("✓", "G") : pill("✗", "R")}</td></tr>`).join("")}</tbody></table>`;
+      $(".body", el).scrollTop = 0;
+    };
+    $("[data-cancel]", el).onclick = close;
+    setTimeout(() => form.querySelector("input,select,textarea")?.focus(), 50);
+    return;
+  }
   $("[data-save]", el).onclick = save;
   $("[data-cancel]", el).onclick = close;
   el.addEventListener("keydown", (e) => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) save(); });
@@ -311,11 +339,16 @@ function breakdownHTML(c, setup) {
 
 /** Team workload chart above the QA Load register. */
 function loadPanel(comp, setup) {
-  const sources = Object.values(E.LOAD_SOURCES);
-  const cls = ["f-R", "f-s3", "f-s4", "f-s2", "f-s1", "f-s5", "f-s6", "f-A", "f-N", "f-s7", "f-s8", "f-s9"];
+  // a fixed colour per source on every chart (8 validated slots); the smallest sources share "Other"
+  const SLOT = { act: "f-s1", dev: "f-s2", capa: "f-s3", cc: "f-s4", rel: "f-s5", apqr: "f-s6", tasks: "f-s7", t1ac: "f-s8" };
+  const OTHER = ["insp", "doc", "trn", "esc"];
+  const keys = [...Object.keys(SLOT), "other"];
+  const sources = keys.map((k) => (k === "other" ? `Other (${OTHER.map((o) => E.LOAD_SOURCES[o].toLowerCase()).join(", ")})` : E.LOAD_SOURCES[k]));
+  const cls = keys.map((k) => SLOT[k] || "f-other");
+  const keyOf = Object.fromEntries(Object.entries(E.LOAD_SOURCES).map(([k, v]) => [v, SLOT[k] ? v : sources[sources.length - 1]]));
   const rows = store.t2.load.map((r, i) => {
     const by = {};
-    for (const it of comp[i].items) by[it.source] = (by[it.source] || 0) + it.days;
+    for (const it of comp[i].items) by[keyOf[it.source]] = (by[keyOf[it.source]] || 0) + it.days;
     return { label: r.member, parts: sources.map((src, k) => ({ name: src, value: Math.round((by[src] || 0) * 10) / 10, cls: cls[k] })) };
   });
   const used = sources.map((src, k) => ({ src, k })).filter(({ src }) => rows.some((r) => r.parts.find((p) => p.name === src).value));
@@ -454,6 +487,13 @@ export function renderRegister(root, { tier, reg, query = {} }) {
     const idKey = sc.idKey || "id";
     const i = s[reg].findIndex((r) => r[idKey] === query.id);
     if (i >= 0) openEditor({ tier, reg, index: i, onSaved: draw });
+  }
+  if (query.practice != null && PRACTICE[+query.practice]) {
+    const p = PRACTICE[+query.practice];
+    const comp = computeAll(tier, reg);
+    const index = p.edit === "firstOpen" ? s[reg].findIndex((r, i) => comp[i].open) : p.edit === "first" ? (s[reg].length ? 0 : -1) : null;
+    if (index === -1) toast("This register has no record to practise on");
+    else openEditor({ tier, reg, index, practice: { ...p, n: +query.practice } });
   }
   if (query.new) {
     let prefill = null;

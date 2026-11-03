@@ -1,7 +1,7 @@
 // App shell: navigation rail, hash router and the home page (the Tier 1 →
 // Tier 2 → Tier 3 cascade).
 
-import { store, HAS_REAL } from "./store.js";
+import { store, HAS_REAL, isRealBoard } from "./store.js";
 import * as E from "./engine.js";
 import { T1_REGISTERS, T2_REGISTERS, T1_ORDER, T2_ORDER } from "./schema.js";
 import { ring } from "./charts.js";
@@ -12,6 +12,8 @@ import { renderSetupT1, renderSetupT2, renderAudit } from "./setup.js";
 import { renderLearnHome, renderModule, learnProgress, RHYTHM } from "./learn.js";
 import { esc, pill, fmtLong, fmtMonth, closeDrawer, initTooltips, modal, toast, $, $$ } from "./ui.js";
 import { createSync } from "./sync.js";
+import { decorateCharts } from "./export.js";
+import { renderReportPage } from "./report.js";
 
 store.load();
 E.linkTier1(() => store.t1);
@@ -57,7 +59,7 @@ function navHTML() {
         ${a("t2/analytics", "◔", "Analytics")}
         ${a("t2/setup", "⚙", "Setup")}
       </div>
-      <div class="nav-group"><div class="nav-title">Data integrity</div>${a("audit", "⎘", "Change history")}</div>
+      <div class="nav-group"><div class="nav-title">Reports & data</div>${a("report", "⤓", "Word report")}${a("audit", "⎘", "Change history")}</div>
     </nav>
     <div class="rail-foot">
       <div class="row" role="group" aria-label="Theme">${["system", "light", "dark"].map((t) => `<button class="rail-btn" data-theme-btn="${t}" aria-pressed="${(store.prefs.theme || "system") === t}">${t[0].toUpperCase() + t.slice(1)}</button>`).join("")}</div>
@@ -210,10 +212,12 @@ function route({ soft = false } = {}) {
   else if (a === "t2" && b === "setup") { renderSetupT2(view); titles.push("Tier 2 setup"); }
   else if (a === "t2" && b === "reg" && T2_REGISTERS[c]) { renderRegister(view, { tier: "t2", reg: c, query }); titles.push(T2_REGISTERS[c].title); }
   else if (a === "audit") { renderAudit(view); titles.push("Change history"); }
+  else if (a === "report") { renderReportPage(view); titles.push("Management report"); }
   else { renderHome(view); titles.push("Overview"); }
   document.title = `${titles[0]} · QA Tier Boards`;
   $(".topbar b").textContent = titles[0];
   markNav();
+  decorateCharts($("#main")); // views may swap their own container while drawing
   if (soft) scrollTo(0, y); else if (!query.keep) scrollTo(0, 0);
 }
 
@@ -251,7 +255,7 @@ function firstRun(sync) {
     <div class="lcards">
       ${HAS_REAL ? `<button class="lcard" data-start="real" style="text-align:left;cursor:pointer"><b>The El Kendi data</b><span>Imported 30/10/2026: shop-floor batch records, sampling, line clearance and IPC, oncology deviations, the APQR programme and the QA personnel list.</span></button>` : ""}
       <button class="lcard" data-start="mine" style="text-align:left;cursor:pointer"><b>The boards in this browser</b><span>Everything you have entered or changed here so far.</span></button>
-      <button class="lcard" data-start="demo" style="text-align:left;cursor:pointer"><b>The September 2026 demo</b><span>Made-up training data for the masterclass.</span></button>
+      ${HAS_REAL ? "" : `<button class="lcard" data-start="demo" style="text-align:left;cursor:pointer"><b>The September 2026 demo</b><span>Made-up training data for the masterclass.</span></button>`}
       <button class="lcard" data-start="blank" style="text-align:left;cursor:pointer"><b>Empty registers</b><span>Keeps setup, targets, roster and lists; registers start empty.</span></button>
     </div><p class="muted" style="margin:0;font-size:12.5px">The first upload sends several hundred records; keep the page open until the status in the menu says “Shared with your team · live”.</p>`,
   { onClose: () => { setupDialog = null; } });
@@ -285,7 +289,7 @@ function join(sync) {
 /** Once, to the owner: the shared board holds site data this version does not
  * include — return it to the September 2026 demo for everyone? */
 async function offerDemo() {
-  if (HAS_REAL || !store.t2.dataset || store.t2.dataset === "demo-2026-09" || store.prefs.demoOffered === store.t2.dataset) return;
+  if (isRealBoard() || !store.t2.dataset || store.t2.dataset === "demo-2026-09" || store.prefs.demoOffered === store.t2.dataset) return;
   const owner = store.user ? await store.user.isOwner().catch(() => false) : false;
   if (!owner) return;
   const { el, close } = modal(`<div class="eyebrow">Demo version</div><h2>Return the shared board to the demo?</h2>

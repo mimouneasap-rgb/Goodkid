@@ -70,7 +70,7 @@ export function renderBoard(root) {
       { value: sumk("logb", "atd", "docs"), cls: "f-s5", name: "Reviews (logbook, AT, docs)" },
     ] };
   });
-  const fnTypes = (s.lists.FnTypes || []).map((ty) => ({ label: ty, value: ctx.fn.filter((r) => ctx.mtd(r.opened) && r.type === ty).length, cls: ty === "Containment / HSE" ? "f-R" : "f-s2" })).filter((x) => x.value);
+  const fnTypes = (s.lists.FnTypes || []).map((ty) => ({ label: ty, value: ctx.fn.filter((r) => ctx.mtd(r.opened) && r.type === ty).length, cls: "f-s1" })).filter((x) => x.value);
 
   root.innerHTML = `
   <section class="hero">
@@ -94,7 +94,7 @@ export function renderBoard(root) {
   </section>
 
   <div class="grid split-side" style="align-items:start">
-    <div>
+    <div data-export-block>
       <div class="card-head"><h2 style="font-size:14px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-2)">SQDCP · day-by-day — ${view.officer === "All team" ? "whole QA team" : esc(view.officer)} · ${fmtMonth(st.selDate)}</h2>
         <span class="muted" style="font-size:12px">automatic from the logs · the huddle can override any day · click a day to select it</span></div>
       <div class="letters">${E.PILLARS.map((p) => {
