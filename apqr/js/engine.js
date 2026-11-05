@@ -2,7 +2,8 @@
 //
 // The v3 model, as defined in the APQR Master Tracker v3:
 //  - every planned product owes TEN departmental annexes (the "slots"), then the
-//    Final QA compilation raised by the APQR Owner once all ten are closed
+//    Final QA compilation raised by the APQR Owner once the five QA-stream annexes
+//    (QA, QC OOS/OOT, Validation Process, Compliance, Supplier Qualification) are closed
 //  - Scigeniq files several annexes under the shared "QA Data Collection" type;
 //    the task TITLE names the owning department, and every figure uses it
 //  - a planned PQR with no workflow still owes the same work: the engine
@@ -29,6 +30,8 @@ export const SLOTS = [
   { key: "Validation Process", short: "V-Proc", label: "Validation Process", dept: "Validation Process" },
 ];
 export const SLOT_KEYS = SLOTS.map((s) => s.key);
+/** The QA-stream annexes the Final QA compilation needs: it can be raised once these five are closed. */
+export const FQ_PREREQ = ["QA", "QC OOS/OOT", "Validation Process", "Compliance", "Supplier Qualification"];
 export const SLOT_BY_KEY = Object.fromEntries(SLOTS.map((s) => [s.key, s]));
 
 export const ROLES = { WORKFLOW: "Parent workflow", ANNEX: "Departmental annexe", FINAL: "Final QA compilation", APPROVAL: "Approval" };
@@ -327,8 +330,10 @@ export function compute(state) {
     const annexNotRaised = annexes.filter((t) => t.generated).length;
     const overdue = annexes.filter((t) => !t.closed && t.overdue === "YES").length;
     const finalQa = !finals.length ? "none" : finals.some((t) => t.closed) ? "done" : "open";
-    const fqSignal = !triggered ? "Not triggered" : finalQa === "done" ? "Complete" : finalQa === "open" ? "Raised, not complete" : slotsOk >= 10 ? "NOT TRIGGERED - data ready" : "Waiting on data collection";
-    const gap = finalQa === "done" && slotsOk < 10;
+    const fqPrereqOk = FQ_PREREQ.filter((s) => slots[s].status === "OK").length;
+    const fqPrereqOpen = FQ_PREREQ.filter((s) => slots[s].status !== "OK");
+    const fqSignal = !triggered ? "Not triggered" : finalQa === "done" ? "Complete" : finalQa === "open" ? "Raised, not complete" : fqPrereqOk >= FQ_PREREQ.length ? "NOT TRIGGERED - data ready" : "Waiting on data collection";
+    const gap = finalQa === "done" && fqPrereqOk < FQ_PREREQ.length;
     const AE = pl ? pl.overdueDate : "";
     const AF = AE ? dayInt(AE) - R : null;
     let rag;
@@ -364,7 +369,7 @@ export function compute(state) {
       scigeniqOwner: wf?.assignee || "",
       wfStage, wfStatus: wf?.status || (triggered ? "" : "Not triggered"), wfDue: wf?.taskEnd || "",
       nWorkflows, flags,
-      slots, slotsOk, slotsMissing, pct,
+      slots, slotsOk, slotsMissing, pct, fqPrereqOk, fqPrereqOpen,
       annexTotal: annexes.length, annexClosed, annexOpen, annexNotRaised, overdue,
       finalQa, finalQaTasks: finals, fqSignal, gap,
       rag,
@@ -549,9 +554,9 @@ export function compute(state) {
   const quality = [];
   const push = (level, title, detail, items = [], id = "") => quality.push({ level, title, detail, items, id });
   const ready = products.filter((p) => p.fqSignal === "NOT TRIGGERED - data ready").sort((a, b) => (a.daysToOverdue ?? 0) - (b.daysToOverdue ?? 0));
-  if (ready.length) push("critical", "Data ready, Final QA never raised", "All ten departmental annexes are closed but the APQR Owner has not raised the Final QA compilation. These reviews can move today.", ready.map((p) => ({ key: p.key, label: `${p.ref} · ${p.product}`, note: p.daysToOverdue < 0 ? `${-p.daysToOverdue} d past PQR due` : `due ${p.overdueDate}` })), "ready");
+  if (ready.length) push("critical", "Data ready, Final QA never raised", "The five QA-stream annexes (QA, QC OOS/OOT, Validation Process, Compliance, Supplier Qualification) are closed but the APQR Owner has not raised the Final QA compilation. These reviews can move today.", ready.map((p) => ({ key: p.key, label: `${p.ref} · ${p.product}`, note: p.daysToOverdue < 0 ? `${-p.daysToOverdue} d past PQR due` : `due ${p.overdueDate}` })), "ready");
   const gaps = products.filter((p) => p.gap);
-  if (gaps.length) push("serious", "Final QA closed with an annexe gap", "The compilation was closed although one or more of the ten required annexes is not closed or was never raised.", gaps.map((p) => ({ key: p.key, label: `${p.ref} · ${p.product}`, note: `${p.slotsOk}/10 annexes OK` })), "gap");
+  if (gaps.length) push("serious", "Final QA closed with an annexe gap", "The compilation was closed although one of the five QA-stream annexes it needs (QA, QC OOS/OOT, Validation Process, Compliance, Supplier Qualification) is not closed or was never raised.", gaps.map((p) => ({ key: p.key, label: `${p.ref} · ${p.product}`, note: `${p.slotsOk}/10 annexes OK` })), "gap");
   const notClosedOut = products.filter((p) => p.fqSignal === "Complete" && p.wfStage !== "Closed");
   if (notClosedOut.length) push("warning", "Final QA closed, workflow still open", "The compilation is closed but the parent APQR workflow has not been closed out in Scigeniq.", notClosedOut.map((p) => ({ key: p.key, label: `${p.ref} · ${p.product}`, note: `stage ${p.wfStage}` })), "notclosed");
   const closedOpen = products.filter((p) => p.flags.includes("CLOSED w/ OPEN"));

@@ -81,7 +81,7 @@ export function demoState() {
           tasks.push({ ...base, id: `t${tasks.length}`, ref: `APV-DM-${apvNo++}`, department: "Approval", stream: "Approval", taskClass: "Approval", taskType: "Approval", title: "Approval", stage: r() > 0.985 ? "Rejected" : "Approved", status: "Completed", assignee: pick(PEOPLE), created: sign, start: sign, closedOn: sign, closure: "Closed", taskEnd: sign });
         }
       }
-      // Final QA compilation, raised by the APQR Owner once all ten annexes are closed
+      // Final QA compilation, raised by the APQR Owner once the five QA-stream annexes are closed
       if (allDone && (wfClosed || r() > 0.3)) {
         const raised = lastClose > report ? report : lastClose;
         const fqDone = wfClosed || r() > 0.35;

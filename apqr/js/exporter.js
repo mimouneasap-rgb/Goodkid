@@ -29,7 +29,7 @@ export async function buildWorkbook(state, model) {
     ["", bold("Report date"), d(model.report)],
     ["", bold("The ten required annexes"), "Compliance, IPC, Process, QA, QC, QC OOS/OOT, RA, Supplier Qualification, Validation Metrology and Validation Process. A slot is OK when at least one of its tasks is closed, open when raised but not closed, MISSING when never raised."],
     ["", bold("Shared QA stream"), "Scigeniq files several annexes under the task type \"QA Data Collection\". The task title names the owning department (CM = Compliance, Supplier = Supplier Qualification, VL = Validation Process, QC OOS/OOT = QC)."],
-    ["", bold("Final QA compilation"), "Raised by the APQR Owner once all ten annexes are closed. A review is COMPLETE when its Final QA is closed."],
+    ["", bold("Final QA compilation"), "Raised by the APQR Owner once the five QA-stream annexes (QA, QC OOS/OOT, Validation Process, Compliance, Supplier Qualification) are closed. A review is COMPLETE when its Final QA is closed."],
     ["", bold("Untriggered workload"), "A planned PQR with no workflow carries its workflow, ten annexes and Final QA at \"Not triggered\" (Record Source = Generated from plan), so totals cover the full required workload."],
     ["", bold("Planned PQR month"), "The month after the review period closes."],
     ["", bold("PQR overdue date"), `1st of the planned PQR month + ${model.settings.overdueMonths} months.`],
@@ -84,7 +84,7 @@ export async function buildWorkbook(state, model) {
   const trackerHdr = ["APQR Ref", "Product", "Dosage Form", "Site", "Triggered", "Workflow Stage", "APQR Owner", "Planned PQR Month", "PQR Overdue Date", "Days to Overdue", ...SLOTS.map((s) => s.short), "Annexes Complete", "% Annexes", "Open Annexes", "Final QA", "Final QA Signal", "Annexe Gap", "RAG Status", "Approvals", "In Plan", "Plan Review Start", "Plan Review End", "Workflow Refs", "QC Annexe Refs (QCTAB)", "Flags", `Prev % (${bl?.label || "baseline"})`, "QA Comments / Actions", "Priority"];
   const tracker = [
     [title(`MASTER APQR TRACKER - one row per planned product (data as at ${dmy(model.report)})`)],
-    [note("The ten slot columns are the required departmental annexes: OK = closed, open = raised but not closed, MISSING = never raised. \"Final QA\" is the compilation the APQR Owner raises once all ten are closed.")],
+    [note("The ten slot columns are the required departmental annexes: OK = closed, open = raised but not closed, MISSING = never raised. \"Final QA\" is the compilation the APQR Owner raises once the five QA-stream annexes (QA, QC OOS/OOT, Validation Process, Compliance, Supplier Qualification) are closed.")],
     [],
     trackerHdr.map(h),
     ...model.products.map((p) => [
@@ -98,7 +98,7 @@ export async function buildWorkbook(state, model) {
   const ready = model.products.filter((p) => p.fqSignal === "NOT TRIGGERED - data ready");
   const finalQa = [
     [title("FINAL QA DATA COLLECTION - the compilation step")],
-    [note("Once all ten departmental annexes are closed, the APQR Owner compiles them into the Final QA Data Collection.")],
+    [note("Once the five QA-stream annexes (QA, QC OOS/OOT, Validation Process, Compliance, Supplier Qualification) are closed, the APQR Owner raises the Final QA Data Collection.")],
     [],
     ["", h("Final QA signal"), h("Products"), h("% of plan")],
     ...FINAL_QA_SIGNALS.map((sig) => ["", sig, model.fqCounts[sig], pct(model.products.length ? model.fqCounts[sig] / model.products.length : 0)]),

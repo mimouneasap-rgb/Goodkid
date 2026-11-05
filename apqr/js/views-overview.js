@@ -2,7 +2,7 @@
 // workload and insights.
 import { raw, esc, icon, fmtN, fmtPct, fmtDate, fmtMonth, fmtMonthShort, fmtDays, plural, ragPill, fqPill, trackingPill, tip, RAG_META, FQ_META, slotChip } from "./ui.js";
 import { ring, segBar, hbars, columns, lineChart, deptColor, stageColor, progressBar, slotCells, slotHead, stackedColumns } from "./charts.js";
-import { DEPARTMENTS, SLOTS, MOVEMENT_METRICS, UP_IS_BAD, FINAL_QA_SIGNALS, monthLabel, eomonth } from "./engine.js";
+import { DEPARTMENTS, SLOTS, FQ_PREREQ, SLOT_BY_KEY, MOVEMENT_METRICS, UP_IS_BAD, FINAL_QA_SIGNALS, monthLabel, eomonth } from "./engine.js";
 import * as store from "./store.js";
 import { personWorkloadSection, bindPersonWorkload } from "./views-people.js";
 
@@ -99,7 +99,7 @@ export const dashboard = {
       <div>
         <div class="hero-eyebrow"><span class="live"></span>${s.meta.publishedAt ? "Team version" : "Live programme"} · ${esc(fmtDate(m.report))}</div>
         <h2>${esc(s.meta.programme || "APQR programme")}<br><span class="grad">${fmtPct(k.completion, 1)} of the required annexes closed</span></h2>
-        <p class="lead">${fmtN(k.annexClosed)} of ${fmtN(k.requiredAnnexes)} required departmental annexes are closed across ${fmtN(k.planned)} planned reviews. ${fmtN(k.productsComplete)} reviews are complete, ${fmtN(k.fqReady)} have all ten annexes closed and are waiting for Final QA, and ${fmtN(k.productsOverdue)} are past their PQR due date.</p>
+        <p class="lead">${fmtN(k.annexClosed)} of ${fmtN(k.requiredAnnexes)} required departmental annexes are closed across ${fmtN(k.planned)} planned reviews. ${fmtN(k.productsComplete)} reviews are complete, ${fmtN(k.fqReady)} have their five QA-stream annexes closed and are waiting for Final QA, and ${fmtN(k.productsOverdue)} are past their PQR due date.</p>
         <div class="hero-meta">${s.meta.planRef ? `<span>Plan ${esc(s.meta.planRef)}</span>` : ""}<span>10 annexes + Final QA per product</span><span>Overdue = planned month + ${m.settings.overdueMonths} mo</span>${bl ? `<span>Baseline ${esc(bl.label)}</span>` : ""}</div>
       </div>
       <div class="hero-ring">${ring(k.completion, { size: 184, stroke: 16, label: "Required annexes closed", sub: "annexes closed", color: "#5eead4" })}</div>
@@ -274,13 +274,13 @@ function matrixTable(mx) {
 export const finalqa = {
   id: "finalqa",
   title: "Final QA compilation",
-  sub: () => "Once all ten annexes are closed, the APQR Owner compiles them into the Final QA Data Collection",
+  sub: () => "Once the five QA-stream annexes (QA, QC OOS/OOT, Validation Process, Compliance, Supplier Qualification) are closed, the APQR Owner raises the Final QA Data Collection",
   render(m) {
     const k = m.kpi;
     const ready = m.products.filter((p) => p.fqSignal === "NOT TRIGGERED - data ready").sort((a, b) => (a.daysToOverdue ?? 0) - (b.daysToOverdue ?? 0));
     const raisedList = m.products.filter((p) => p.fqSignal === "Raised, not complete");
     const gaps = m.products.filter((p) => p.gap);
-    const near = m.products.filter((p) => p.fqSignal === "Waiting on data collection" && p.slotsOk >= 8).sort((a, b) => b.slotsOk - a.slotsOk || (a.daysToOverdue ?? 0) - (b.daysToOverdue ?? 0));
+    const near = m.products.filter((p) => p.fqSignal === "Waiting on data collection" && p.fqPrereqOk >= FQ_PREREQ.length - 2).sort((a, b) => b.fqPrereqOk - a.fqPrereqOk || (a.daysToOverdue ?? 0) - (b.daysToOverdue ?? 0));
     const row = (p, extra = "") => `<tr data-key="${esc(p.key)}"><td class="mono" style="white-space:nowrap">${esc(p.ref)}</td><td class="prod"><b title="${esc(p.product)}">${esc(p.product)}</b><small>${esc(p.dosageForm)} · ${esc(p.owner)}</small></td><td style="white-space:nowrap">${monthLabel(p.plannedMonth)}</td><td style="white-space:nowrap">${fmtDate(p.overdueDate)}<br><small class="muted">${fmtDays(p.daysToOverdue)}</small></td>${extra}<td><button class="btn btn-sm" data-add-action="${esc(p.key)}">${icon("plus")}Action</button></td></tr>`;
     return `
     <div class="kpis" style="margin-top:0">
@@ -288,20 +288,20 @@ export const finalqa = {
     </div>
     <div class="grid g-12" style="margin-top:18px">
       <section class="card span-12 table-card reveal">
-        <div style="padding:20px 20px 0"><div class="card-h"><div><h3>Data ready, Final QA never raised · ${fmtN(ready.length)}</h3><p>Every one of the ten annexes is closed, so the compilation can be raised today. These reviews are blocked on the APQR Owner.</p></div></div></div>
-        ${ready.length ? `<div class="table-wrap" style="max-height:none"><table class="data"><thead><tr><th>APQR Ref</th><th>Product</th><th>Planned</th><th>PQR due</th><th>Last annexe closed</th><th></th></tr></thead><tbody>${ready.map((p) => row(p, `<td style="white-space:nowrap">${fmtDate(p.tasks.filter((t) => t.isAnnex && t.closedOn).map((t) => t.closedOn).sort().pop())}</td>`)).join("")}</tbody></table></div>` : `<p class="muted" style="padding:0 20px 20px">No review is waiting for its Final QA.</p>`}
+        <div style="padding:20px 20px 0"><div class="card-h"><div><h3>Data ready, Final QA never raised · ${fmtN(ready.length)}</h3><p>The five QA-stream annexes the compilation needs (QA, QC OOS/OOT, Validation Process, Compliance, Supplier Qualification) are closed, so it can be raised today. These reviews are blocked on the APQR Owner.</p></div></div></div>
+        ${ready.length ? `<div class="table-wrap" style="max-height:none"><table class="data"><thead><tr><th>APQR Ref</th><th>Product</th><th>Planned</th><th>PQR due</th><th>Last QA-stream annexe closed</th><th></th></tr></thead><tbody>${ready.map((p) => row(p, `<td style="white-space:nowrap">${fmtDate(p.tasks.filter((t) => t.isAnnex && FQ_PREREQ.includes(t.slot) && t.closedOn).map((t) => t.closedOn).sort().pop())}</td>`)).join("")}</tbody></table></div>` : `<p class="muted" style="padding:0 20px 20px">No review is waiting for its Final QA.</p>`}
       </section>
       <section class="card span-6 table-card reveal">
         <div style="padding:20px 20px 0"><div class="card-h"><div><h3>Final QA raised, not complete · ${fmtN(raisedList.length)}</h3><p>Compilation in progress</p></div></div></div>
         ${raisedList.length ? `<div class="table-wrap" style="max-height:360px"><table class="data"><thead><tr><th>Ref</th><th>Product</th><th>Planned</th><th>PQR due</th><th>Raised</th><th></th></tr></thead><tbody>${raisedList.map((p) => row(p, `<td style="white-space:nowrap">${fmtDate(p.finalQaTasks[0]?.created)}</td>`)).join("")}</tbody></table></div>` : `<p class="muted" style="padding:0 20px 20px">None.</p>`}
       </section>
       <section class="card span-6 table-card reveal">
-        <div style="padding:20px 20px 0"><div class="card-h"><div><h3>Final QA closed with an annexe gap · ${fmtN(gaps.length)}</h3><p>Compilation closed while a required annexe is open or was never raised</p></div></div></div>
-        ${gaps.length ? `<div class="table-wrap" style="max-height:360px"><table class="data"><thead><tr><th>Ref</th><th>Product</th><th>Planned</th><th>PQR due</th><th>Gap</th><th></th></tr></thead><tbody>${gaps.map((p) => row(p, `<td>${SLOTS.filter((s) => p.slots[s.key].status !== "OK").map((s) => `<span class="tag crit">${esc(s.short)}</span>`).join(" ")}</td>`)).join("")}</tbody></table></div>` : `<p class="muted" style="padding:0 20px 20px">None.</p>`}
+        <div style="padding:20px 20px 0"><div class="card-h"><div><h3>Final QA closed with an annexe gap · ${fmtN(gaps.length)}</h3><p>Compilation closed while one of its five QA-stream annexes is open or was never raised</p></div></div></div>
+        ${gaps.length ? `<div class="table-wrap" style="max-height:360px"><table class="data"><thead><tr><th>Ref</th><th>Product</th><th>Planned</th><th>PQR due</th><th>Gap</th><th></th></tr></thead><tbody>${gaps.map((p) => row(p, `<td>${p.fqPrereqOpen.map((s) => `<span class="tag crit">${esc(SLOT_BY_KEY[s].short)}</span>`).join(" ")}</td>`)).join("")}</tbody></table></div>` : `<p class="muted" style="padding:0 20px 20px">None.</p>`}
       </section>
       <section class="card span-12 table-card reveal">
-        <div style="padding:20px 20px 0"><div class="card-h"><div><h3>Close to data-ready · ${fmtN(near.length)}</h3><p>Eight or nine of the ten annexes closed. Chasing the last ones unlocks the Final QA.</p></div></div></div>
-        ${near.length ? `<div class="table-wrap" style="max-height:420px"><table class="data"><thead><tr><th>Ref</th><th>Product</th><th>Planned</th><th>PQR due</th><th>Still open</th><th></th></tr></thead><tbody>${near.map((p) => row(p, `<td>${SLOTS.filter((s) => p.slots[s.key].status !== "OK").map((s) => `<span class="tag ${p.slots[s.key].status === "MISSING" ? "crit" : "info"}">${esc(s.label)}</span>`).join(" ")}</td>`)).join("")}</tbody></table></div>` : `<p class="muted" style="padding:0 20px 20px">None.</p>`}
+        <div style="padding:20px 20px 0"><div class="card-h"><div><h3>Close to data-ready · ${fmtN(near.length)}</h3><p>Three or four of the five QA-stream annexes closed. Chasing the last ones unlocks the Final QA.</p></div></div></div>
+        ${near.length ? `<div class="table-wrap" style="max-height:420px"><table class="data"><thead><tr><th>Ref</th><th>Product</th><th>Planned</th><th>PQR due</th><th>Still open</th><th></th></tr></thead><tbody>${near.map((p) => row(p, `<td>${SLOTS.filter((s) => FQ_PREREQ.includes(s.key) && p.slots[s.key].status !== "OK").map((s) => `<span class="tag ${p.slots[s.key].status === "MISSING" ? "crit" : "info"}">${esc(s.label)}</span>`).join(" ")}</td>`)).join("")}</tbody></table></div>` : `<p class="muted" style="padding:0 20px 20px">None.</p>`}
       </section>
       <section class="card span-12 reveal">
         <div class="card-h"><div><h3>Final QA progress by planned month</h3><p>Complete, raised, data-ready, waiting and not-triggered reviews per planned PQR month. Click a month for its annexes.</p></div></div>

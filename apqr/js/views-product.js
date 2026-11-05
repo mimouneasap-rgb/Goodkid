@@ -3,7 +3,7 @@
 // closed date, owner, priority, notes, actions, plan details) changeable here.
 import { esc, icon, fmtN, fmtPct, fmtDate, fmtMonth, fmtDays, ragPill, fqPill, movementBadge, slotChip, slotCls } from "./ui.js";
 import { ring, deptColor, slotCells } from "./charts.js";
-import { SLOTS, dayInt, ROLES } from "./engine.js";
+import { SLOTS, FQ_PREREQ, dayInt, ROLES } from "./engine.js";
 import * as store from "./store.js";
 import * as act from "./actions.js";
 import { peopleSelect, listSelect } from "./lists.js";
@@ -64,7 +64,7 @@ export const productView = {
     const approvals = p.tasks.filter((t) => t.isApproval);
     const wfs = p.tasks.filter((t) => t.isWorkflow && !t.generated);
     const audit = s.audit.filter((a) => a.key === p.key).slice(0, 60);
-    const lastClosed = p.tasks.filter((t) => t.isAnnex && t.closedOn).map((t) => t.closedOn).sort().pop();
+    const lastClosed = p.tasks.filter((t) => t.isAnnex && FQ_PREREQ.includes(t.slot) && t.closedOn).map((t) => t.closedOn).sort().pop();
 
     // ten annexes table
     const annexRows = SLOTS.map((sl) => {
@@ -77,8 +77,8 @@ export const productView = {
     }).join("");
 
     const fqHint = {
-      "NOT TRIGGERED - data ready": `<div class="callout warn" style="margin-bottom:12px">${icon("alert")}<div><b>All ten annexes are closed${lastClosed ? ` (last on ${fmtDate(lastClosed)})` : ""}.</b> The Final QA Data Collection can be raised in Scigeniq today.</div></div>`,
-      "Waiting on data collection": `<div class="callout" style="margin-bottom:12px">${icon("info")}<div>${10 - p.slotsOk} of the ten annexes still to close before the Final QA: ${SLOTS.filter((x) => p.slots[x.key].status !== "OK").map((x) => esc(x.label)).join(", ")}.</div></div>`,
+      "NOT TRIGGERED - data ready": `<div class="callout warn" style="margin-bottom:12px">${icon("alert")}<div><b>The five QA-stream annexes are closed${lastClosed ? ` (last on ${fmtDate(lastClosed)})` : ""}.</b> The Final QA Data Collection can be raised in Scigeniq today.</div></div>`,
+      "Waiting on data collection": `<div class="callout" style="margin-bottom:12px">${icon("info")}<div>${p.fqPrereqOpen.length} of the five QA-stream annexes still to close before the Final QA can be raised: ${p.fqPrereqOpen.map((x) => esc(x)).join(", ")}.</div></div>`,
       "Not triggered": `<div class="callout" style="margin-bottom:12px">${icon("info")}<div>The APQR workflow has not been triggered in Scigeniq yet.</div></div>`,
     }[p.fqSignal] || "";
 
@@ -127,7 +127,7 @@ export const productView = {
       </section>
 
       <section class="card span-12 table-card reveal">
-        <div style="padding:20px 20px 0"><div class="card-h"><div><h3>Final QA compilation</h3><p>Raised by the APQR Owner once all ten annexes are closed</p></div><div class="tools">${fqPill(p.fqSignal)}${p.triggered && !p.finalQaTasks.length ? `<button class="btn btn-sm" data-add-final>${icon("plus")}Record the Final QA task</button>` : ""}</div></div>${fqHint}</div>
+        <div style="padding:20px 20px 0"><div class="card-h"><div><h3>Final QA compilation</h3><p>Raised by the APQR Owner once the five QA-stream annexes are closed (QA, QC OOS/OOT, Validation Process, Compliance, Supplier Qualification)</p></div><div class="tools">${fqPill(p.fqSignal)}${p.triggered && !p.finalQaTasks.length ? `<button class="btn btn-sm" data-add-final>${icon("plus")}Record the Final QA task</button>` : ""}</div></div>${fqHint}</div>
         ${p.finalQaTasks.length ? `<div class="table-wrap" style="max-height:none"><table class="data ptable"><thead>${HEAD.replace("<th>Annexe</th>", "")}</thead><tbody>${p.finalQaTasks.map((t) => taskRow(t, L)).join("")}</tbody></table></div>` : `<div style="height:8px"></div>`}
       </section>
 

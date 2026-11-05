@@ -314,3 +314,24 @@ test("Scigeniq parent formats: Task - APQR , <product> and Row - <product>(<proc
   assert.equal(productFromParent("Task - Duplicated"), "Task - Duplicated");
   assert.equal(productFromParent("APQR , ALPHA 10 mg Tablets-SITE"), "ALPHA 10 mg Tablets-SITE");
 });
+
+test("Final QA is data-ready once the five QA-stream annexes are closed, whatever the other five", () => {
+  const five = ["QA Data Collection", "QC OOS/OOT Data Collection", "VL Process Data Collection", "CM Data Collection", "Supplier Data Collection"];
+  const others = ["IPC Data Collection - Tablet", "Process Data Collection - Tablet", "QC Data Collection - Tablet", "RA Data Collection", "Validation Data Collection"];
+  const m = compute(baseState([...five.map(closedTask), ...others.map((t) => task({ title: t }))], "2026-06-15"));
+  const p = m.products[0];
+  assert.equal(p.slotsOk, 5);
+  assert.equal(p.fqPrereqOk, 5);
+  assert.equal(p.fqSignal, "NOT TRIGGERED - data ready");
+  assert.equal(m.kpi.fqReady, 1);
+  // one of the five still open: waiting, and it is named
+  const w = compute(baseState([...five.slice(0, 4).map(closedTask), task({ title: five[4] }), ...others.map(closedTask)], "2026-06-15")).products[0];
+  assert.equal(w.slotsOk, 9);
+  assert.equal(w.fqSignal, "Waiting on data collection");
+  assert.deepEqual(w.fqPrereqOpen, ["Supplier Qualification"]);
+  // Final QA closed while a non-QA annexe is still open is not a gap; a missing QA-stream annexe is
+  const g1 = compute(baseState([...five.map(closedTask), task({ title: others[0] }), closedTask("Final QA Data Collection")], "2026-06-15")).products[0];
+  assert.equal(g1.gap, false);
+  const g2 = compute(baseState([...five.slice(1).map(closedTask), ...others.map(closedTask), closedTask("Final QA Data Collection")], "2026-06-15")).products[0];
+  assert.equal(g2.gap, true);
+});

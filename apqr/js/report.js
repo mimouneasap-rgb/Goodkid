@@ -207,7 +207,7 @@ export async function buildReport(choice = lastChoice) {
         `**${fmtPct(k.completion, 1)}** of the ${fmtN(k.requiredAnnexes)} required departmental annexes are closed (${fmtN(k.annexClosed)}); ${fmtN(k.annexOpen)} are open and ${fmtN(k.annexNotRaised)} not yet raised, mostly in the ${fmtN(k.notTriggered)} reviews not triggered yet.`,
         `**${fmtN(k.triggered)} of ${fmtN(k.planned)}** planned reviews are triggered in Scigeniq (${fmtPct(k.planTriggered)}); **${fmtN(k.productsComplete)}** are complete (Final QA closed) and **${fmtN(k.closedOut)}** workflows are closed out.`,
         k.productsOverdue ? `**${fmtN(k.productsOverdue)} reviews are past their PQR due date** and not complete; ${fmtN(k.overdueAnnexes)} open annexes are overdue.` : "No review is past its PQR due date.",
-        k.fqReady ? `**${fmtN(k.fqReady)} reviews have all ten annexes closed but the Final QA compilation has not been raised** — they can move today (${secRef("finalqa")}).` : "Every review with complete data has its Final QA compilation raised.",
+        k.fqReady ? `**${fmtN(k.fqReady)} reviews have their five QA-stream annexes closed but the Final QA compilation has not been raised** — they can move today (${secRef("finalqa")}).` : "Every review with complete data has its Final QA compilation raised.",
         `${fmtN(k.unassignedOpen)} open annexes have no named data collection owner (assigned to a group or role) and ${fmtN(k.noReviewer)} have no named data reviewer.`,
         k.openActions ? `${fmtN(k.openActions)} QA follow-up actions are open${k.overdueActions ? `, ${fmtN(k.overdueActions)} overdue` : ""}.` : "No QA follow-up action is open.",
       ];
@@ -410,7 +410,7 @@ export async function buildReport(choice = lastChoice) {
         ["Ten required annexes", SLOTS.map((x) => x.label).join(", ") + ". A slot is OK when one of its tasks is closed, open when raised but not closed, MISSING when never raised."],
         ["Shared QA Data Collection stream", "Annexes filed under the Scigeniq task type “QA Data Collection” are attributed to a department by their title (CM, Supplier, QC OOS/OOT, VL Process, QA)."],
         ["RAG", `COMPLETE = Final QA closed · OVERDUE = past the PQR overdue date · DUE SOON = within ${s.settings.dueSoonDays} days · ON TRACK otherwise · Not yet due / NOT STARTED – overdue for untriggered reviews.`],
-        ["Final QA signal", "Complete · Raised, not complete · NOT TRIGGERED – data ready (all ten slots OK, Final QA never raised) · Waiting on data collection · Not triggered."],
+        ["Final QA signal", "Complete · Raised, not complete · NOT TRIGGERED – data ready (the five QA-stream annexes QA, QC OOS/OOT, Validation Process, Compliance and Supplier Qualification are OK, Final QA never raised) · Waiting on data collection · Not triggered."],
         ["Untriggered workload", "A planned product without a workflow still owes its parent workflow, ten annexes and Final QA; they count as not raised."],
         ["User, role or group", "Tasks assigned to a role or group have no named person; the tracker attributes them to the owning department’s group or to the acting role."],
         ["Changed in app", "A record edited in the tracker; the change must be mirrored in Scigeniq, which stays the system of record."],
