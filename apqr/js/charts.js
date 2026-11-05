@@ -187,7 +187,7 @@ export function slotCells(p) {
     const st = p.slots[s.key].status;
     const n = p.slots[s.key].tasks.length;
     const glyph = st === "OK" ? icon("check") : st === "MISSING" ? "!" : st === "open" ? (n > 1 ? n : "") : "";
-    return `<span class="slot ${slotCls(st)}" data-tip="${tip(s.label, [["Status", st === "open" ? "Raised, not closed" : st === "OK" ? "Closed" : st === "MISSING" ? "Never raised" : "Not triggered"], ["Tasks", String(n)]])}">${glyph}</span>`;
+    return `<span class="slot ${slotCls(st)}" data-tip="${tip(s.label, [["Status", st === "open" ? "Raised, not closed" : st === "OK" ? "Closed" : st === "MISSING" ? "Never raised" : st === "pending" ? "Not raised yet (workflow in Batches Selection)" : "Not triggered"], ["Tasks", String(n)]])}">${glyph}</span>`;
   }).join("")}</div>`;
 }
 export const slotHead = () => `<div class="slot-head">${SLOTS.map((s) => `<span title="${esc(s.label)}">${esc(s.short)}</span>`).join("")}</div>`;

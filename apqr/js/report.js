@@ -97,7 +97,7 @@ function chartDefs(m) {
   const planned = m.tasks.filter((t) => t.isAnnex && m.planByKey.has(t.key));
   const mx = annexMatrix(planned);
   const dgroups = [...mx.rows, mx.total].map((r) => ({ label: r.dept === "Total" ? "Total general" : r.dept, values: mx.stages.map((st) => ({ key: st, value: r.total ? r.counts[st] / r.total : 0, count: r.counts[st], color: stageColor(st) })) }));
-  const deptStageRows = DEPARTMENTS.map((dp) => { const ts = planned.filter((t) => t.dept === dp); const c = (st) => ts.filter((t) => stageOf(t) === st).length; return { label: dp, sub: `${fmtN(ts.length)} required`, segments: [{ key: "Completed", value: c("Completed"), color: LC.done }, { key: "In data review", value: c("Data Review"), color: LC.review }, { key: "Collecting data", value: c("Collecting Data"), color: LC.collect }, { key: "Not triggered", value: c("Not triggered"), color: LC.nt }] }; });
+  const deptStageRows = DEPARTMENTS.map((dp) => { const ts = planned.filter((t) => t.dept === dp); const c = (st) => ts.filter((t) => stageOf(t) === st).length; return { label: dp, sub: `${fmtN(ts.length)} required`, segments: [{ key: "Completed", value: c("Completed"), color: LC.done }, { key: "In data review", value: c("Data Review"), color: LC.review }, { key: "Collecting data", value: c("Collecting Data"), color: LC.collect }, { key: "Not triggered", value: (c("Not triggered") + c("Not raised")), color: LC.nt }] }; });
 
   return {
     deptStages: card("Actual APQR annexes progress by department (all planned months)", "% of each department’s required annexes at each current stage; untriggered PQRs count as “Not triggered”", columns(dgroups, { height: 300, series: mx.stages.map((st) => ({ label: st, color: stageColor(st) })) })),
@@ -306,7 +306,7 @@ export async function buildReport(choice = lastChoice) {
         const ts = planned.filter((t) => t.dept === dp);
         const c = (st) => ts.filter((t) => stageOf(t) === st).length;
         const open = ts.filter((t) => !t.generated && !t.closed);
-        return { dp, nt: c("Not triggered"), col: c("Collecting Data"), rev: c("Data Review"), done: c("Completed"), total: ts.length, open: open.length, late: open.filter((t) => t.overdue === "YES").length, noOwner: open.filter((t) => !t.collectorPerson).length, noRev: open.filter((t) => !t.reviewerPerson).length };
+        return { dp, nt: (c("Not triggered") + c("Not raised")), col: c("Collecting Data"), rev: c("Data Review"), done: c("Completed"), total: ts.length, open: open.length, late: open.filter((t) => t.overdue === "YES").length, noOwner: open.filter((t) => !t.collectorPerson).length, noRev: open.filter((t) => !t.reviewerPerson).length };
       });
       const tot = rows.reduce((a, r) => { for (const key of ["nt", "col", "rev", "done", "total", "open", "late", "noOwner", "noRev"]) a[key] = (a[key] || 0) + r[key]; return a; }, { dp: "Total" });
       const warn = (n, c = "8A5A00") => ({ text: fmtN(n), color: n ? c : undefined, bold: !!n });

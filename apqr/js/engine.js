@@ -35,7 +35,7 @@ export const ROLES = { WORKFLOW: "Parent workflow", ANNEX: "Departmental annexe"
 export const RAG = ["COMPLETE", "ON TRACK", "DUE SOON", "OVERDUE"];
 export const RAG_ALL = ["OVERDUE", "DUE SOON", "ON TRACK", "COMPLETE", "NOT STARTED - overdue", "Not yet due"];
 export const WORKFLOW_STAGES = ["Not triggered", "Batches Selection", "Data Collection", "Collecting Data", "Data Review", "CAPA Planning", "Final Review", "Closed"];
-export const STAGE_ORDER = ["Not triggered", "Batches Selection", "Data Collection", "Collecting Data", "Data Review", "CAPA Planning", "Final Review", "Completed", "Approved", "Closed", "Rejected"];
+export const STAGE_ORDER = ["Not triggered", "Not raised", "Batches Selection", "Data Collection", "Collecting Data", "Data Review", "CAPA Planning", "Final Review", "Completed", "Approved", "Closed", "Rejected"];
 export const FINAL_QA_SIGNALS = ["Complete", "Raised, not complete", "NOT TRIGGERED - data ready", "Waiting on data collection", "Not triggered"];
 export const CLASSES = ["Data Collection", "Approval", "Workflow"];
 
@@ -203,6 +203,8 @@ function mode(values) {
   for (const v of values) { if (!v) continue; const k = (c.get(v) || 0) + 1; c.set(v, k); if (k > n) { n = k; best = v; } }
   return best;
 }
+/** A parent workflow that has not reached Data Collection yet (its annexes do not exist yet). */
+const isEarlyStage = (stage) => /batch|not started|^open$|^new$/i.test(String(stage || ""));
 const stageIdx = (s) => { const i = STAGE_ORDER.indexOf(s); return i < 0 ? 50 : i; };
 
 /* ---------------------------------------------------------------- compute */
@@ -282,6 +284,19 @@ export function compute(state) {
     for (const s of SLOTS) generated.push(derive({ ...base, id: `gen:${p.id}:${s.key}`, taskClass: "Data Collection", taskRole: ROLES.ANNEX, annexSlot: s.key, taskType: "", title: slotTitle(s.key, p.process), department: s.dept, stream: s.dept }, true));
     generated.push(derive({ ...base, id: `gen:${p.id}:final`, taskClass: "Data Collection", taskRole: ROLES.FINAL, taskType: "QA Data Collection", title: "Final QA Data Collection", department: "QA", stream: "QA" }, true));
   }
+  // Triggered PQRs still owe every required annexe they do not have yet: Scigeniq only
+  // creates the annexes when the workflow reaches Data Collection, so a workflow in
+  // Batches Selection carries ten "not raised yet" annexes (not a gap).
+  for (const p of plan) {
+    const rl = realByKey.get(p.key);
+    if (!rl) continue;
+    const wf = rl.filter((t) => t.isWorkflow).sort((x, y) => (dayNum(y.created) || 0) - (dayNum(x.created) || 0))[0];
+    const early = !!wf && isEarlyStage(wf.stage);
+    for (const s of SLOTS) {
+      if (rl.some((t) => t.isAnnex && t.slot === s.key)) continue;
+      generated.push(derive({ product: p.product, dosageForm: p.process, site: p.site, criticality: "", created: "", start: "", closedOn: "", closure: "Not Closed", createdBy: "—", assignee: "Unassigned", stage: "Not raised", status: early ? "Not raised yet" : "Never raised", taskEnd: "", ref: wf?.ref || rl[0].ref, pending: early, id: `gen:${p.id}:${s.key}:nr`, taskClass: "Data Collection", taskRole: ROLES.ANNEX, annexSlot: s.key, taskType: "", title: slotTitle(s.key, p.process), department: s.dept, stream: s.dept }, true));
+    }
+  }
   const tasks = [...real, ...generated];
   const tasksByKey = new Map();
   for (const t of tasks) { if (!t.key) continue; if (!tasksByKey.has(t.key)) tasksByKey.set(t.key, []); tasksByKey.get(t.key).push(t); }
@@ -302,7 +317,7 @@ export function compute(state) {
     const slots = {};
     for (const s of SLOTS) {
       const ts = realAnnex.filter((t) => t.slot === s.key);
-      const status = !triggered ? "Not triggered" : !ts.length ? "MISSING" : ts.some((t) => t.closed) ? "OK" : "open";
+      const status = !triggered ? "Not triggered" : !ts.length ? (wf && isEarlyStage(wf.stage) ? "pending" : "MISSING") : ts.some((t) => t.closed) ? "OK" : "open";
       slots[s.key] = { status, tasks: ts };
     }
     const slotsOk = SLOTS.filter((s) => slots[s.key].status === "OK").length;
@@ -577,8 +592,8 @@ export function compute(state) {
   const people = [...new Set([...real.filter((t) => t.assigneeType === "user").map((t) => t.assigneeName), ...real.map((t) => t.collectorPerson ? t.collector : "").filter(Boolean), ...real.map((t) => t.reviewerPerson ? t.reviewer : "").filter(Boolean)])].sort();
 
   /* --- data collection (annexes): progress by month, owners and reviewers --- */
-  const COLL_STAGES = ["Not triggered", "Collecting Data", "Data Review", "Completed"];
-  const collStage = (t) => t.generated ? "Not triggered" : t.closed ? "Completed" : /review/i.test(t.stage) ? "Data Review" : "Collecting Data";
+  const COLL_STAGES = ["Not triggered", "Not raised", "Collecting Data", "Data Review", "Completed"];
+  const collStage = (t) => t.generated ? (t.stage === "Not raised" ? "Not raised" : "Not triggered") : t.closed ? "Completed" : /review/i.test(t.stage) ? "Data Review" : "Collecting Data";
   const collection = {
     stages: COLL_STAGES,
     stageOf: collStage,

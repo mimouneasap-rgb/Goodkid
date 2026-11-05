@@ -80,7 +80,10 @@ test("approvals, workflow and Final QA don't count as annexes", () => {
     task({ title: `APQR , ${PRODUCT}`, taskClass: "Workflow", taskType: "APQR", stage: "Data Collection" }),
     task({ title: "Final QA Data Collection" }),
   ], "2026-06-15"));
-  assert.equal(m.products[0].annexTotal, 1);
+  // a triggered PQR still owes all ten annexes: one raised, nine never raised (workflow past Batches Selection)
+  assert.equal(m.products[0].annexTotal, 10);
+  assert.equal(m.products[0].annexNotRaised, 9);
+  assert.equal(m.products[0].slotsMissing, 9);
   assert.equal(m.products[0].approvals, 1);
   assert.equal(m.products[0].fqSignal, "Raised, not complete");
 });
@@ -287,4 +290,27 @@ test("Word writer builds a valid package with tables, image, landscape section a
   assert.match(doc, /<w:b\/>.*Bold/);
   assert.equal((doc.match(/<w:sectPr>/g) || []).length, 3);
   assert.match(await z.text("docProps/core.xml"), /T &amp; &lt;report&gt;/);
+});
+
+const SLOTS_ALL = (p) => Object.values(p.slots).map((s) => s.status);
+test("a workflow in Batches Selection owes ten not-raised-yet annexes, not missing ones", () => {
+  const m = compute(baseState([task({ title: `APQR , ${PRODUCT}`, taskClass: "Workflow", taskType: "APQR", stage: "Batches Selection" })], "2026-06-15"));
+  const p = m.products[0];
+  assert.equal(p.triggered, true);
+  assert.equal(p.annexTotal, 10);
+  assert.equal(p.annexNotRaised, 10);
+  assert.equal(p.slotsMissing, 0);
+  assert.ok(SLOTS_ALL(p).every((st) => st === "pending"));
+  assert.equal(m.kpi.requiredAnnexes, 10);
+  assert.equal(m.kpi.missingSlots, 0);
+  assert.equal(m.collection.byMonth.reduce((n, x) => n + (x.counts["Not raised"] || 0), 0), 10);
+});
+
+test("Scigeniq parent formats: Task - APQR , <product> and Row - <product>(<process>)", () => {
+  assert.equal(productFromParent("Task - APQR , RESTILON (Rivastigmine) 2 mg/ml Oral solution (120 ml)-ELKENDI"), "RESTILON (Rivastigmine) 2 mg/ml Oral solution (120 ml)-ELKENDI");
+  assert.equal(productFromParent("Row - SOPVAL (Sodium Valproate) 200 mg/5 ml Syrup (200 ml)-ELKENDI(Liquid/Syrup)"), "SOPVAL (Sodium Valproate) 200 mg/5 ml Syrup (200 ml)-ELKENDI");
+  assert.equal(productFromParent("Row - FENATHYL LP (Fenofibrate) 160 mg Capsules (30 CAP)(Hard Capsule)"), "FENATHYL LP (Fenofibrate) 160 mg Capsules (30 CAP)");
+  assert.equal(productFromParent("Row - CLOBECORT 0.05 % Cream (15 gm)-ELKENDI(Semi Solid)"), "CLOBECORT 0.05 % Cream (15 gm)-ELKENDI");
+  assert.equal(productFromParent("Task - Duplicated"), "Task - Duplicated");
+  assert.equal(productFromParent("APQR , ALPHA 10 mg Tablets-SITE"), "ALPHA 10 mg Tablets-SITE");
 });

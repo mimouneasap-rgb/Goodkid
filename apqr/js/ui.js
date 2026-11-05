@@ -108,10 +108,10 @@ export function fqPill(sig) {
   const m = FQ_META[sig] || FQ_META["Not triggered"];
   return html`<span class="pill pill-${m.cls}">${icon(m.icon)}${m.label}</span>`;
 }
-const SLOT_CLS = { OK: "ok", open: "open", MISSING: "missing", "Not triggered": "nt" };
+const SLOT_CLS = { OK: "ok", open: "open", MISSING: "missing", "Not triggered": "nt", pending: "nt" };
 export const slotCls = (st) => SLOT_CLS[st] || "nt";
 export function slotChip(st) {
-  const label = { OK: "OK", open: "Open", MISSING: "Missing", "Not triggered": "Not triggered" }[st] || st;
+  const label = { OK: "OK", open: "Open", MISSING: "Missing", "Not triggered": "Not triggered", pending: "Not raised yet" }[st] || st;
   return `<span class="stat-chip ${slotCls(st)}">${esc(label)}</span>`;
 }
 export function ragPill(rag) {

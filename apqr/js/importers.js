@@ -385,6 +385,13 @@ export function guessMapping(headerRow) {
 export function productFromParent(s) {
   let p = str(s);
   if (!p) return "";
+  // Scigeniq export formats since 11/2026: "Task - APQR , <product>" (tasks under an APQR workflow)
+  // and "Row - <product>(<process>)" (a workflow triggered from an APQR plan row)
+  if (/^task\s*-(?!\s*duplicated\s*$)/i.test(p)) p = p.replace(/^task\s*-\s*/i, "");
+  if (/^row\s*-\s*/i.test(p)) {
+    p = p.replace(/^row\s*-\s*/i, "");
+    p = p.replace(/\s*\((tablets?|hard\s*capsules?|capsules?|liquid\s*\/\s*syrup|liquid\s*\/\s*solution|liquid|syrup|semi[\s-]*solid)\)\s*$/i, "");
+  }
   p = p.replace(/^APQR\s*[,:–-]\s*/i, "");
   p = p.replace(/^APQR\s*\/\s*\S+\s+/i, "");
   p = p.replace(/^APQR\s+(?=\S)/i, "");
