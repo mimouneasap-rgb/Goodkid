@@ -15,11 +15,12 @@ const types = {
   ".json": "application/json",
   ".webmanifest": "application/manifest+json",
   ".png": "image/png",
+  ".jpg": "image/jpeg",
 };
 
 createServer(async (req, res) => {
   const urlPath = decodeURIComponent(new URL(req.url, "http://x").pathname);
-  const filePath = normalize(join(root, urlPath === "/" ? "index.html" : urlPath));
+  const filePath = normalize(join(root, urlPath.endsWith("/") ? urlPath + "index.html" : urlPath));
   if (!filePath.startsWith(root.endsWith(sep) ? root : root + sep)) {
     res.writeHead(403).end("Forbidden");
     return;

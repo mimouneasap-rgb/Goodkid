@@ -1,5 +1,7 @@
 # Quality Risk Manager
 
+> **New:** [`oncology/`](oncology/) holds the **El Kendi Oncology QA** app. It is built from the QA master workbook and has a dashboard, management review, QMS metrics, SPC, separate deviation / CAPA / change-control / audit-finding / action dashboards, product lifecycle, APQR, WIP, API suppliers, calibration and validation programs, training plan, 5S weekly audit, a GMP QA-activity register, facility map, rooms, equipment, FMEA, SOPs and data quality. No sign-in, and no QA data in the repository: you load the workbook in the browser. See [oncology/README.md](oncology/README.md).
+
 A lightweight quality risk management (QRM) app for identifying, scoring,
 controlling and reviewing quality risks, following the FMEA approach used in
 ICH Q9 and ISO 14971.
@@ -64,6 +66,8 @@ npm test           # runs the unit tests for the scoring logic
 | `manifest.webmanifest`, `sw.js`, `icons/` | App manifest, offline service worker and icons |
 | `server.js` | Tiny static server with no dependencies |
 | `tests/` | `node --test` unit tests |
+| `oncology/` | El Kendi Oncology QA app (see its README) |
+| `tools/extract_workbook.py` | Builds the git-ignored local data file `oncology/js/workbook-data.js` (and `schema.js`) from the master workbook |
 
 ## Notes
 
