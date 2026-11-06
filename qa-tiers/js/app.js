@@ -16,7 +16,7 @@ import { createSync } from "./sync.js";
 import { decorateCharts } from "./export.js";
 import { renderReportPage } from "./report.js";
 import { renderClose, renderArchive } from "./archive.js";
-import { renderImport } from "./scigeniq.js";
+import { renderImport, pendingUpdate } from "./scigeniq.js";
 import { renderStart, renderGuide, initGuides, startTour, tourFor, startProgress, endTour } from "./guides.js";
 
 store.load();
@@ -320,6 +320,7 @@ function join(sync) {
   team.mode = sync.readOnly ? "readonly" : "live"; paintTeam();
   route({ soft: true });
   if (HAS_REAL) offerRealData(); else if (EDITION.start === "demo") offerDemo();
+  offerUpdate();
 }
 
 /** Once, to the owner: the shared board holds site data this version does not
@@ -338,6 +339,16 @@ async function offerDemo() {
     close(); route({ soft: true });
     toast("Shared board returned to the demo — keep the page open until the status says live");
   };
+}
+
+/** To anyone who can edit: the site data of this version carries a Scigeniq update the board has not applied. */
+async function offerUpdate() {
+  const u = pendingUpdate();
+  if (!u || store.prefs.updateOffered === u.id) return;
+  const can = store.user ? await store.user.can("data.write").catch(() => null) : true;
+  if (can === false) return;
+  store.prefs.updateOffered = u.id; store.save();
+  toast(`Scigeniq update of ${u.generated} ready to apply`, { label: "Review", run: () => navigate("#/import") });
 }
 
 /** Once, to the owner: the shared board still holds the demo — load the El Kendi data? */

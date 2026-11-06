@@ -5,3 +5,5 @@
 export const REAL_T1 = null;
 export const REAL_T2 = null;
 export const REAL_PEOPLE = [];
+/** A Scigeniq update shipped with the site data, applied in the app through the import preview. */
+export const REAL_UPDATE = null;

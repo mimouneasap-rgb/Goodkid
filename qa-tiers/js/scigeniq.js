@@ -12,6 +12,7 @@ import { store } from "./store.js";
 import * as E from "./engine.js";
 import { T2_REGISTERS } from "./schema.js";
 import { loadScript } from "./export.js";
+import * as SITE from "./real-data.js";
 import { esc, fmtDate, toast, fresh, confirmDialog, $, $$ } from "./ui.js";
 
 const XLSX_URL = "https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js";
@@ -297,7 +298,7 @@ export function planImport(mapped, { update = true, add = true } = {}) {
 }
 
 /** Write the plan into the board in one save, with one change-history entry per register. */
-export function applyImport(plan, { files = [], generated = null, addPeople = true } = {}) {
+export function applyImport(plan, { files = [], generated = null, addPeople = true, id = null } = {}) {
   if (store.viewing) throw new Error("Return to the live board first — an archive is read-only");
   const s = store.t2;
   const counts = {};
@@ -319,9 +320,24 @@ export function applyImport(plan, { files = [], generated = null, addPeople = tr
   for (const r of s.aud) { addTo("AudType", r.type); addTo("AudRisk", r.risk); }
   for (const r of s.act) addTo("Departments", r.dept);
   for (const r of s.cc) addTo("Departments", r.initiator);
-  s.imports = [{ at: new Date().toISOString(), files, generated, counts }, ...(s.imports || [])].slice(0, 30);
+  s.imports = [{ at: new Date().toISOString(), files, generated, counts, ...(id ? { id } : {}) }, ...(s.imports || [])].slice(0, 30);
   store.save("t2");
   return counts;
+}
+
+/* ── the update shipped with the site data ───────────────── */
+
+/** The Scigeniq update that ships with this copy, if the board has not applied it yet. */
+export function pendingUpdate() {
+  const u = SITE.REAL_UPDATE;
+  if (!u || !store.t2 || store.viewing) return null;
+  if ((store.t2.imports || []).some((h) => h.id === u.id)) return null;
+  if (!String(store.t2.dataset || "").startsWith("elkendi")) return null;
+  return u;
+}
+function sessionFromUpdate(u) {
+  const mapped = { ...u.mapped, people: new Set(u.mapped.people || []) };
+  return { files: [{ name: `Scigeniq exports of ${u.generated}`, generated: u.generated, rows: [] }], mapped, opts: { update: true, add: true, people: true }, updateId: u.id, updateFiles: u.files || [] };
 }
 
 /* ── the page ────────────────────────────────────────────── */
@@ -372,6 +388,17 @@ export function renderImport(root) {
   drop.addEventListener("dragover", (e) => { e.preventDefault(); drop.classList.add("on"); });
   drop.addEventListener("dragleave", () => drop.classList.remove("on"));
   drop.addEventListener("drop", (e) => { e.preventDefault(); drop.classList.remove("on"); go(e.dataTransfer.files); });
+  const up = pendingUpdate();
+  if (up && !session) {
+    const card = document.createElement("div");
+    card.className = "card card-pad";
+    card.style.borderColor = "var(--accent)";
+    card.innerHTML = `<div class="card-head"><h2>Site update ready <span class="sub">Scigeniq exports of ${esc(up.generated)}</span></h2></div>
+      <p style="margin:0 0 10px;color:var(--ink-2);font-size:13.5px">This version of the boards carries the ${esc(String((up.files || []).length || ""))} Scigeniq exports of ${esc(up.generated)}. Preview what they change on the board, then apply — records the team has added are kept.</p>
+      <button class="btn primary" data-upd>Preview the update</button>`;
+    $("[data-result]", root).before(card);
+    $("[data-upd]", card).onclick = () => { session = sessionFromUpdate(up); session.plan = planImport(session.mapped, session.opts); card.remove(); drawPlan(root); };
+  }
   if (session) drawPlan(root);
 }
 
@@ -398,7 +425,8 @@ function drawPlan(root) {
   const fmt = (v) => (v == null || v === "" ? "∅" : /^\d{4}-\d\d-\d\d$/.test(v) ? fmtDate(v) : typeof v === "number" && v <= 1 && v > 0 ? `${Math.round(v * 100)} %` : String(v).length > 70 ? `${String(v).slice(0, 68)}…` : String(v));
   box.innerHTML = `
     <div class="card card-pad"><div class="card-head"><h2>Files read <span class="sub">${files.length}</span></h2><button class="btn sm ghost" data-clearimp>Start again</button></div>
-      <table class="plain"><tbody>${kinds.map(({ f, c }) => `<tr><td><b>${esc(f.name.replace(/^[0-9a-f]{8}-/, ""))}</b><br><span class="muted" style="font-size:12px">${f.generated ? `generated ${esc(f.generated)}` : ""}</span></td><td style="font-size:12.5px">${Object.entries(c).map(([k, n]) => `${n} ${esc(KIND_LABEL[k] || k)}`).join(" · ")}</td></tr>`).join("")}</tbody></table>
+      ${session.updateId ? `<p style="margin:0;font-size:13px">Shipped with the site data: ${esc((session.updateFiles || []).join(", ") || files[0].name)}</p>` : ""}
+      <table class="plain"><tbody>${kinds.filter(({ f }) => f.rows.length).map(({ f, c }) => `<tr><td><b>${esc(f.name.replace(/^[0-9a-f]{8}-/, ""))}</b><br><span class="muted" style="font-size:12px">${f.generated ? `generated ${esc(f.generated)}` : ""}</span></td><td style="font-size:12.5px">${Object.entries(c).map(([k, n]) => `${n} ${esc(KIND_LABEL[k] || k)}`).join(" · ")}</td></tr>`).join("")}</tbody></table>
       ${mapped.skipped ? `<p class="muted" style="font-size:12.5px">${mapped.skipped} row(s) of a type the boards do not track were skipped.</p>` : ""}</div>
     <div class="card card-pad"><div class="card-head"><h2>What will change <span class="sub">${total} record${total === 1 ? "" : "s"}</span></h2></div>
       <div class="row" style="gap:14px;margin-bottom:10px;font-size:13px"><label class="row" style="gap:6px"><input type="checkbox" data-opt="add" ${opts.add ? "checked" : ""}> Add new records</label><label class="row" style="gap:6px"><input type="checkbox" data-opt="update" ${opts.update ? "checked" : ""}> Update existing records</label><label class="row" style="gap:6px"><input type="checkbox" data-opt="people" ${opts.people ? "checked" : ""}> Add ${plan.people.length} new name${plan.people.length === 1 ? "" : "s"} to the People list</label></div>
@@ -423,7 +451,7 @@ function drawPlan(root) {
     if (!await confirmDialog({ title: "Apply the Scigeniq import?", body: `<p>${REGS.map((r) => (plan[r].add.length || plan[r].upd.length ? `${T2_REGISTERS[r].short}: +${plan[r].add.length} new, ${plan[r].upd.length} updated` : "")).filter(Boolean).join("<br>") || "Only the People list changes."}</p><p>${store.sync ? "<b>For everyone on the team.</b> " : ""}Every change is recorded in Change history.</p>`, ok: "Apply" })) return;
     try {
       const gen = files.map((f) => f.generated).filter(Boolean).sort().pop() || null;
-      applyImport(session.plan, { files: files.map((f) => f.name.replace(/^[0-9a-f]{8}-/, "")), generated: gen, addPeople: opts.people });
+      applyImport(session.plan, { files: session.updateFiles?.length ? session.updateFiles : files.map((f) => f.name.replace(/^[0-9a-f]{8}-/, "")), generated: gen, addPeople: opts.people, id: session.updateId || null });
       toast("Import applied — the boards are up to date with Scigeniq");
       session = null;
       renderImport(root);
