@@ -394,9 +394,9 @@ const IN_PROGRESS = ["In Progress", "Effectiveness Check", "In Course", "In Appr
 export const REG_SLOT = { act: "f-s1", dev: "f-s2", capa: "f-s3", cc: "f-s4", rel: "f-s5", apqr: "f-s6", tasks: "f-s7", find: "f-s8" };
 const slotOf = (reg) => REG_SLOT[reg] || "f-other";
 const QMS = ["dev", "capa", "cc", "insp", "act", "find", "aud", "esc", "doc"];
-const DATE_KEY = { dev: "opened", capa: "opened", cc: "opened", insp: "opened", act: "opened", esc: "opened", doc: "opened", apqr: "opened", rel: "mfg", trn: "date", tasks: "opened", aud: "opened", find: "opened" };
-const CLOSE_KEY = { dev: "closed", capa: "closed", cc: "closed", insp: "closed", act: "closed", esc: "closed", doc: "closed", apqr: "closed", rel: "decision", tasks: "closed", aud: "closed", find: "closed" };
-const OWNER_KEY = { dev: "owner", capa: "owner", cc: "owner", insp: "owner", act: "owner", esc: "owner", doc: "owner", apqr: "owner", rel: "officer", tasks: "member", trn: "trainer", aud: "owner", find: "owner" };
+const DATE_KEY = { rej: "opened", dev: "opened", capa: "opened", cc: "opened", insp: "opened", act: "opened", esc: "opened", doc: "opened", apqr: "opened", rel: "mfg", trn: "date", tasks: "opened", aud: "opened", find: "opened" };
+const CLOSE_KEY = { rej: "closed", dev: "closed", capa: "closed", cc: "closed", insp: "closed", act: "closed", esc: "closed", doc: "closed", apqr: "closed", rel: "decision", tasks: "closed", aud: "closed", find: "closed" };
+const OWNER_KEY = { rej: "owner", dev: "owner", capa: "owner", cc: "owner", insp: "owner", act: "owner", esc: "owner", doc: "owner", apqr: "owner", rel: "officer", tasks: "member", trn: "trainer", aud: "owner", find: "owner" };
 const legend = (items) => `<div class="chart-legend">${items.map(([cls, name]) => `<span><i class="bg-${cls.slice(2)}"></i>${esc(name)}</span>`).join("")}</div>`;
 const regLabel = (reg) => T2_REGISTERS[reg]?.short || reg;
 
@@ -405,7 +405,7 @@ const regLabel = (reg) => T2_REGISTERS[reg]?.short || reg;
 export const CHARTS = [
   { id: "mix", title: "Workload by process", q: "Where is work starting but not finishing?", dims: ["owner", "area", "product", "reg"],
     build({ s, comp }) {
-      const rows = ["dev", "capa", "cc", "act", "find", "aud", "insp", "rel", "doc", "apqr", "esc"].filter((reg) => s[reg]).map((reg) => {
+      const rows = ["dev", "capa", "cc", "act", "find", "aud", "rej", "insp", "rel", "doc", "apqr", "esc"].filter((reg) => s[reg]).map((reg) => {
         const g = { o: 0, p: 0, c: 0, x: 0 };
         s[reg].forEach((r, i) => { const c = comp[reg][i]; if (c.live === "Overdue") g.x++; else if (!c.open) g.c++; else if (IN_PROGRESS.includes(r.status)) g.p++; else g.o++; });
         return { reg, g };
@@ -510,7 +510,7 @@ export const CHARTS = [
     build({ s, comp }) {
       const ref = s.setup.statusDate;
       const B = [["0–30 d", "f-a1"], ["31–60 d", "f-a2"], ["61–90 d", "f-a3"], ["> 90 d", "f-a4"]];
-      const rows = [...QMS, "apqr"].filter((r) => s[r]?.length).map((reg) => {
+      const rows = [...QMS, "apqr", "rej"].filter((r) => s[r]?.length).map((reg) => {
         const g = [0, 0, 0, 0];
         s[reg].forEach((r, i) => {
           if (!comp[reg][i].open || !has(r[DATE_KEY[reg]])) return;

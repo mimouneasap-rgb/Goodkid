@@ -305,7 +305,7 @@ export function decorateCharts(root) {
     b.innerHTML = `<span aria-hidden="true">⤓</span> Export`;
     b.onclick = (e) => { e.stopPropagation(); openMenu(b, t); };
     if (t.head) t.head.append(b);
-    else { t.host.style.position ||= "relative"; b.classList.add("png-float"); t.host.append(b); }
+    else { t.host.style.position ||= "relative"; t.host.classList.add("has-float"); b.classList.add("png-float"); t.host.append(b); }
   }
   root.querySelectorAll("[data-export-all]").forEach((b) => {
     if (b._wired) return;

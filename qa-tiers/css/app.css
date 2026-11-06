@@ -773,3 +773,4 @@ svg.chart text.seg.on-a1, svg.chart text.seg.on-a2, svg.chart text.seg.on-q1 { f
 .dropzone:hover, .dropzone.on { border-color: var(--accent); background: var(--accent-soft); }
 .imp-det { margin-top: 10px; padding: 8px 10px; border-radius: 9px; background: var(--surface-2); border: 1px solid var(--line); }
 .imp-det summary { cursor: pointer; font-size: 13px; }
+.has-float { padding-top: 40px !important; }

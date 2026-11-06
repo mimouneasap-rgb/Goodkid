@@ -300,10 +300,35 @@ export const T2_REGISTERS = {
     table: ["id", "audit", "desc", "cls", "owner", "status", "due"],
     sortDesc: true,
   },
+  rej: {
+    no: "13", title: "Rejections", icon: "⊘", short: "Rejections",
+    lead: "The reject index: every rejection report — raw material, packaging, bulk, validation or finished-product batch — from the initial rejection to the final signed closure.",
+    source: "Rejection report QA0113E/Onc (reject index) · WIP rejections in progress", who: "QA oncology", when: "When a rejection is raised, signed and closed",
+    lifecycle: ["Open", "In Progress", "Pending Signature", "Closed"], kpi: null, idHint: "REONC001-26MP",
+    fields: [
+      f("id", "Rejection Report No.", "text", { req: true, help: "e.g. REONC001-26MP — the suffix is the rejection type" }),
+      f("code", "Item Code", "text"),
+      f("product", "Product / Material", "text", { req: true }),
+      f("ptype", "Rejection Type", "list", { list: "RejType", help: "Raw material · Packaging material · Intermediate / bulk · Validation batch · Finished product" }),
+      f("btype", "Batch Type", "text", { help: "Industrial · Registration · Validation…" }),
+      f("batch", "Batch No.", "text"),
+      f("link", "Related OOS / Deviation", "text"),
+      f("qty", "Quantity Rejected", "text", { help: "As written on the report, e.g. 7,35 kg" }),
+      f("kg", "Quantity (kg)", "num"),
+      f("reason", "Reason for Rejection", "long"),
+      f("owner", "Initiated by", "list", { list: "People" }),
+      f("opened", "Initial Rejection Date", "date", { req: true }),
+      f("status", "Status", "list", { list: "RejStatus", req: true, help: "Open · In Progress · Pending Signature (final rejection awaiting signature) · Closed" }),
+      f("closed", "Final Rejection (Closure) Date", "date", { help: "Signed final rejection — only when Closed" }),
+      f("comments", "Comments", "long"),
+    ],
+    table: ["id", "product", "ptype", "batch", "qty", "reason", "status", "opened"],
+    sortDesc: true,
+  },
 };
 
 /** Order of the registers on the Tier 2 navigation. */
-export const T2_ORDER = ["dev", "capa", "cc", "act", "insp", "rel", "doc", "load", "tasks", "apqr", "trn", "esc", "aud", "find"];
+export const T2_ORDER = ["dev", "capa", "cc", "act", "insp", "rel", "doc", "load", "tasks", "apqr", "trn", "esc", "aud", "find", "rej"];
 
 /** Tier 2 Daily Log (calendar) inputs. */
 export const T2_DAILY_FIELDS = [
@@ -462,7 +487,7 @@ export const T1_ORDER = ["dl", "br", "fn", "ac", "hd", "tr"];
 export const LOCKED_LISTS = new Set([
   "DevClass", "DevStatus", "CAPAStatus", "CCCat", "CCStatus", "YesNoTBD", "YesNo", "Severity", "InspStatus",
   "BRStatus", "DocStatus", "APQRStatus", "TrStatus", "EscStatus", "DayStatus", "ManualKPI",
-  "Att", "FnStatus", "AcStatus", "FnTypes", "Weekdays", "TaskStatus", "ActStatus", "ActParent", "AudStatus", "FindStatus", "AudKind",
+  "Att", "FnStatus", "AcStatus", "FnTypes", "Weekdays", "TaskStatus", "ActStatus", "ActParent", "AudStatus", "FindStatus", "AudKind", "RejStatus",
 ]);
 
 /** Human names for the drop-down lists. */
@@ -476,7 +501,7 @@ export const LIST_LABELS = {
   EscStatus: "Escalation status", DayStatus: "Day status", ManualKPI: "Manual KPI status",
   People: "People & functions", Departments: "Departments", Products: "Products", Tier3: "Tier 3 escalation contacts",
   FnTypes: "Finding types", ErrCats: "Error categories", Shifts: "Shifts", Att: "Attendance", RecType: "Record type",
-  FnStatus: "Finding status", ActStatus: "eQMS action status", ActParent: "eQMS action parent", Roles: "Positions / roles", TaskStatus: "Task status", AcSource: "Action source", Priority: "Priority", AcStatus: "Action status", Owners: "Action owners", AudKind: "Audit record", AudType: "Audit type", AudRisk: "Audit risk", AudStatus: "Audit status", FindType: "Finding type (audits)", FindStatus: "Audit finding status",
+  FnStatus: "Finding status", ActStatus: "eQMS action status", ActParent: "eQMS action parent", Roles: "Positions / roles", TaskStatus: "Task status", AcSource: "Action source", Priority: "Priority", AcStatus: "Action status", Owners: "Action owners", AudKind: "Audit record", AudType: "Audit type", AudRisk: "Audit risk", AudStatus: "Audit status", FindType: "Finding type (audits)", FindStatus: "Audit finding status", RejStatus: "Rejection status", RejType: "Rejection type",
 };
 
 export const SKILL_LEVELS = [

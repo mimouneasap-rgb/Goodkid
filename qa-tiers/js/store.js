@@ -3,7 +3,8 @@
 // written to a small audit trail (what, which record, before → after).
 
 import { DEMO_T1, DEMO_T2 } from "./demo-data.js";
-import { REAL_T1, REAL_T2 } from "./real-data.js";
+import * as SITE from "./real-data.js";
+const { REAL_T1, REAL_T2 } = SITE;
 import { DEFAULT_ACTIVITIES, monthEnd } from "./engine.js";
 import { EDITION } from "./edition.js";
 import { ensureKeys, stateFrom } from "./sync.js";
@@ -44,7 +45,9 @@ function seedLists(tier, s) {
     s.tasks ??= /El Kendi/.test(s.setup.site) && s.setup.month === "2026-09-01" ? clone(DEMO_TASKS) : [];
     s.activities = s.activities.concat(DEFAULT_ACTIVITIES.filter((a) => !s.activities.some((x) => x.name === a.name)).map((a) => ({ ...a, role: REAL_ROLES[a.role] ?? a.role })));
     s.act ??= [];
-    s.aud ??= []; s.find ??= [];
+    s.aud ??= []; s.find ??= []; s.rej ??= [];
+    s.lists.RejStatus ??= ["Open", "In Progress", "Pending Signature", "Closed"];
+    s.lists.RejType ??= ["Raw material", "Packaging material", "Intermediate / bulk", "Validation batch", "Finished product"];
     s.lists.AudKind ??= ["Plan", "Audit"];
     s.lists.AudType ??= ["Internal", "Supplier", "External Authority"];
     s.lists.AudRisk ??= ["Low Risk", "Moderate Risk", "High Risk", "N/A"];
@@ -73,14 +76,21 @@ const REAL_ROLES = {
 export const HAS_REAL = !!(REAL_T1 && REAL_T2);
 /** Whether the boards hold site data — shipped with this copy, or already on the shared board.
  * A real board never offers the demo, whichever copy of the app opens it. */
-export const isRealBoard = () => HAS_REAL || store.t2?.dataset === "elkendi-2026-10-30" || store.t1?.dataset === "elkendi-2026-10-30";
+/** The site data this copy ships: its dataset id, name, date and what it holds. */
+export const REAL_INFO = {
+  dataset: "elkendi-2026-10-30", label: "The El Kendi data", date: "30/10/2026",
+  sources: "shop-floor batch records, sampling, line clearance and IPC, oncology deviations, the APQR programme and the QA personnel list",
+  summary: "11 QA staff from QA0007E/Onc/TE01, 359 officer-days of shop-floor activity, 51 batches, 75 batch-record reviews, 19 oncology deviations (QE-KO), 163 APQRs and 136 Scigeniq tasks",
+  ...(SITE.REAL_META || {}),
+};
+export const isRealBoard = () => HAS_REAL || String(store.t2?.dataset || "").startsWith("elkendi") || String(store.t1?.dataset || "").startsWith("elkendi");
 /** The September 2026 demo is offered only by a demo edition on a board without site data. */
 export const demoAllowed = () => !isRealBoard() && EDITION.start === "demo";
 /** Where a new board starts when nothing says otherwise. */
 export const DEFAULT_SOURCE = HAS_REAL ? "real" : EDITION.start;
 
 const T1_REGS = ["dl", "br", "fn", "ac", "hd", "tr"];
-const T2_REGS = ["dev", "capa", "cc", "insp", "rel", "doc", "load", "apqr", "trn", "esc", "tasks", "act", "aud", "find"];
+const T2_REGS = ["dev", "capa", "cc", "insp", "rel", "doc", "load", "apqr", "trn", "esc", "tasks", "act", "aud", "find", "rej"];
 const isoToday = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
 
 /** An empty board for the edition's reporting month: the standard lists,
@@ -114,7 +124,7 @@ function fresh(tier, source = DEFAULT_SOURCE) {
   const real = source === "real" && HAS_REAL;
   const s = clone(tier === "t1" ? (real ? REAL_T1 : DEMO_T1) : (real ? REAL_T2 : DEMO_T2));
   s.audit = [];
-  s.dataset = real ? "elkendi-2026-10-30" : "demo-2026-09";
+  s.dataset = real ? REAL_INFO.dataset : "demo-2026-09";
   if (tier === "t2") {
     s.activities ??= clone(DEFAULT_ACTIVITIES).map((a) => (real ? { ...a, role: REAL_ROLES[a.role] ?? a.role } : a));
     if (!real) s.tasks ??= clone(DEMO_TASKS);
@@ -247,7 +257,7 @@ export const store = {
       this[tier] = s; this.save(tier); return;
     }
     const s = fresh(tier, "real");
-    const regs = tier === "t1" ? ["dl", "br", "fn", "ac", "hd", "tr"] : ["dev", "capa", "cc", "insp", "rel", "doc", "apqr", "trn", "esc", "tasks", "act", "aud", "find"];
+    const regs = tier === "t1" ? ["dl", "br", "fn", "ac", "hd", "tr"] : ["dev", "capa", "cc", "insp", "rel", "doc", "apqr", "trn", "esc", "tasks", "act", "aud", "find", "rej"];
     for (const r of regs) s[r] = [];
     if (tier === "t2") { s.daily = {}; s.trend.rows = s.trend.rows.map(() => Array(12).fill(null)); }
     this[tier] = s; this.save(tier);

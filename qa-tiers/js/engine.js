@@ -80,6 +80,7 @@ export const T2_FLOW = {
   act: { done: ["Done", "Cancelled"] },
   aud: { done: ["Completed", "Canceled"] },
   find: { done: ["Completed", "Canceled"] },
+  rej: { done: ["Closed"] },
 };
 
 /** ƒx columns of a generic Tier 2 register row (Live Status, Age, Days to Due, Closed On Time, Data Check). */
@@ -151,6 +152,7 @@ export const DEFAULT_ACTIVITIES = [
   { name: "Audit plan management", reg: "aud", field: "kind", value: "Plan", effort: 0.5, role: "Senior QA Officer — board owner" },
   { name: "Audit (lead auditor)", reg: "aud", effort: 3, role: "Senior QA Officer — board owner" },
   { name: "Audit finding follow-up", reg: "find", effort: 0.25, role: "QA Officer — oncology line" },
+  { name: "Rejection report (raise to final signature)", reg: "rej", effort: 0.5, role: "QA Officer — oncology line" },
   { name: "Batch record review (routine)", reg: "task", effort: 1, role: "QA Batch Release" },
   { name: "Gemba walks & line support (routine)", reg: "task", effort: 1, role: "QA Officer — oncology line" },
   { name: "Internal audit / self-inspection", reg: "task", effort: 4, role: "Senior QA Officer — board owner" },
@@ -169,7 +171,7 @@ export const DEFAULT_ACTIVITIES = [
 
 export const LOAD_SOURCES = {
   dev: "Deviations", capa: "CAPA", cc: "Change control", insp: "Inspections", rel: "Batch release", doc: "Documentation",
-  apqr: "APQR", trn: "Training", esc: "Escalations", tasks: "Task planner", t1ac: "Tier 1 actions", act: "eQMS actions", aud: "Audits", find: "Audit findings",
+  apqr: "APQR", trn: "Training", esc: "Escalations", tasks: "Task planner", t1ac: "Tier 1 actions", act: "eQMS actions", aud: "Audits", find: "Audit findings", rej: "Rejections",
 };
 
 /** Who does the QA work on a record, and over which dates. */
@@ -182,6 +184,7 @@ const LOAD_MAP = {
   act: { who: "owner", done: ["Done"], skip: ["Cancelled"] },
   aud: { who: "owner", done: ["Completed"], skip: ["Canceled"] },
   find: { who: "owner", done: ["Completed"], skip: ["Canceled"] },
+  rej: { who: "owner", done: ["Closed"] },
   t1ac: { who: "officer", done: ["Done"], skip: ["Cancelled"] },
 };
 

@@ -5,5 +5,7 @@
 export const REAL_T1 = null;
 export const REAL_T2 = null;
 export const REAL_PEOPLE = [];
+/** What the site data is: { dataset, label, date, sources, summary }. */
+export const REAL_META = null;
 /** A Scigeniq update shipped with the site data, applied in the app through the import preview. */
 export const REAL_UPDATE = null;

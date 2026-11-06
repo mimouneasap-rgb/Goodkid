@@ -67,6 +67,7 @@ export const TYPES = {
       ["act", "eQMS actions", "Overdue actions by owner and the overdue list"],
       ["audits", "Audits & findings", "Audit programme status, findings by classification, open and overdue findings"],
       ["rel", "Batch release", "Release clock and batches not yet released"],
+      ["rej", "Rejections", "Reject index: open, pending signature, quantity rejected by type"],
       ["apqr", "APQR", "Programme status and overdue reviews"],
       ["load", "QA load", "Capacity, calculated workload and delays per person"],
       ["t1", "Tier 1 huddle board", "SQDCP day counts, 20 KPIs and team performance"],
@@ -85,10 +86,10 @@ const NOTES = [
   ["focus", "Focus for the next period", "Two or three priorities."],
 ];
 
-const REGS = ["dev", "capa", "cc", "insp", "act", "find", "aud", "esc", "doc", "apqr", "rel", "tasks", "trn"];
-const DATE_KEY = { dev: "opened", capa: "opened", cc: "opened", insp: "opened", act: "opened", esc: "opened", doc: "opened", apqr: "opened", rel: "mfg", trn: "date", tasks: "opened", aud: "opened", find: "opened" };
-const CLOSE_KEY = { dev: "closed", capa: "closed", cc: "closed", insp: "closed", act: "closed", esc: "closed", doc: "closed", apqr: "closed", rel: "decision", tasks: "closed", aud: "closed", find: "closed" };
-const OWNER_KEY = { dev: "owner", capa: "owner", cc: "owner", insp: "owner", act: "owner", esc: "owner", doc: "owner", apqr: "owner", rel: "officer", tasks: "member", trn: "trainer", aud: "owner", find: "owner" };
+const REGS = ["dev", "capa", "cc", "insp", "act", "find", "aud", "rej", "esc", "doc", "apqr", "rel", "tasks", "trn"];
+const DATE_KEY = { rej: "opened", dev: "opened", capa: "opened", cc: "opened", insp: "opened", act: "opened", esc: "opened", doc: "opened", apqr: "opened", rel: "mfg", trn: "date", tasks: "opened", aud: "opened", find: "opened" };
+const CLOSE_KEY = { rej: "closed", dev: "closed", capa: "closed", cc: "closed", insp: "closed", act: "closed", esc: "closed", doc: "closed", apqr: "closed", rel: "decision", tasks: "closed", aud: "closed", find: "closed" };
+const OWNER_KEY = { rej: "owner", dev: "owner", capa: "owner", cc: "owner", insp: "owner", act: "owner", esc: "owner", doc: "owner", apqr: "owner", rel: "officer", tasks: "member", trn: "trainer", aud: "owner", find: "owner" };
 const label = (reg) => T2_REGISTERS[reg]?.short || reg;
 const descOf = (r) => r.desc || r.title || r.topic || r.product || "";
 
@@ -485,6 +486,15 @@ export async function buildReport(opts, onStep = () => {}) {
       const rows = s2.rel, c = comp.rel, released = rows.filter((r) => r.status === "Released").length;
       body.push(sec("Batch release"), k.P(`${rows.length} batches · ${released} released · ${c.filter((x) => x.late === "Yes").length} released late · ${c.filter((x) => x.live === "Overdue").length} past the ${st.brTarget}-day target without a decision.`),
         ...openTable(k, rows, c, ref, lim, [["Batch", (r) => r.id], ["Product", (r) => r.product, false, 24], ["Mfg completion", (r) => fmtDate(r.mfg)], ["Target", (r, x) => fmtDate(x.target)], ["Status", (r, x) => (x.live === "Overdue" ? { v: "Overdue", rag: "R" } : r.status)], ["Lead (d)", (r, x) => x.lead, true]]));
+    }
+    if (on("rej")) {
+      const rows = s2.rej || [], c = comp.rej || [];
+      const byType = {};
+      rows.forEach((r) => { const t = r.ptype || "—"; byType[t] ??= { n: 0, kg: 0, open: 0 }; byType[t].n++; byType[t].kg += +r.kg || 0; if (r.status !== "Closed") byType[t].open++; });
+      body.push(sec("Rejections"), k.P(`${rows.length} rejection reports · ${statusMix(rows, c)} · ${fmtNum(rows.reduce((a, r) => a + (+r.kg || 0), 0))} kg rejected in all.`),
+        k.T(["Type", "Reports", "Not closed", "Quantity (kg)"], Object.entries(byType).sort((a, b) => b[1].n - a[1].n).map(([t, x]) => [{ v: t, bold: true }, x.n, x.open ? { v: x.open, rag: "A" } : 0, fmtNum(x.kg)]), { right: [1, 2, 3] }),
+        k.H("Not closed", 2),
+        ...openTable(k, rows, c, ref, lim, [["Report", (r) => r.id], ["Product / material", (r) => r.product, false, 26], ["Batch", (r) => r.batch], ["Qty", (r) => r.qty], ["Reason", (r) => r.reason, false, 22], ["Status", (r) => r.status], ["Raised", (r) => fmtDate(r.opened)]]));
     }
     if (on("apqr")) {
       const rows = s2.apqr, c = comp.apqr;

@@ -1,7 +1,7 @@
 // App shell: navigation rail, hash router and the home page (the Tier 1 →
 // Tier 2 → Tier 3 cascade).
 
-import { store, HAS_REAL, demoAllowed } from "./store.js";
+import { store, HAS_REAL, demoAllowed, REAL_INFO } from "./store.js";
 import { EDITION } from "./edition.js";
 import * as E from "./engine.js";
 import { T1_REGISTERS, T2_REGISTERS, T1_ORDER, T2_ORDER } from "./schema.js";
@@ -288,7 +288,7 @@ function firstRun(sync) {
   setupDialog = modal(`<div class="eyebrow">Share with your team</div><h2>Set up the shared board</h2>
     <p style="margin:0">From now on everyone who opens this page works on the same Tier 1 and Tier 2 boards, and sees each other's changes live. Choose what the team starts from:</p>
     <div class="lcards">
-      ${HAS_REAL ? `<button class="lcard" data-start="real" style="text-align:left;cursor:pointer"><b>The El Kendi data</b><span>Imported 30/10/2026: shop-floor batch records, sampling, line clearance and IPC, oncology deviations, the APQR programme and the QA personnel list.</span></button>` : ""}
+      ${HAS_REAL ? `<button class="lcard" data-start="real" style="text-align:left;cursor:pointer"><b>${esc(REAL_INFO.label)} (recommended)</b><span>Imported ${esc(REAL_INFO.date)}: ${esc(REAL_INFO.sources)}.</span></button>` : ""}
       <button class="lcard" data-start="mine" style="text-align:left;cursor:pointer"><b>The boards in this browser</b><span>Everything you have entered or changed here so far.</span></button>
       ${demoAllowed() ? `<button class="lcard" data-start="demo" style="text-align:left;cursor:pointer"><b>The September 2026 demo</b><span>Made-up training data for the masterclass.</span></button>` : ""}
       <button class="lcard" data-start="blank" style="text-align:left;cursor:pointer;${EDITION.start === "blank" && !HAS_REAL ? "border-color:var(--accent);background:var(--accent-soft)" : ""}"><b>${EDITION.start === "blank" && !HAS_REAL ? `A blank ${esc(EDITION.label)} board (recommended)` : "Empty registers"}</b><span>${EDITION.start === "blank" && !HAS_REAL ? "Empty registers for the month, with the standard lists, KPI targets and QA activity catalogue. Then follow Start here." : "Keeps setup, targets, roster and lists; registers start empty."}</span></button>
@@ -351,21 +351,22 @@ async function offerUpdate() {
   toast(`Scigeniq update of ${u.generated} ready to apply`, { label: "Review", run: () => navigate("#/import") });
 }
 
-/** Once, to the owner: the shared board still holds the demo — load the El Kendi data? */
+/** Once, to the owner: the shared board holds other data than the site data of this copy — load it? */
 async function offerRealData() {
-  if (!HAS_REAL || store.t2.dataset === "elkendi-2026-10-30" || store.prefs.realOffered) return;
+  if (!HAS_REAL || store.t2.dataset === REAL_INFO.dataset || store.prefs.realOffered === REAL_INFO.dataset) return;
   const owner = store.user ? await store.user.isOwner().catch(() => false) : false;
   if (!owner) return;
-  const { el, close } = modal(`<div class="eyebrow">El Kendi data available</div><h2>Replace the demo on the shared board?</h2>
-    <p style="margin:0">The shared board still holds the September 2026 demo. The real El Kendi data imported on 30/10/2026 is ready: 11 QA staff from QA0007E/Onc/TE01, 359 officer-days of shop-floor activity, 51 batches, 75 batch-record reviews, 19 oncology deviations (QE-KO), 163 APQRs and 136 Scigeniq tasks.</p>
-    <p style="margin:0">Loading it replaces the demo <b>for everyone on the team</b>. The settings your team changed (month, status date) are replaced too.</p>
-    <div class="actions"><button class="btn" data-later>Not now</button><button class="btn primary" data-load>Load the El Kendi data for the team</button></div>`);
-  el.querySelector("[data-later]").onclick = () => { store.prefs.realOffered = true; store.save(); close(); };
+  const was = String(store.t2.dataset || "").startsWith("demo") ? "the September 2026 demo" : String(store.t2.dataset || "").startsWith("blank") ? "a blank board" : "earlier data";
+  const { el, close } = modal(`<div class="eyebrow">Site data available</div><h2>Load ${esc(REAL_INFO.label)} for the team?</h2>
+    <p style="margin:0">The shared board holds ${was}. ${esc(REAL_INFO.label)} (${esc(REAL_INFO.date)}) is ready: ${esc(REAL_INFO.summary)}.</p>
+    <p style="margin:0">Loading it replaces what the shared board holds now <b>for everyone on the team</b>, settings included.</p>
+    <div class="actions"><button class="btn" data-later>Not now</button><button class="btn primary" data-load>Load it for the team</button></div>`);
+  el.querySelector("[data-later]").onclick = () => { store.prefs.realOffered = REAL_INFO.dataset; store.save(); close(); };
   el.querySelector("[data-load]").onclick = () => {
     store.reset("t1", "real"); store.reset("t2", "real");
-    store.prefs.realOffered = true; store.save();
+    store.prefs.realOffered = REAL_INFO.dataset; store.save();
     close(); route({ soft: true });
-    toast("El Kendi data loaded for the whole team — keep the page open until the status says live");
+    toast(`${REAL_INFO.label} loaded for the whole team — keep the page open until the status says live`);
   };
 }
 
