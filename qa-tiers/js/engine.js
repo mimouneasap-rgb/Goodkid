@@ -78,6 +78,8 @@ export const T2_FLOW = {
   esc: { done: ["Resolved"] },
   tasks: { done: ["Done", "Cancelled"] },
   act: { done: ["Done", "Cancelled"] },
+  aud: { done: ["Completed", "Canceled"] },
+  find: { done: ["Completed", "Canceled"] },
 };
 
 /** ƒx columns of a generic Tier 2 register row (Live Status, Age, Days to Due, Closed On Time, Data Check). */
@@ -146,6 +148,9 @@ export const DEFAULT_ACTIVITIES = [
   { name: "Tier 3 escalation follow-up", reg: "esc", effort: 0.5, role: "Senior QA Officer — board owner" },
   { name: "Tier 1 action", reg: "t1ac", effort: 0.25, role: "QA Officer — oncology line" },
   { name: "eQMS action (QE / CAPA / CC)", reg: "act", effort: 0.5, role: "QA Officer — oncology line" },
+  { name: "Audit plan management", reg: "aud", field: "kind", value: "Plan", effort: 0.5, role: "Senior QA Officer — board owner" },
+  { name: "Audit (lead auditor)", reg: "aud", effort: 3, role: "Senior QA Officer — board owner" },
+  { name: "Audit finding follow-up", reg: "find", effort: 0.25, role: "QA Officer — oncology line" },
   { name: "Batch record review (routine)", reg: "task", effort: 1, role: "QA Batch Release" },
   { name: "Gemba walks & line support (routine)", reg: "task", effort: 1, role: "QA Officer — oncology line" },
   { name: "Internal audit / self-inspection", reg: "task", effort: 4, role: "Senior QA Officer — board owner" },
@@ -164,7 +169,7 @@ export const DEFAULT_ACTIVITIES = [
 
 export const LOAD_SOURCES = {
   dev: "Deviations", capa: "CAPA", cc: "Change control", insp: "Inspections", rel: "Batch release", doc: "Documentation",
-  apqr: "APQR", trn: "Training", esc: "Escalations", tasks: "Task planner", t1ac: "Tier 1 actions", act: "eQMS actions",
+  apqr: "APQR", trn: "Training", esc: "Escalations", tasks: "Task planner", t1ac: "Tier 1 actions", act: "eQMS actions", aud: "Audits", find: "Audit findings",
 };
 
 /** Who does the QA work on a record, and over which dates. */
@@ -175,6 +180,8 @@ const LOAD_MAP = {
   trn: { who: "trainer", start: (r) => r.date, end: (r) => r.date, due: (r) => r.date, done: ["Completed"], skip: ["Cancelled"] },
   tasks: { who: "member", done: ["Done"], skip: ["Cancelled"] },
   act: { who: "owner", done: ["Done"], skip: ["Cancelled"] },
+  aud: { who: "owner", done: ["Completed"], skip: ["Canceled"] },
+  find: { who: "owner", done: ["Completed"], skip: ["Canceled"] },
   t1ac: { who: "officer", done: ["Done"], skip: ["Cancelled"] },
 };
 
@@ -254,7 +261,21 @@ export function t2Computed(state) {
     if (out.act[i].live === "Overdue") l.overdue++;
     links.set(a.parent, l);
   });
-  for (const reg of ["dev", "capa", "cc"]) out[reg].forEach((c, i) => { c.actions = links.get(state[reg][i].id) || null; });
+  for (const reg of ["dev", "capa", "cc", "aud", "find"]) out[reg].forEach((c, i) => { c.actions = links.get(state[reg][i].id) || null; });
+  // findings of each audit, and the CAPA that answer each finding
+  const finds = new Map();
+  (state.find || []).forEach((r, i) => {
+    if (!r.audit) return;
+    const l = finds.get(r.audit) || { total: 0, open: 0, overdue: 0 };
+    l.total++;
+    if (out.find[i].open) l.open++;
+    if (out.find[i].live === "Overdue") l.overdue++;
+    finds.set(r.audit, l);
+  });
+  out.aud.forEach((c, i) => { c.findings = finds.get(state.aud[i].id) || null; });
+  const capaOf = new Map();
+  (state.capa || []).forEach((r) => { if (r.link) capaOf.set(r.link, [...(capaOf.get(r.link) || []), r.id]); });
+  out.find.forEach((c, i) => { c.capa = capaOf.get(state.find[i].id) || null; });
   out.rel = state.rel.map((r) => t2Release(r, s));
   out.trn = state.trn.map((r) => t2Training(r, s));
   const t1 = tier1Source();

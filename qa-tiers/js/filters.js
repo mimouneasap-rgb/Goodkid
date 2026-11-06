@@ -12,7 +12,7 @@ import { esc, fmtDate, $, $$ } from "./ui.js";
 
 const has = (v) => v !== "" && v != null;
 
-export const T2_REGS = ["dev", "capa", "cc", "insp", "rel", "doc", "apqr", "trn", "esc", "act", "tasks", "load"];
+export const T2_REGS = ["dev", "capa", "cc", "insp", "rel", "doc", "apqr", "trn", "esc", "act", "tasks", "aud", "find", "load"];
 export const T1_REGS = ["dl", "br", "fn", "ac", "hd", "tr"];
 
 /** Every filterable dimension: the record fields it reads. */
@@ -22,7 +22,7 @@ export const DIMS = {
   product: { label: "Product", all: "All products", keys: ["product"] },
   cls: { label: "Classification", all: "All classes", keys: ["cls"] },
   sev: { label: "Severity / category", all: "All severities", keys: ["sev", "cat"] },
-  type: { label: "Type", all: "All types", keys: ["type", "ptype", "rtype"] },
+  type: { label: "Type", all: "All types", keys: ["type", "ptype", "rtype", "ftype"] },
   source: { label: "Source", all: "All sources", keys: ["source"] },
   dept: { label: "Department", all: "All departments", keys: ["dept", "initiator"] },
   root: { label: "Root cause", all: "All root causes", keys: ["root"] },

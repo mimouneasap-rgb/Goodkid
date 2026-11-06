@@ -65,6 +65,7 @@ export const TYPES = {
       ["capa", "CAPA", "Status mix, overdue and open CAPA"],
       ["cc", "Change control", "Status mix, overdue and open changes"],
       ["act", "eQMS actions", "Overdue actions by owner and the overdue list"],
+      ["audits", "Audits & findings", "Audit programme status, findings by classification, open and overdue findings"],
       ["rel", "Batch release", "Release clock and batches not yet released"],
       ["apqr", "APQR", "Programme status and overdue reviews"],
       ["load", "QA load", "Capacity, calculated workload and delays per person"],
@@ -84,10 +85,10 @@ const NOTES = [
   ["focus", "Focus for the next period", "Two or three priorities."],
 ];
 
-const REGS = ["dev", "capa", "cc", "insp", "act", "esc", "doc", "apqr", "rel", "tasks", "trn"];
-const DATE_KEY = { dev: "opened", capa: "opened", cc: "opened", insp: "opened", act: "opened", esc: "opened", doc: "opened", apqr: "opened", rel: "mfg", trn: "date", tasks: "opened" };
-const CLOSE_KEY = { dev: "closed", capa: "closed", cc: "closed", insp: "closed", act: "closed", esc: "closed", doc: "closed", apqr: "closed", rel: "decision", tasks: "closed" };
-const OWNER_KEY = { dev: "owner", capa: "owner", cc: "owner", insp: "owner", act: "owner", esc: "owner", doc: "owner", apqr: "owner", rel: "officer", tasks: "member", trn: "trainer" };
+const REGS = ["dev", "capa", "cc", "insp", "act", "find", "aud", "esc", "doc", "apqr", "rel", "tasks", "trn"];
+const DATE_KEY = { dev: "opened", capa: "opened", cc: "opened", insp: "opened", act: "opened", esc: "opened", doc: "opened", apqr: "opened", rel: "mfg", trn: "date", tasks: "opened", aud: "opened", find: "opened" };
+const CLOSE_KEY = { dev: "closed", capa: "closed", cc: "closed", insp: "closed", act: "closed", esc: "closed", doc: "closed", apqr: "closed", rel: "decision", tasks: "closed", aud: "closed", find: "closed" };
+const OWNER_KEY = { dev: "owner", capa: "owner", cc: "owner", insp: "owner", act: "owner", esc: "owner", doc: "owner", apqr: "owner", rel: "officer", tasks: "member", trn: "trainer", aud: "owner", find: "owner" };
 const label = (reg) => T2_REGISTERS[reg]?.short || reg;
 const descOf = (r) => r.desc || r.title || r.topic || r.product || "";
 
@@ -467,6 +468,19 @@ export async function buildReport(opts, onStep = () => {}) {
         k.H("Overdue actions", 2),
         ...openTable(k, rows.filter((_, i) => c[i].live === "Overdue"), c.filter((x) => x.live === "Overdue"), ref, lim, [["Action", (r) => r.id], ["Parent", (r) => r.parent], ["Action", (r) => r.desc, false, 34], ["Owner", (r) => r.owner], ["Due", (r) => fmtDate(r.due)], ["Overdue", late]]));
     }
+    if (on("audits")) {
+      const A = s2.aud || [], Fd = s2.find || [], ca = comp.aud || [], cf = comp.find || [];
+      const audits = A.filter((r) => r.kind !== "Plan");
+      const byCls = ["Critical", "Major", "Minor"].map((cl) => { const rows = Fd.map((r, i) => ({ r, c: cf[i] })).filter((x) => x.r.cls === cl); return [cl, rows.length, rows.filter((x) => x.c.open).length, rows.filter((x) => x.c.live === "Overdue").length]; });
+      body.push(sec("Audits & findings"),
+        k.P(`${A.filter((r) => r.kind === "Plan").length} audit plans · ${audits.length} audits (${statusMix(audits, ca.filter((_, i) => A[i].kind !== "Plan"))}) · ${Fd.length} findings.`),
+        k.H("Findings by classification", 2),
+        k.T(["Classification", "Findings", "Open", "Overdue"], byCls.map(([cl, n, o, x]) => [{ v: cl, bold: true }, n, o, x ? { v: x, rag: "R" } : 0]), { right: [1, 2, 3] }),
+        k.H("Open audits", 2),
+        ...openTable(k, audits, ca.filter((_, i) => A[i].kind !== "Plan"), ref, lim, [["Audit", (r) => r.id], ["Type", (r) => r.type], ["Auditee / scope", (r) => r.desc, false, 30], ["Lead", (r) => r.owner], ["Status", (r) => r.status], ["Due", (r) => fmtDate(r.due)], ["Findings", (r, c) => (c.findings ? `${c.findings.open} open / ${c.findings.total}` : "—")]]),
+        k.H("Open findings", 2),
+        ...openTable(k, Fd, cf, ref, lim, [["Finding", (r) => r.id], ["Audit", (r) => r.audit], ["Finding", (r) => r.desc, false, 32], ["Class", (r) => r.cls], ["Owner", (r) => r.owner], ["Due", (r) => fmtDate(r.due)], ["Overdue", late], ["CAPA", (r, c) => (c.capa ? c.capa.join(", ") : "—")]]));
+    }
     if (on("rel")) {
       const rows = s2.rel, c = comp.rel, released = rows.filter((r) => r.status === "Released").length;
       body.push(sec("Batch release"), k.P(`${rows.length} batches · ${released} released · ${c.filter((x) => x.late === "Yes").length} released late · ${c.filter((x) => x.live === "Overdue").length} past the ${st.brTarget}-day target without a decision.`),
@@ -584,6 +598,7 @@ export const ROUTINES = {
     ["sent", "Daily report or summary sent to the QA manager", "Reports → Daily", null],
   ],
   weekly: [
+    ["import", "Latest Scigeniq exports imported", "Import from Scigeniq", (f) => { const h = store.t2.imports?.[0]; return !!h && E.diffDays(f.per.ref, h.at.slice(0, 10)) <= 7; }],
     ["flags", "Data-check flags cleared in every register", "Each register's ⚠ strip", (f) => f.flags === 0],
     ["overdue", "Every overdue item reviewed with its owner — new date or escalation", "Analytics → Overdue items by person", (f) => f.overdue.length === 0],
     ["next", "Items due next week confirmed with their owners", "Reports → Weekly → Due next 7 days", null],

@@ -258,7 +258,7 @@ const GUIDES = [
     ["Check the lists", "Setup → Drop-down lists: areas, departments, root causes, sources. Status lists are locked (the KPI formulas count them by name)."],
     ["Review the KPI targets", "Setup → KPI targets & RAG thresholds. Write down who approved them."],
     ["Set the as-of date", "Tier 2 Setup → Data as of → Today. Every overdue count is calculated as of this date."],
-    ["Enter the open items", "Copy the open deviations, CAPA, changes and eQMS actions from the eQMS (reference, dates, owner, status, due date). History before the month is optional — closed items only feed trends."],
+    ["Load the eQMS records", "Import from Scigeniq: drop the allTasks exports (quality events, CAPA, change control, actions, audits, findings, APQR) — every record comes in with its owner, dates and status. Enter by hand only what Scigeniq does not hold."],
     ["Share the link", "Share menu of the page. Everyone with edit access works on the same live board."],
   ] },
   { id: "daily", tour: "daily", icon: "☀", title: "Every day", when: "08:00 → 16:00", steps: [
@@ -299,6 +299,13 @@ const GUIDES = [
     ["Export a chart", "⤓ Export: PNG 2× / 3× / 4× (print), light print colours or as on screen, card / page / white / transparent background, footer on or off; Copy picture; SVG vector; CSV data."],
     ["Export every chart", "Analytics → ⤓ All charts (ZIP): every chart as PNG plus its CSV."],
     ["Report", "Reports centre: daily, weekly and monthly Word documents with the same filters, commentary and sign-off; a text summary to paste."],
+  ] },
+  { id: "import", tour: null, icon: "⤒", title: "Update from Scigeniq", when: "Weekly — or before any review", steps: [
+    ["Export from Scigeniq", "Tasks → All tasks → filter by Type → Export → Excel, once per list: actions (Actions + Standalone Actions), Quality Event, CAPA, Change Control, Audit Plan, Audit, Audit Findings, APQR (+ its data-collection tasks). File names do not matter."],
+    ["Drop them in the app", "Import from Scigeniq → drop every file at once. Each file is recognised by its content."],
+    ["Check the preview", "Per register: new, updated, unchanged, only on the board. Open “see the changes” for each field before → after."],
+    ["Apply", "One click updates the shared board for the whole team; Change history records it, the import history keeps the export date."],
+    ["What is kept", "Records missing from an export stay on the board; fields Scigeniq does not carry (area, comments you typed on other fields) are kept."],
   ] },
   { id: "team", tour: null, icon: "⎘", title: "Sharing & data integrity", when: "Always", steps: [
     ["One live board", "Everyone with edit access works on the same boards; changes appear on every screen within seconds."],

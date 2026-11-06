@@ -455,6 +455,21 @@ export const MODULES = [
         ]),
         link("Open the reports centre", "#/report"),
       ] },
+      { title: "Update from Scigeniq", blocks: [
+        flow([
+          { small: "1", title: "Export", text: "Scigeniq → Tasks → filter by Type → Export Excel (allTasks_report)" },
+          { small: "2", title: "Drop", text: "Import from Scigeniq: every file at once — recognised by content" },
+          { small: "3", title: "Check", text: "New · updated · unchanged per register, field by field" },
+          { small: "4", title: "Apply", text: "One click — the whole team's board is up to date" },
+        ]),
+        table(["Scigeniq export", "Register on the board"], [
+          ["Quality Event", "01 Deviations"], ["CAPA", "02 CAPA (with the finding or event it answers)"], ["Change Control", "03 Change control"],
+          ["Actions · Standalone Actions", "03·A eQMS actions — linked to their parent by its title"], ["Audit Plan · Audit", "11 Audit programme"],
+          ["Audit Findings", "12 Audit findings (with the CAPA that answers each)"], ["APQR + data-collection tasks", "08 APQR — status and % complete"],
+        ]),
+        callout("Import weekly, before the weekly review — and before any Tier 3 report. Scigeniq stays the record of truth: re-importing never duplicates, it updates."),
+        link("Open Import from Scigeniq", "#/import"),
+      ] },
       { title: "Routines and the text summary", blocks: [
         text("Each daily and weekly report carries its <b>routine</b>: the checklist of the period (Tier 1 log entered, huddle held, red letters actioned, Daily Log, overrides justified, escalations raised, report sent…). Where the boards can tell, the item says so (“✓ the boards show it is done”). The ticks are shared with the team and stamped with the time."),
         text("The <b>summary to paste</b> is the same report in plain text — KPIs, SQDCP letters, Top 3, what was raised, what is due, what is overdue, your commentary — ready for an e-mail, Teams or WhatsApp. Copy it, or save it as .txt."),

@@ -44,6 +44,14 @@ function seedLists(tier, s) {
     s.tasks ??= /El Kendi/.test(s.setup.site) && s.setup.month === "2026-09-01" ? clone(DEMO_TASKS) : [];
     s.activities = s.activities.concat(DEFAULT_ACTIVITIES.filter((a) => !s.activities.some((x) => x.name === a.name)).map((a) => ({ ...a, role: REAL_ROLES[a.role] ?? a.role })));
     s.act ??= [];
+    s.aud ??= []; s.find ??= [];
+    s.lists.AudKind ??= ["Plan", "Audit"];
+    s.lists.AudType ??= ["Internal", "Supplier", "External Authority"];
+    s.lists.AudRisk ??= ["Low Risk", "Moderate Risk", "High Risk", "N/A"];
+    s.lists.AudStatus ??= ["Open", "Preparation", "Findings In Progress", "Pending Approval", "Completed", "Canceled"];
+    s.lists.FindType ??= ["Documentation", "Equipment and Facilities", "Material", "Production", "Quality Assurance", "Quality Control", "Data Integrity", "Environmental Monitoring", "Safety", "Personnel / training", "Other"];
+    s.lists.FindStatus ??= ["Open", "Pending Response", "Completed", "Canceled"];
+    for (const [l, v] of [["DevStatus", "Canceled"], ["CAPAStatus", "Canceled"], ["CCStatus", "Canceled"], ["ActParent", "Audit"], ["ActParent", "APQR"], ["ActParent", "Standalone"]]) if (s.lists[l] && !s.lists[l].includes(v)) s.lists[l].push(v);
     s.lists.ActStatus ??= ["Open", "In Progress", "QA Approval", "Done", "Cancelled"];
     s.lists.ActParent ??= ["Quality Event", "CAPA", "Change Control"];
     s.lists.Tier3 ??= uniq(["Site Quality Head", "Plant Management", ...pick(["esc"], ["to"])]);
@@ -72,7 +80,7 @@ export const demoAllowed = () => !isRealBoard() && EDITION.start === "demo";
 export const DEFAULT_SOURCE = HAS_REAL ? "real" : EDITION.start;
 
 const T1_REGS = ["dl", "br", "fn", "ac", "hd", "tr"];
-const T2_REGS = ["dev", "capa", "cc", "insp", "rel", "doc", "load", "apqr", "trn", "esc", "tasks", "act"];
+const T2_REGS = ["dev", "capa", "cc", "insp", "rel", "doc", "load", "apqr", "trn", "esc", "tasks", "act", "aud", "find"];
 const isoToday = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
 
 /** An empty board for the edition's reporting month: the standard lists,
@@ -239,7 +247,7 @@ export const store = {
       this[tier] = s; this.save(tier); return;
     }
     const s = fresh(tier, "real");
-    const regs = tier === "t1" ? ["dl", "br", "fn", "ac", "hd", "tr"] : ["dev", "capa", "cc", "insp", "rel", "doc", "apqr", "trn", "esc", "tasks", "act"];
+    const regs = tier === "t1" ? ["dl", "br", "fn", "ac", "hd", "tr"] : ["dev", "capa", "cc", "insp", "rel", "doc", "apqr", "trn", "esc", "tasks", "act", "aud", "find"];
     for (const r of regs) s[r] = [];
     if (tier === "t2") { s.daily = {}; s.trend.rows = s.trend.rows.map(() => Array(12).fill(null)); }
     this[tier] = s; this.save(tier);

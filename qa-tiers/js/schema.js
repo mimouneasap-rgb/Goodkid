@@ -253,10 +253,57 @@ export const T2_REGISTERS = {
     ],
     table: ["id", "member", "activity", "desc", "opened", "due", "status"],
   },
+  aud: {
+    no: "11", title: "Audit Programme", icon: "◎", short: "Audit programme",
+    lead: "The audit plans and every audit under them — internal, supplier and authority — with their findings and actions.",
+    source: "Scigeniq audit plans & audits (allTasks export)", who: "Audit coordinator / QA", when: "When an audit is planned, performed or closed",
+    lifecycle: ["Open", "Preparation", "Findings In Progress", "Pending Approval", "Completed"], kpi: null, idHint: "AUDT-KO-36",
+    fields: [
+      f("id", "Audit Ref.", "text", { req: true, help: "Reference exactly as in Scigeniq, e.g. AUDT-KO-35 (audit) or AUDP-KO-17 (plan)" }),
+      f("kind", "Record", "list", { list: "AudKind", help: "Plan (the yearly programme) or Audit" }),
+      f("plan", "Audit Plan", "text", { help: "AUDP-KO-… the audit belongs to" }),
+      f("desc", "Audit / Auditee", "long", { help: "Auditee, scope or plan name" }),
+      f("type", "Audit Type", "list", { list: "AudType", help: "Internal · Supplier · External Authority" }),
+      f("standard", "Standard", "text", { help: "GMP, GDP, GLP…" }),
+      f("risk", "Risk", "list", { list: "AudRisk" }),
+      f("areas", "Audited Areas", "text"),
+      f("owner", "Lead Auditor", "list", { list: "People", help: "Assigned user" }),
+      f("opened", "Created", "date", { req: true }),
+      f("due", "Due Date", "date", { help: "Planned completion" }),
+      f("status", "Status", "list", { list: "AudStatus", req: true, help: "Open · Preparation · Findings In Progress · Pending Approval · Completed · Canceled" }),
+      f("closed", "Completed", "date", { help: "Only when Completed or Canceled" }),
+      f("comments", "Team / Comments", "long"),
+    ],
+    table: ["id", "kind", "type", "desc", "owner", "status", "due"],
+    sortDesc: true,
+  },
+  find: {
+    no: "12", title: "Audit Findings", icon: "⚑", short: "Audit findings",
+    lead: "Every finding raised by an audit: its classification, the response due, the CAPA that answers it.",
+    source: "Scigeniq audit findings (allTasks export)", who: "Finding owner / QA", when: "When the audit report is issued + on every response",
+    lifecycle: ["Open", "Pending Response", "Completed"], kpi: null, idHint: "FIND-KO-201",
+    fields: [
+      f("id", "Finding Ref.", "text", { req: true, help: "Reference exactly as in Scigeniq, e.g. FIND-KO-200" }),
+      f("audit", "Audit Ref.", "text", { help: "AUDT-KO-… that raised it" }),
+      f("desc", "Finding", "long", { req: true }),
+      f("cls", "Classification", "list", { list: "DevClass", help: "Minor · Major · Critical" }),
+      f("ftype", "Finding Type", "list", { list: "FindType" }),
+      f("area", "Audited Area", "text"),
+      f("owner", "Owner", "list", { list: "People", help: "Assigned user" }),
+      f("opened", "Raised", "date", { req: true }),
+      f("due", "Response Due", "date"),
+      f("status", "Status", "list", { list: "FindStatus", req: true, help: "Open · Pending Response · Completed · Canceled" }),
+      f("closed", "Completed", "date", { help: "Only when Completed or Canceled" }),
+      f("waitCapa", "Waiting for CAPA", "list", { list: "YesNo" }),
+      f("comments", "Comments", "long"),
+    ],
+    table: ["id", "audit", "desc", "cls", "owner", "status", "due"],
+    sortDesc: true,
+  },
 };
 
 /** Order of the registers on the Tier 2 navigation. */
-export const T2_ORDER = ["dev", "capa", "cc", "act", "insp", "rel", "doc", "load", "tasks", "apqr", "trn", "esc"];
+export const T2_ORDER = ["dev", "capa", "cc", "act", "insp", "rel", "doc", "load", "tasks", "apqr", "trn", "esc", "aud", "find"];
 
 /** Tier 2 Daily Log (calendar) inputs. */
 export const T2_DAILY_FIELDS = [
@@ -415,7 +462,7 @@ export const T1_ORDER = ["dl", "br", "fn", "ac", "hd", "tr"];
 export const LOCKED_LISTS = new Set([
   "DevClass", "DevStatus", "CAPAStatus", "CCCat", "CCStatus", "YesNoTBD", "YesNo", "Severity", "InspStatus",
   "BRStatus", "DocStatus", "APQRStatus", "TrStatus", "EscStatus", "DayStatus", "ManualKPI",
-  "Att", "FnStatus", "AcStatus", "FnTypes", "Weekdays", "TaskStatus", "ActStatus", "ActParent",
+  "Att", "FnStatus", "AcStatus", "FnTypes", "Weekdays", "TaskStatus", "ActStatus", "ActParent", "AudStatus", "FindStatus", "AudKind",
 ]);
 
 /** Human names for the drop-down lists. */
@@ -429,7 +476,7 @@ export const LIST_LABELS = {
   EscStatus: "Escalation status", DayStatus: "Day status", ManualKPI: "Manual KPI status",
   People: "People & functions", Departments: "Departments", Products: "Products", Tier3: "Tier 3 escalation contacts",
   FnTypes: "Finding types", ErrCats: "Error categories", Shifts: "Shifts", Att: "Attendance", RecType: "Record type",
-  FnStatus: "Finding status", ActStatus: "eQMS action status", ActParent: "eQMS action parent", Roles: "Positions / roles", TaskStatus: "Task status", AcSource: "Action source", Priority: "Priority", AcStatus: "Action status", Owners: "Action owners",
+  FnStatus: "Finding status", ActStatus: "eQMS action status", ActParent: "eQMS action parent", Roles: "Positions / roles", TaskStatus: "Task status", AcSource: "Action source", Priority: "Priority", AcStatus: "Action status", Owners: "Action owners", AudKind: "Audit record", AudType: "Audit type", AudRisk: "Audit risk", AudStatus: "Audit status", FindType: "Finding type (audits)", FindStatus: "Audit finding status",
 };
 
 export const SKILL_LEVELS = [

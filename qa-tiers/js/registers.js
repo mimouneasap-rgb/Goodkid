@@ -84,7 +84,8 @@ FX.ac = FX.fn;
 FX.apqr = [...FX.generic.slice(0, 1), { key: "effPct", label: "Effective %", num: true, cell: (c) => pct(c.effPct) }, ...FX.generic.slice(1)];
 
 function fxSpec(tier, reg) {
-  if (tier === "t2" && ["dev", "capa", "cc"].includes(reg)) return [...FX.generic.slice(0, 3), { key: "actions", label: "Actions", cell: actionsCell }, ...FX.generic.slice(3)];
+  if (tier === "t2" && ["dev", "capa", "cc", "find"].includes(reg)) return [...FX.generic.slice(0, 3), { key: "actions", label: "Actions", cell: actionsCell }, ...(reg === "find" ? [{ key: "capa", label: "CAPA", cell: (c) => (c.capa ? esc(c.capa.join(", ")) : "") }] : []), ...FX.generic.slice(3)];
+  if (tier === "t2" && reg === "aud") return [...FX.generic.slice(0, 3), { key: "findings", label: "Findings", cell: (c) => (c.findings ? `${c.findings.open} open / ${c.findings.total}${c.findings.overdue ? ` · <b style="color:var(--r)">${c.findings.overdue} overdue</b>` : ""}` : "") }, { key: "actions", label: "Actions", cell: actionsCell }, ...FX.generic.slice(3)];
   if (tier === "t2") return reg === "rel" ? FX.rel : reg === "trn" ? FX.trn2 : reg === "load" ? FX.load : reg === "tasks" ? FX.tasks : reg === "apqr" ? FX.apqr : FX.generic;
   return reg === "tr" ? FX.tr1 : FX[reg];
 }
@@ -110,7 +111,7 @@ function computeOne(tier, reg, rec, index) {
       return { ...c, std, effort: has(rec.effort) ? +rec.effort : std, check: c.check === "OK" && !act ? "Activity not in the catalogue" : c.check };
     }
     const c = E.t2Row(reg, rec, s.setup.statusDate);
-    if (["dev", "capa", "cc"].includes(reg) && index != null) c.actions = E.t2Computed(s)[reg][index]?.actions || null;
+    if (["dev", "capa", "cc", "aud", "find"].includes(reg) && index != null) { const x = E.t2Computed(s)[reg][index]; c.actions = x?.actions || null; c.findings = x?.findings || null; c.capa = x?.capa || null; }
     return c;
   }
   const sel = s.setup.selDate;

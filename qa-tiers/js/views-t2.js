@@ -391,12 +391,12 @@ export function freezeMonth(after) {
 
 const IN_PROGRESS = ["In Progress", "Effectiveness Check", "In Course", "In Approval", "In Review", "Under Review", "On Hold", "QA Approval"];
 /** One fixed colour per register, the same in every chart (colour follows the entity). */
-export const REG_SLOT = { act: "f-s1", dev: "f-s2", capa: "f-s3", cc: "f-s4", rel: "f-s5", apqr: "f-s6", tasks: "f-s7", insp: "f-s8" };
+export const REG_SLOT = { act: "f-s1", dev: "f-s2", capa: "f-s3", cc: "f-s4", rel: "f-s5", apqr: "f-s6", tasks: "f-s7", find: "f-s8" };
 const slotOf = (reg) => REG_SLOT[reg] || "f-other";
-const QMS = ["dev", "capa", "cc", "insp", "act", "esc", "doc"];
-const DATE_KEY = { dev: "opened", capa: "opened", cc: "opened", insp: "opened", act: "opened", esc: "opened", doc: "opened", apqr: "opened", rel: "mfg", trn: "date", tasks: "opened" };
-const CLOSE_KEY = { dev: "closed", capa: "closed", cc: "closed", insp: "closed", act: "closed", esc: "closed", doc: "closed", apqr: "closed", rel: "decision", tasks: "closed" };
-const OWNER_KEY = { dev: "owner", capa: "owner", cc: "owner", insp: "owner", act: "owner", esc: "owner", doc: "owner", apqr: "owner", rel: "officer", tasks: "member", trn: "trainer" };
+const QMS = ["dev", "capa", "cc", "insp", "act", "find", "aud", "esc", "doc"];
+const DATE_KEY = { dev: "opened", capa: "opened", cc: "opened", insp: "opened", act: "opened", esc: "opened", doc: "opened", apqr: "opened", rel: "mfg", trn: "date", tasks: "opened", aud: "opened", find: "opened" };
+const CLOSE_KEY = { dev: "closed", capa: "closed", cc: "closed", insp: "closed", act: "closed", esc: "closed", doc: "closed", apqr: "closed", rel: "decision", tasks: "closed", aud: "closed", find: "closed" };
+const OWNER_KEY = { dev: "owner", capa: "owner", cc: "owner", insp: "owner", act: "owner", esc: "owner", doc: "owner", apqr: "owner", rel: "officer", tasks: "member", trn: "trainer", aud: "owner", find: "owner" };
 const legend = (items) => `<div class="chart-legend">${items.map(([cls, name]) => `<span><i class="bg-${cls.slice(2)}"></i>${esc(name)}</span>`).join("")}</div>`;
 const regLabel = (reg) => T2_REGISTERS[reg]?.short || reg;
 
@@ -405,7 +405,7 @@ const regLabel = (reg) => T2_REGISTERS[reg]?.short || reg;
 export const CHARTS = [
   { id: "mix", title: "Workload by process", q: "Where is work starting but not finishing?", dims: ["owner", "area", "product", "reg"],
     build({ s, comp }) {
-      const rows = ["dev", "capa", "cc", "act", "insp", "rel", "doc", "apqr", "esc"].filter((reg) => s[reg]).map((reg) => {
+      const rows = ["dev", "capa", "cc", "act", "find", "aud", "insp", "rel", "doc", "apqr", "esc"].filter((reg) => s[reg]).map((reg) => {
         const g = { o: 0, p: 0, c: 0, x: 0 };
         s[reg].forEach((r, i) => { const c = comp[reg][i]; if (c.live === "Overdue") g.x++; else if (!c.open) g.c++; else if (IN_PROGRESS.includes(r.status)) g.p++; else g.o++; });
         return { reg, g };
@@ -556,11 +556,11 @@ export const CHARTS = [
     build({ s }) {
       const y = String(s.trend.year || s.setup.month.slice(0, 4));
       const regs = ["dev", "capa", "cc", "act"].filter((r) => s[r]);
-      const other = ["insp", "esc", "doc"].filter((r) => s[r]);
+      const other = ["insp", "esc", "doc", "find", "aud"].filter((r) => s[r]);
       const cols = E.MONTHS.map((mn, j) => {
         const mm = `${y}-${String(j + 1).padStart(2, "0")}`;
         const n = (reg) => s[reg].filter((r) => String(r[DATE_KEY[reg]] || "").startsWith(mm)).length;
-        return { label: `${mn} ${y}`, short: mn, parts: [...regs.map((reg) => ({ value: n(reg), cls: slotOf(reg), name: regLabel(reg) })), { value: other.reduce((a, r) => a + n(r), 0), cls: "f-other", name: "Other (inspections, escalations, documents)" }] };
+        return { label: `${mn} ${y}`, short: mn, parts: [...regs.map((reg) => ({ value: n(reg), cls: slotOf(reg), name: regLabel(reg) })), { value: other.reduce((a, r) => a + n(r), 0), cls: "f-other", name: "Other (inspections, escalations, documents, audits, findings)" }] };
       });
       return {
         body: columns(cols, { height: 210 }),

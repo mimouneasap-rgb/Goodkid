@@ -16,6 +16,7 @@ import { createSync } from "./sync.js";
 import { decorateCharts } from "./export.js";
 import { renderReportPage } from "./report.js";
 import { renderClose, renderArchive } from "./archive.js";
+import { renderImport } from "./scigeniq.js";
 import { renderStart, renderGuide, initGuides, startTour, tourFor, startProgress, endTour } from "./guides.js";
 
 store.load();
@@ -63,7 +64,7 @@ function navHTML() {
         ${a("t2/analytics", "◔", "Analytics")}
         ${a("t2/setup", "⚙", "Setup")}
       </div>
-      <div class="nav-group"><div class="nav-title">Reports & data</div>${a("report", "⤓", "Reports centre")}${a("close", "✓", "Month-end close")}${a("archive", "🗄", "Archive")}${a("guide", "?", "How-to guides")}${a("audit", "⎘", "Change history")}</div>
+      <div class="nav-group"><div class="nav-title">Reports & data</div>${a("import", "⤒", "Import from Scigeniq")}${a("report", "⤓", "Reports centre")}${a("close", "✓", "Month-end close")}${a("archive", "🗄", "Archive")}${a("guide", "?", "How-to guides")}${a("audit", "⎘", "Change history")}</div>
     </nav>
     <div class="rail-foot">
       <div class="row" role="group" aria-label="Theme">${["system", "light", "dark"].map((t) => `<button class="rail-btn" data-theme-btn="${t}" aria-pressed="${(store.prefs.theme || "system") === t}">${t[0].toUpperCase() + t.slice(1)}</button>`).join("")}</div>
@@ -228,6 +229,7 @@ function route({ soft = false } = {}) {
   else if (a === "t2" && b === "reg" && T2_REGISTERS[c]) { renderRegister(view, { tier: "t2", reg: c, query }); titles.push(T2_REGISTERS[c].title); }
   else if (a === "audit") { renderAudit(view); titles.push("Change history"); }
   else if (a === "report") { renderReportPage(view, { type: query.type }); titles.push("Reports centre"); }
+  else if (a === "import") { renderImport(view); titles.push("Import from Scigeniq"); }
   else if (a === "close") { renderClose(view, { navigate }); titles.push("Month-end close"); }
   else if (a === "archive") { renderArchive(view, { navigate }); titles.push("Archive"); }
   else if (a === "start") { renderStart(view); titles.push("Start here"); }

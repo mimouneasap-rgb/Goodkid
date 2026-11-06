@@ -133,7 +133,7 @@ function dataCard(tier) {
   return `<div class="card card-pad"><div class="card-head"><h2>Data & backup</h2></div>
     <p class="muted" style="margin:0 0 12px;font-size:13px">${store.sync ? "This board is shared: every change is saved for the whole team and appears live on their screens." : "Data is saved in this browser."} Export a backup regularly, or to move the boards to another device. The eQMS stays the GMP record of truth — this board mirrors it.</p>
     <div class="row"><button class="btn" data-export>⬇ Export backup (both tiers)</button>
-    <label class="btn">⬆ Import backup<input type="file" accept=".json,application/json" data-import hidden></label>
+    <label class="btn">⬆ Import backup<input type="file" accept=".json,application/json" data-import hidden></label><a class="btn" href="#/import">⤒ Import from Scigeniq</a>
     ${HAS_REAL ? `<button class="btn" data-real>Load the El Kendi data (imported 30/10/2026)</button>` : ""}${demoAllowed() ? `<button class="btn" data-reset>Load the September 2026 demo</button>` : ""}<button class="btn danger" data-blank>${EDITION.start === "blank" && !HAS_REAL ? `Restart a blank ${EDITION.label} ${label}` : `Start a blank ${label}`}</button></div></div>`;
 }
 
