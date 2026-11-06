@@ -813,9 +813,10 @@ function openImport() {
   importDlg.showModal();
 }
 
-/** Remove all data (two clicks). In the shared workspace only the owner sees it. */
+/** Remove the data kept in this browser (two clicks). Never offered in the shared workspace, where it would delete
+ *  everyone's data rather than this browser's copy. */
 function clearButton() {
-  if (!wsState.base || !ws.canWrite || (ws.mode === "shared" && !isOwner)) return h("span");
+  if (!wsState.base || !ws.canWrite || ws.mode === "shared") return h("span");
   let armed = false;
   const btn = h("button.btn.ghost.danger-text", {
     type: "button",
