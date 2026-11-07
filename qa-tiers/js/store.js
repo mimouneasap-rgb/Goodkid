@@ -7,7 +7,7 @@ import * as SITE from "./real-data.js";
 const { REAL_T1, REAL_T2 } = SITE;
 import { DEFAULT_ACTIVITIES, monthEnd } from "./engine.js";
 import { EDITION, hasTier } from "./edition.js";
-import { ensureKeys, stateFrom } from "./sync.js";
+import { ensureKeys, stateFrom, dedupe } from "./sync.js";
 
 const KEYS = { t1: "qaTiers.t1.v1", t2: "qaTiers.t2.v1", prefs: "qaTiers.prefs.v1" };
 const AUDIT_MAX = 300;
@@ -191,6 +191,8 @@ export const store = {
     const raw = stateFrom(tier, this.sync.remote[tier], host[tier]);
     this.sync.rebase(tier, raw);
     const next = seedLists(tier, raw);
+    const copies = dedupe(tier, next); // copies left by a double upload: removed for everyone by the push below
+    if (copies) this.listeners.forEach((fn) => fn(tier, "deduped", copies));
     next.audit = host[tier]?.audit || [];
     host[tier] = ensureKeys(tier, next);
     write(KEYS[tier], host[tier]);

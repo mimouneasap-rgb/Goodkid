@@ -20,15 +20,48 @@ const CONCURRENCY = 4;
 const newKey = () => `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
 const json = (v) => JSON.stringify(v);
 
+/** A key made from the record's own number, so uploading the same record twice
+ * writes the same document instead of a second copy. */
+const idKeyOf = (r) => {
+  const id = r.id ?? r.member;
+  return id == null || id === "" ? null : `r-${String(id).replace(/[^A-Za-z0-9_-]+/g, "_").slice(0, 150)}`;
+};
+
 /** Give every record a stable key and an order, so each can be its own document. */
 export function ensureKeys(tier, state) {
   for (const reg of REGS[tier]) {
-    (state[reg] || []).forEach((r, i) => {
-      r._k ??= newKey();
+    const rows = state[reg] || [];
+    const used = new Set(rows.map((r) => r._k).filter(Boolean));
+    rows.forEach((r, i) => {
+      if (r._k == null) {
+        const k = idKeyOf(r);
+        r._k = k && !used.has(k) ? k : newKey();
+        used.add(r._k);
+      }
       r._o ??= i;
     });
   }
   return state;
+}
+
+/** Drop exact copies of a record (the same fields under another document key —
+ * left by an upload that ran twice). Returns how many were removed; the next
+ * push deletes their documents from the shared board. */
+export function dedupe(tier, state) {
+  let n = 0;
+  for (const reg of REGS[tier]) {
+    const rows = state[reg];
+    if (!Array.isArray(rows) || rows.length < 2) continue;
+    const seen = new Set();
+    state[reg] = rows.filter((r) => {
+      const { _k, _o, ...rest } = r;
+      const sig = JSON.stringify(Object.keys(rest).sort().map((k) => [k, rest[k]]));
+      if (seen.has(sig)) { n++; return false; }
+      seen.add(sig);
+      return true;
+    });
+  }
+  return n;
 }
 
 /** The documents that represent one board: Map<"collection/id", bodyJSON>. */

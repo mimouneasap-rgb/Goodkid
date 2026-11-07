@@ -439,7 +439,9 @@ document.addEventListener("click", (e) => {
   e.preventDefault();
   navigate(a.getAttribute("href"));
 }, true);
-store.onChange((tier, kind) => {
+const dedupeShown = new Set();
+store.onChange((tier, kind, n) => {
+  if (kind === "deduped") { if (dedupeShown.has(tier)) return; dedupeShown.add(tier); toast(store.sync?.readOnly ? `${n} duplicate records hidden — the board owner's next visit removes them` : `${n} duplicate records removed from the shared board — keep the page open until the status says live`); return; }
   if (kind === "blocked") { toast(store.viewing?.kind === "practice" ? "Practice mode — nothing is saved" : "Read-only archive — return to the live board to make changes"); return; }
   renderNav();
   if (kind === "view") route({ soft: true });

@@ -131,3 +131,25 @@ test("a batch record marked Completed without a date is closed, and flagged", ()
   assert.equal(r.open, false);
   assert.equal(r.check, "Completion date missing");
 });
+
+test("a record uploaded twice is one document, and stray copies are removed", async () => {
+  const { ensureKeys, docsOf, stateFrom, dedupe } = await import("../js/sync.js");
+  const make = () => ({ dev: [{ id: "DEV-1", desc: "a" }, { id: "DEV-2", desc: "b" }], capa: [{ id: "CAPA-1" }], load: [{ member: "Ana" }] });
+  const a = ensureKeys("t2", make()), b = ensureKeys("t2", make());
+  assert.deepEqual([...docsOf("t2", a).keys()], [...docsOf("t2", b).keys()]);
+  assert.equal(a.dev[0]._k, "r-DEV-1");
+  // two records with the same number keep separate documents
+  const twin = ensureKeys("t2", { dev: [{ id: "X 1" }, { id: "X 1", desc: "edited" }] });
+  assert.notEqual(twin.dev[0]._k, twin.dev[1]._k);
+  // an old double upload: the same fields under two random keys
+  const docs = new Map([
+    ["t2-meta/setup", JSON.stringify({ v: {} })],
+    ["t2-dev/k1", JSON.stringify({ _k: "k1", _o: 0, id: "DEV-1", desc: "a" })],
+    ["t2-dev/k2", JSON.stringify({ _k: "k2", _o: 0, id: "DEV-1", desc: "a" })],
+    ["t2-dev/k3", JSON.stringify({ _k: "k3", _o: 1, id: "DEV-2", desc: "b" })],
+    ["t2-dev/k4", JSON.stringify({ _k: "k4", _o: 1, id: "DEV-2", desc: "b, edited" })],
+  ]);
+  const s = stateFrom("t2", docs);
+  assert.equal(dedupe("t2", s), 1);
+  assert.deepEqual(s.dev.map((r) => r._k), ["k1", "k3", "k4"]); // a copy someone edited is kept
+});
