@@ -309,6 +309,7 @@ const GUIDES = [
   { id: "training", tour: null, icon: "✎", title: "Training — plan, unplanned, external", when: "After each session · month-end report", steps: [
     ["Annual plan", "Training → Annual plan: the topics of the department plan (GS0024/Onc/T06) by month. Click a topic, tick the people trained (the count follows), set the completion date and status. Moving a topic: Rescheduled = Yes and a new planned date."],
     ["Unplanned training", "＋ New training, category Unplanned: Revised SOP, New SOP, Quality circle, Corporate, Audit / CAPA driven (link the audit or CAPA), On the job, Induction. Trained department = Other departments when QA trains another department."],
+    ["Delivery & trainers", "Delivery: Trainer-led, Read & understood (self-training) or both. Tick one or several trainers — none for a read & understood training. A session with two trainers counts in the QA load of each."],
     ["External training", "Category External: the course, the provider, the people who attended and the date (or the year when the date is not known)."],
     ["KPI", "The Training KPI counts the annual plan only: employees trained ÷ employees to be trained on the topics due to date. A topic is executed when at least 80 % of the group is trained. Unplanned and external training are tracked, not targeted."],
     ["Month-end report", "Training → ⤓ Department report (xlsx): the QA_Onc row of the corporate file — Planned (P, E, to be trained, trained) and Unplanned (quality circle, SOP, others) — plus the register."],

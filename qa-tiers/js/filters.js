@@ -134,7 +134,8 @@ export function applyFilters(tier, s, F, { ref, comp: pre } = {}) {
         const key = fieldFor(sc, dim);
         if (!key) continue; // the register does not record it: unaffected
         const v = dim === "product" ? productName(r[key]) : r[key];
-        if (String(v ?? "") !== String(F[dim])) return false;
+        // several people in one field ("A, B"): any of them matches
+        if (String(v ?? "") !== String(F[dim]) && !(key === "trainer" && String(v ?? "").split(",").map((x) => x.trim()).includes(String(F[dim])))) return false;
       }
       if (has(F.state) && reg !== "load") {
         const open = x.open !== undefined ? !!x.open : ck ? !has(r[ck]) : true;
@@ -177,7 +178,7 @@ export function options(tier, dim, s = store[tier]) {
     const sc = schemaOf(tier, reg);
     const key = sc && fieldFor(sc, dim);
     if (!key) continue;
-    for (const r of s[reg] || []) { const v = dim === "product" ? productName(r[key]) : r[key]; if (has(v)) vals.add(String(v)); }
+    for (const r of s[reg] || []) { const v = dim === "product" ? productName(r[key]) : r[key]; if (!has(v)) continue; if (key === "trainer") String(v).split(",").map((x) => x.trim()).filter(Boolean).forEach((x) => vals.add(x)); else vals.add(String(v)); }
   }
   return [...vals].sort((a, b) => String(a).localeCompare(String(b))).map((v) => [v, v]);
 }

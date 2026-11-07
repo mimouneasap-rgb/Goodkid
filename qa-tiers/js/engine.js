@@ -154,6 +154,12 @@ export function planGroup(state) {
   return (state.load || []).filter((r) => has(r.member) && roles.has(normRole(r.role))).map((r) => r.member);
 }
 const namesIn = (r) => String(r.attendees || "").split(",").map((x) => x.trim()).filter(Boolean);
+/** The names of a multi-person field ("A, B"). */
+export const splitNames = (v) => String(v || "").split(",").map((x) => x.trim()).filter(Boolean);
+/** Delivery of a training: trainer-led, read & understood (self-training), or both. */
+export const TR_MODES = ["Trainer-led", "Read & understood", "Trainer-led + read & understood"];
+export const trnSelf = (r) => /read & understood/i.test(r.mode || "");
+export const trnLed = (r) => !r.mode || /trainer-led/i.test(r.mode);
 /** "To be trained" and "trained" of a training: on the annual plan, the mandatory group only. */
 export function trnFigures(r, group) {
   if (trnCat(r) === "Planned" && trnQA(r) && group?.length && r.status !== "Cancelled") {
@@ -165,10 +171,11 @@ export function trnFigures(r, group) {
 /** Keep the stored figures of the plan topics on the mandatory group (boards saved before the rule). */
 export function normalizeTraining(state) {
   const group = planGroup(state);
-  if (!group.length) return 0;
   let n = 0;
   for (const r of state.trn || []) {
-    if (trnCat(r) !== "Planned" || !trnQA(r) || r.status === "Cancelled") continue;
+    // delivery of the records saved before the field: led by whoever is named as trainer or provider
+    if (!has(r.mode) && (has(r.trainer) || has(r.provider))) { r.mode = "Trainer-led"; n++; }
+    if (!group.length || trnCat(r) !== "Planned" || !trnQA(r) || r.status === "Cancelled") continue;
     const f = trnFigures(r, group);
     if (num(r.planned) !== f.planned || (namesIn(r).length && num(r.trained) !== f.trained)) {
       r.planned = f.planned;
@@ -190,6 +197,7 @@ export function t2Training(r, setup) {
   let check = "OK";
   if (!has(r.status)) check = "Status missing";
   else if (has(r.done) && r.status !== "Completed" && r.status !== "Cancelled") check = "Completion date entered — set the status to Completed";
+  else if (has(r.mode) && trnLed(r) && !has(r.trainer) && !has(r.provider) && trnDone(r)) check = "Trainer missing for a trainer-led training";
   else if (has(r.trained) && has(r.planned) && +r.trained > +r.planned) check = "Trained exceeds planned";
   else if (r.status === "Completed" && !has(r.trained)) check = "Participants trained missing";
   return { completion, live, check, open: !closed };
@@ -250,7 +258,7 @@ const LOAD_MAP = {
   dev: { who: "owner" }, capa: { who: "owner" }, cc: { who: "owner" }, insp: { who: "inspector" },
   doc: { who: "owner" }, apqr: { who: "owner" }, esc: { who: "owner" },
   rel: { who: "officer", start: (r) => r.bmr || r.mfg, end: (r) => r.decision, due: (r, s) => (has(r.mfg) ? addDays(r.mfg, num(s.brTarget)) : ""), done: ["Released", "Rejected"] },
-  trn: { who: "trainer", start: (r) => r.date, end: (r) => r.date, due: (r) => r.date, done: ["Completed"], skip: ["Cancelled"] },
+  trn: { who: "trainer", multi: true, start: (r) => r.date, end: (r) => r.date, due: (r) => r.date, done: ["Completed"], skip: ["Cancelled"] },
   tasks: { who: "member", done: ["Done"], skip: ["Cancelled"] },
   act: { who: "owner", done: ["Done"], skip: ["Cancelled"] },
   aud: { who: "owner", done: ["Completed"], skip: ["Canceled"] },
@@ -276,7 +284,7 @@ export function workloadItems(state, member, t1 = null) {
     const m = LOAD_MAP[reg];
     const doneList = m.done || T2_FLOW[reg].done;
     for (const r of rows) {
-      if (!member || r[m.who] !== member || (m.skip || []).includes(r.status)) continue;
+      if (!member || !(m.multi ? splitNames(r[m.who]).includes(member) : r[m.who] === member) || (m.skip || []).includes(r.status)) continue;
       const start = m.start ? m.start(r) : r.opened;
       if (!has(start)) continue;
       const done = doneList.includes(r.status) || (reg === "trn" && trnDone(r));

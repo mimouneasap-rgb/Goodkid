@@ -56,6 +56,7 @@ function seedLists(tier, s) {
     s.lists.TrStatus = uniq(["Planned", "Rescheduled", "In Progress", "Completed", "Cancelled", ...(s.lists.TrStatus || [])]);
     s.lists.TrAudience ??= ["QA", "Other departments"];
     s.lists.TrPlanRoles ??= [...PLAN_ROLES];
+    s.lists.TrMode ??= ["Trainer-led", "Read & understood", "Trainer-led + read & understood"];
     normalizeTraining(s);
     if (s.kpis?.[8] && /sessions due to date/.test(s.kpis[8].def || "")) s.kpis[8] = { ...s.kpis[8], def: "Annual plan: employees trained ÷ to be trained (topics due to date)" };
     s.lists.T1EStatus ??= ["Open", "In Progress", "Resolved", "Escalated to Tier 3"];

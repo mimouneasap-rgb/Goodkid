@@ -159,7 +159,10 @@ function overview(body, s, Y, rows) {
     { value: m.other, cls: "f-s7", name: "Others (corporate, audit-driven, on the job, induction…)" },
     { value: m.ext, cls: "f-s5", name: "External" }] }));
   const byType = Object.entries(qa.reduce((m, x) => ((m[x.r.type || "—"] = (m[x.r.type || "—"] || 0) + 1), m), {})).sort((a, b) => b[1] - a[1]);
-  const trainers = Object.entries(rows.filter((x) => String(x.when).startsWith(`${Y}`) && x.r.trainer).reduce((m, x) => ((m[x.r.trainer] = (m[x.r.trainer] || 0) + 1), m), {})).sort((a, b) => b[1] - a[1]);
+  const yr = rows.filter((x) => String(x.when).startsWith(`${Y}`));
+  const trainers = Object.entries(yr.reduce((m, x) => { E.splitNames(x.r.trainer).forEach((t) => { m[t] = (m[t] || 0) + 1; }); return m; }, {})).sort((a, b) => b[1] - a[1]);
+  const modeOf = (r) => (!r.mode ? "none" : /\+/.test(r.mode) ? "both" : E.trnSelf(r) ? "self" : "led");
+  const modes = [["Trainer-led", yr.filter((x) => modeOf(x.r) === "led").length, "s3"], ["Read & understood", yr.filter((x) => modeOf(x.r) === "self").length, "s4"], ["Both", yr.filter((x) => modeOf(x.r) === "both").length, "s7"], ["Not recorded", yr.filter((x) => modeOf(x.r) === "none").length, "other"]].filter(([, n], i) => n || i < 3);
   CHART_DATA.set("trn-plan", { title: `Annual plan ${Y} — topics by month`, head: ["Month", "Planned (P)", "Executed (E)", "Employees to be trained", "Employees trained"], rows: rep.map((m) => [m.label, m.P, m.E ?? "", m.toTrain, m.trained ?? ""]) });
   CHART_DATA.set("trn-unplanned", { title: `Unplanned & external ${Y} — employees trained`, head: ["Month", "SOP training", "Quality circle", "Others", "External"], rows: rep.map((m) => [m.label, m.sop, m.qc, m.other, m.ext]) });
   const tot = (f) => rep.reduce((a, m) => a + (m[f] || 0), 0);
@@ -173,7 +176,9 @@ function overview(body, s, Y, rows) {
         ${columns(unCols, { width: 640, height: 210 })}
         <div class="legend" style="margin-top:8px"><span><i class="bg-s1"></i>SOP training</span><span><i class="bg-s4"></i>Quality circle</span><span><i class="bg-s7"></i>Others</span><span><i class="bg-s5"></i>External</span></div></div>
       <div class="card card-pad"><div class="card-head"><h2>Training types <span class="sub">QA sessions in ${Y}</span></h2></div>${hbars(byType.map(([label, value]) => ({ label, value, cls: "f-s2" })), { width: 560, labelW: 170 })}</div>
-      <div class="card card-pad"><div class="card-head"><h2>Trainers <span class="sub">sessions delivered in ${Y}, other departments included</span></h2></div>${hbars(trainers.map(([label, value]) => ({ label, value, cls: "f-s3" })), { width: 560, labelW: 170 })}</div>
+      <div class="card card-pad"><div class="card-head"><h2>Trainers & delivery <span class="sub">sessions in ${Y}, other departments included — a session with two trainers counts for each</span></h2></div>
+        <div class="mode-mix">${modes.map(([l, n, c]) => `<span><i class="bg-${c}"></i><b>${n}</b> ${esc(l)}</span>`).join("")}</div>
+        ${hbars(trainers.map(([label, value]) => ({ label, value, cls: "f-s3" })), { width: 560, labelW: 170 })}</div>
     </div>
     <div class="card card-pad" style="margin-top:16px">
       <div class="card-head"><h2>Department training report ${Y} <span class="sub">QA_Onc row of the Departments Annual Oncology Training Plan — counts are employees, as in the corporate file</span></h2><button class="btn sm" data-xlsx2>⤓ xlsx</button></div>
@@ -206,8 +211,14 @@ function planView(body, s, Y, rows) {
     <div class="stack">${months.map((m) => `<div class="card plan-month"><div class="pm-head"><b>${esc(m.label)}</b><span class="muted">${m.items.length} topic${m.items.length > 1 ? "s" : ""} · ${m.items.filter((x) => E.trnDone(x.r)).length} completed</span></div>
       ${m.items.map((x) => { const [lbl, rag] = state(x); const { planned: p, trained: t } = E.trnFigures(x.r, g); return `<button type="button" class="pm-row" data-open="${x.i}">
         <span class="mono">${esc(x.r.sop || "—")}</span>
-        <span class="pm-title">${esc(x.r.topic)}<small>${esc(x.r.type || "")}${x.r.trainer ? ` · ${esc(x.r.trainer)}` : ""}${x.r.done ? ` · held ${fmtDate(x.r.done)}` : ""}</small></span>
+        <span class="pm-title">${esc(x.r.topic)}<small>${esc(x.r.type || "")}${deliveryHTML(x.r)}${x.r.done ? ` · held ${fmtDate(x.r.done)}` : ""}</small></span>
         <span class="pm-bar" title="${t} of the ${p} people of the plan group trained"><i style="width:${p ? Math.min(100, (t / p) * 100) : 0}%" class="${rag}"></i></span><span class="num">${p ? `${t}/${p}` : ""}</span>${pill(lbl, rag)}</button>`; }).join("")}</div>`).join("") || `<div class="empty">No annual plan for ${Y} yet — add the topics of the department plan.</div>`}</div>`;
+}
+
+/** " · trainers" and a read & understood tag, for the lists. */
+function deliveryHTML(r) {
+  const t = E.splitNames(r.trainer);
+  return `${t.length ? ` · ${esc(t.join(", "))}` : ""}${E.trnSelf(r) ? ` <span class="ru-tag" title="${esc(r.mode)}">${t.length ? "+ " : ""}Read & understood</span>` : ""}`;
 }
 
 /* ── unplanned and external training: add and edit ───── */
@@ -247,7 +258,7 @@ function unplannedView(body, s, Y, rows, redraw) {
       ${g.items.map((x) => `<button type="button" class="un-row" data-open="${x.i}">
         <span class="un-date">${x.r.done || x.r.date ? fmtDate(x.r.done || x.r.date) : "—"}</span>
         <span class="mono">${esc(x.r.sop || "—")}</span>
-        <span class="pm-title">${esc(x.r.topic || "")}<small><span class="type-tag t-${slug(x.r.type || "other")}">${esc(x.r.type || "Other")}</span>${x.r.trainer ? ` · ${esc(x.r.trainer)}` : ""}${x.r.link ? ` · ${esc(x.r.link)}` : ""}${!x.qa ? ` · <b>given to another department</b>` : ""}</small></span>
+        <span class="pm-title">${esc(x.r.topic || "")}<small><span class="type-tag t-${slug(x.r.type || "other")}">${esc(x.r.type || "Other")}</span>${deliveryHTML(x.r)}${x.r.link ? ` · ${esc(x.r.link)}` : ""}${!x.qa ? ` · <b>given to another department</b>` : ""}</small></span>
         ${avatars(x.names)}<span class="num">${x.r.trained || x.names.length || ""}</span>${x.r.eff ? pill(x.r.eff) : `<span class="muted">—</span>`}</button>`).join("")}</div>`).join("") || `<div class="card card-pad"><div class="empty">No unplanned training matches${view.unType || view.unQ ? " these filters" : ` in ${Y}`} — add one with the buttons above.</div></div>`}</div>`;
   $$("[data-addun]", body).forEach((b) => b.onclick = () => {
     const other = view.unDept === "other";
@@ -346,7 +357,7 @@ function matrixView(body, s, Y, rows) {
 function cardRows(rows, name) {
   return rows.filter((x) => x.names.includes(name) && x.r.status !== "Cancelled").map((x) => ({
     date: x.r.done || (x.cat !== "Planned" ? x.r.date : "") || "", month: !x.r.done && x.cat === "Planned" ? x.r.date || "" : "", year: x.r.year || "",
-    title: x.r.topic || "", doc: x.r.sop || "NA", rev: x.r.version || "", trainer: x.r.trainer || x.r.provider || "",
+    title: x.r.topic || "", doc: x.r.sop || "NA", rev: x.r.version || "", trainer: [E.splitNames(x.r.trainer).join(" · ") || x.r.provider || "", E.trnSelf(x.r) ? "Read & understood" : ""].filter(Boolean).join(" + "),
     cat: x.cat, ttype: x.r.type || "", type: `${x.cat}${x.r.type ? ` · ${x.r.type}` : ""}`, eff: x.r.eff || "", i: x.i,
   })).sort((a, b) => String(a.date || a.month || a.year).localeCompare(String(b.date || b.month || b.year)));
 }
@@ -380,7 +391,7 @@ function cardsView(body, s, rows) {
       </header>
       <div class="tc-table"><table class="data tc">
         <colgroup><col style="width:46px"><col style="width:98px"><col><col style="width:142px"><col style="width:52px"><col style="width:124px"><col style="width:168px"><col style="width:140px"></colgroup>
-        <thead><tr><th class="num">No.</th><th>Date</th><th>Training name</th><th>Document No.</th><th class="num">Rev.</th><th>Trainer</th><th>Training type</th><th>Effectiveness</th></tr></thead>
+        <thead><tr><th class="num">No.</th><th>Date</th><th>Training name</th><th>Document No.</th><th class="num">Rev.</th><th>Trainer(s) / delivery</th><th>Training type</th><th>Effectiveness</th></tr></thead>
         <tbody>${lines.map((l, n) => `<tr data-open="${l.i}"><td class="num muted">${n + 1}</td><td>${l.date ? fmtDate(l.date) : l.month ? `<span class="muted" title="Exact date not recorded">${esc(fmtMonth(l.month))}</span>` : esc(String(l.year || "—"))}</td>
           <td class="tc-title">${esc(l.title)}</td><td class="mono">${esc(l.doc)}</td><td class="num">${esc(l.rev)}</td><td>${esc(l.trainer)}</td>
           <td><span class="cat-pill ${l.cat}">${esc(l.cat)}</span><small class="tc-type">${esc(l.ttype)}</small></td><td>${l.eff ? pill(l.eff) : `<span class="muted">—</span>`}</td></tr>`).join("") || `<tr><td colspan="8"><div class="empty">No training recorded for ${esc(p.name)} yet</div></td></tr>`}</tbody>
@@ -402,7 +413,7 @@ async function exportCards(s, rows, people) {
     const aoa = [
       ["Employee Training Card (Carte de formation de l'employé)", "", "", "", "", "", "", "Template GS0024/Onc/T03"], [],
       ["Employee Name (nom de l'employé)", "", p.name], ["Department (Département)", "", "Quality Assurance"], ["Title (Titre de la fonction)", "", p.role || ""], [],
-      ["Sr. No.", "Training Date (Date de la formation)", "Training Name (Titre de la formation)", "Document Number (Numéro du Document)", "Revision Number", "Trainer Name (nom du formateur)", "Training Type (Type de formation)", "Effectiveness / Evaluation / Result"],
+      ["Sr. No.", "Training Date (Date de la formation)", "Training Name (Titre de la formation)", "Document Number (Numéro du Document)", "Revision Number", "Trainer Name (nom du formateur) / delivery", "Training Type (Type de formation)", "Effectiveness / Evaluation / Result"],
       ...lines.map((l, n) => [n + 1, l.date ? new Date(`${l.date}T00:00:00Z`) : l.month ? fmtMonth(l.month) : l.year ? String(l.year) : "", l.title, l.doc, l.rev, l.trainer, l.type, l.eff]),
     ];
     const ws = X.utils.aoa_to_sheet(aoa, { cellDates: true, dateNF: "dd/mm/yyyy" });
@@ -438,8 +449,8 @@ export async function exportDeptReport(s, Y = yearOf(s)) {
   ws2["!cols"] = [{ wch: 7 }, { wch: 16 }, ...rep.flatMap(() => [{ wch: 12 }, { wch: 12 }, { wch: 12 }])];
   X.utils.book_append_sheet(wb, ws2, "UnPlanned Oncology Training");
   // the register behind it
-  const head = ["Training ID", "Category", "Training type", "Document No.", "Revision", "Training title", "Trained department", "Planned date", "Rescheduled", "Completion date", "Trainer", "External provider", "Year", "Status", "Employees to be trained", "Employees trained", "Names", "Effectiveness", "Comments"];
-  const keys = ["id", "cat", "type", "sop", "version", "topic", "dept", "date", "resched", "done", "trainer", "provider", "year", "status", "planned", "trained", "attendees", "eff", "comments"];
+  const head = ["Training ID", "Category", "Training type", "Document No.", "Revision", "Training title", "Trained department", "Planned date", "Rescheduled", "Completion date", "Delivery", "Trainer(s)", "External provider", "Year", "Status", "Employees to be trained", "Employees trained", "Names", "Effectiveness", "Comments"];
+  const keys = ["id", "cat", "type", "sop", "version", "topic", "dept", "date", "resched", "done", "mode", "trainer", "provider", "year", "status", "planned", "trained", "attendees", "eff", "comments"];
   const ws3 = X.utils.aoa_to_sheet([head, ...(s.trn || []).map((r) => keys.map((k) => (["date", "done"].includes(k) && r[k] ? new Date(`${r[k]}T00:00:00Z`) : r[k] ?? "")))], { cellDates: true, dateNF: "dd/mm/yyyy" });
   ws3["!cols"] = keys.map((k) => ({ wch: k === "topic" ? 50 : k === "attendees" || k === "comments" ? 40 : 14 }));
   X.utils.book_append_sheet(wb, ws3, "Training register");

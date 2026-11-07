@@ -191,7 +191,7 @@ export function inputHTML(tier, field, value, { name = field.key, cls = "", reg 
     const box = (p) => `<label class="pp ${chosen.includes(p) ? "on" : ""}"><input type="checkbox" value="${esc(p)}" ${chosen.includes(p) ? "checked" : ""}> ${esc(p)}</label>`;
     return `<div class="people-pick ${cls}" data-people="${name}"${field.countInto ? ` data-count="${field.countInto}"` : ""}>
       <input type="hidden" name="${name}" value="${esc(chosen.join(", "))}">
-      <div class="pp-head"><b data-ppn>${chosen.length}</b> selected <span class="spacer"></span><button type="button" class="btn sm ghost" data-ppall title="The job titles the annual plan makes mandatory">Plan group</button><button type="button" class="btn sm ghost" data-ppnone>None</button></div>
+      <div class="pp-head"><b data-ppn>${chosen.length}</b> selected <span class="spacer"></span>${field.noGroup ? "" : `<button type="button" class="btn sm ghost" data-ppall title="The job titles the annual plan makes mandatory">Plan group</button>`}<button type="button" class="btn sm ghost" data-ppnone>None</button></div>
       <div class="pp-list">${first.map(box).join("")}</div>
       ${rest.length ? `<details class="pp-more"><summary>Other people (${rest.length})</summary><div class="pp-list">${rest.map(box).join("")}</div></details>` : ""}
       <div class="inline" style="margin-top:6px"><input type="text" data-ppadd placeholder="Add a name (e.g. a trainee from another department)" autocomplete="off"><button type="button" class="btn sm" data-ppaddbtn>Add</button></div>
@@ -244,7 +244,7 @@ export function wireInputs(root, tier, fields, onChange) {
       if (target) target.value = names.length || "";
     };
     pp.addEventListener("change", (e) => { if (e.target.matches("input[type=checkbox]")) sync(); });
-    pp.querySelector("[data-ppall]").onclick = () => { pp.querySelectorAll("input[type=checkbox]").forEach((c) => { if (team.includes(c.value)) c.checked = true; }); sync(); };
+    if (pp.querySelector("[data-ppall]")) pp.querySelector("[data-ppall]").onclick = () => { pp.querySelectorAll("input[type=checkbox]").forEach((c) => { if (team.includes(c.value)) c.checked = true; }); sync(); };
     pp.querySelector("[data-ppnone]").onclick = () => { pp.querySelectorAll("input[type=checkbox]").forEach((c) => { c.checked = false; }); sync(); };
     const add = () => {
       const inp = pp.querySelector("[data-ppadd]"), n = inp.value.trim();
@@ -322,9 +322,10 @@ export function openEditor({ tier, reg, index = null, prefill = null, onSaved, p
   let groups = "", lastGroup = null;
   for (const f of sc.fields) {
     if (f.group && f.group !== lastGroup) { groups += `<div class="form-group-title">${esc(f.group)}</div>`; lastGroup = f.group; }
-    const full = f.type === "long" ? " full" : "";
-    groups += `<label class="field${full}" data-f="${f.key}"><span>${esc(f.label)}${f.req ? '<i class="req">*</i>' : ""}</span>
-      ${inputHTML(tier, f, rec[f.key], { reg })}${f.help ? `<small>${esc(f.help)}</small>` : ""}</label>`;
+    const full = f.type === "long" || f.type === "people" ? " full" : "";
+    const tag = f.type === "people" ? "div" : "label"; // the picker holds its own labels
+    groups += `<${tag} class="field${full}" data-f="${f.key}"><span>${esc(f.label)}${f.req ? '<i class="req">*</i>' : ""}</span>
+      ${inputHTML(tier, f, rec[f.key], { reg })}${f.help ? `<small>${esc(f.help)}</small>` : ""}</${tag}>`;
   }
   const body = `${practice ? `<div class="callout" style="margin-bottom:12px"><b>Practice · event ${practice.n + 1}.</b> ${esc(practice.text)}</div><div data-practice></div>` : ""}<div data-fx></div><div data-flag></div><form class="form-grid" autocomplete="off">${groups}</form>${reg === "load" ? `<div data-breakdown style="margin-top:18px"></div>` : ""}${isNew ? "" : linksHTML(tier, reg, rec)}`;
   const footer = practice

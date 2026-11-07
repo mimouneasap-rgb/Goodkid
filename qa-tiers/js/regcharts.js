@@ -82,6 +82,17 @@ export function registerCharts({ tier, reg, sc, list, ref, dateKey, closeKey, ow
       hbars(items, { labelW: 170 }), { head: [f.label, "Records", "Share"], rows: [...pairs.map(([v, c]) => [v, c, pct(c / n)]), ...(blank > 0 ? [["Not filled in", blank, pct(blank / n)]] : [])] });
   }
 
+  // 2b · multi-person fields (trainers, employees trained): one count per person
+  for (const f of sc.fields.filter((x) => x.type === "people")) {
+    const m = new Map();
+    list.forEach((x) => String(x.r[f.key] || "").split(",").map((v) => v.trim()).filter(Boolean).forEach((v) => m.set(v, (m.get(v) || 0) + 1)));
+    if (!m.size) continue;
+    const pairs = [...m.entries()].sort((a, b) => b[1] - a[1]);
+    add(`by-${f.key}`, `By ${f.label.toLowerCase()}`, `Records per person named in ${f.label.toLowerCase()} — click to search for them`,
+      hbars(pairs.slice(0, 14).map(([v, c]) => ({ label: short(v, 30), value: c, cls: color, tip: `**${v}**\n${c} records · click to search`, attrs: `data-fq="${esc(v)}"` })), { labelW: 170 }),
+      { head: [f.label, "Records"], rows: pairs });
+  }
+
   // 3 · raised vs closed per month
   if (dateKey) {
     const months = MONTHS(ref);
