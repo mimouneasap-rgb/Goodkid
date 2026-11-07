@@ -46,6 +46,9 @@ function seedLists(tier, s) {
     s.activities = s.activities.concat(DEFAULT_ACTIVITIES.filter((a) => !s.activities.some((x) => x.name === a.name)).map((a) => ({ ...a, role: REAL_ROLES[a.role] ?? a.role })));
     s.act ??= [];
     s.aud ??= []; s.find ??= []; s.rej ??= []; s.t1e ??= [];
+    s.lists.AudStandard ??= uniq(["GMP", "GDP", "GLP", "ISO 9001", "ICH Q10", ...(s.aud || []).map((r) => r.standard)]);
+    s.lists.AuditAreas ??= uniq(["Quality Assurance", "Quality Control", "Manufacturing", "Packaging", "Warehouse", "Engineering", "IT Infrastructure", ...(s.aud || []).map((r) => r.areas), ...(s.find || []).map((r) => r.area)]);
+    s.lists.BatchType ??= uniq(["Industrial", "Registration", "Validation", "Pilot", "Commercial", ...(s.rej || []).map((r) => String(r.btype ?? "").trim()).filter((v) => /[a-z]/i.test(v))]);
     s.lists.T1EStatus ??= ["Open", "In Progress", "Resolved", "Escalated to Tier 3"];
     s.lists.Pillars ??= ["S · Safety", "Q · Quality", "D · Delivery", "C · Compliance", "P · People"];
     s.lists.RejStatus ??= ["Open", "In Progress", "Pending Signature", "Closed"];

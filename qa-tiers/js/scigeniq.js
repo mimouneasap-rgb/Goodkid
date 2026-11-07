@@ -317,7 +317,8 @@ export function applyImport(plan, { files = [], generated = null, addPeople = tr
   const addTo = (list, v) => { if (has(v) && L[list] && !L[list].includes(v)) L[list].push(v); };
   if (addPeople) plan.people.forEach((n) => addTo("People", n));
   for (const r of s.find) addTo("FindType", r.ftype);
-  for (const r of s.aud) { addTo("AudType", r.type); addTo("AudRisk", r.risk); }
+  for (const r of s.aud) { addTo("AudType", r.type); addTo("AudRisk", r.risk); addTo("AudStandard", r.standard); addTo("AuditAreas", r.areas); }
+  for (const r of s.find) addTo("AuditAreas", r.area);
   for (const r of s.act) addTo("Departments", r.dept);
   for (const r of s.cc) addTo("Departments", r.initiator);
   s.imports = [{ at: new Date().toISOString(), files, generated, counts, ...(id ? { id } : {}) }, ...(s.imports || [])].slice(0, 30);

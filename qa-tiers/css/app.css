@@ -776,3 +776,25 @@ svg.chart text.seg.on-a1, svg.chart text.seg.on-a2, svg.chart text.seg.on-q1 { f
 .has-float { padding-top: 40px !important; }
 .cascade.solo-t1 { grid-template-columns: minmax(0, 1fr); }
 .cascade.solo-t2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
+/* ── Register upgrade: linked-record pickers, links panel, bulk edit, charts view ── */
+.refpick { display: flex; gap: 6px; align-items: center; }
+.refpick select { flex: 1; min-width: 0; }
+.links-panel { margin-top: 18px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface-2); padding: 12px 14px; }
+.links-panel .card-head { padding: 0 0 8px; border: 0; flex-wrap: wrap; gap: 8px; }
+.links-panel h2 { font-size: 14px; }
+.link-group { margin-top: 8px; }
+.link-group > b { display: block; font-size: 11.5px; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); margin-bottom: 4px; }
+.link-row { display: flex; gap: 10px; align-items: baseline; padding: 6px 8px; border-radius: 7px; text-decoration: none; color: var(--ink); background: var(--surface); border: 1px solid var(--line); margin-bottom: 4px; }
+.link-row:hover { border-color: var(--accent); }
+.link-row .mono { font-family: var(--font-mono); font-size: 12px; color: var(--accent-2); white-space: nowrap; }
+.link-row .muted { margin-left: auto; font-size: 12px; white-space: nowrap; }
+.bulkbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 10px 14px; margin-bottom: 10px; border-left: 4px solid var(--accent); background: var(--accent-soft); position: sticky; top: 8px; z-index: 5; }
+.bulkbar select, .bulkbar input { max-width: 220px; }
+th.selcell, td.selcell { width: 34px; text-align: center; padding-left: 6px !important; padding-right: 6px !important; }
+tr.selrow td { background: var(--accent-soft) !important; }
+td a.reflink { color: var(--accent-2); font-family: var(--font-mono); font-size: 12px; text-decoration: none; border-bottom: 1px dotted currentColor; }
+.seg-ctl button[aria-pressed="true"] { background: var(--navy); color: var(--navy-ink); }
+svg.chart rect.clickable { cursor: pointer; }
+svg.chart rect.clickable:hover { opacity: .8; }
+[data-regcharts] .card { break-inside: avoid; }

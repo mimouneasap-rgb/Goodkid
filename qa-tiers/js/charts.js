@@ -27,7 +27,7 @@ export function hbars(items, { width = 420, fmt = (v) => v, max, marks = [], lab
     const w = Math.max(it.value > 0 ? 3 : 0, x(it.value) - labelW);
     s += `<text class="lbl" x="${labelW - 8}" y="${y + barH / 2 + 4}" text-anchor="end">${esc(trunc(it.label, Math.floor((labelW - 12) / 6.6)))}</text>`;
     s += `<rect x="${labelW}" y="${y}" width="${plotW}" height="${barH}" rx="5" class="f-N" opacity=".12"/>`;
-    s += `<rect x="${labelW}" y="${y}" width="${w}" height="${barH}" rx="5" class="${it.cls || "f-s1"}" data-tip="${esc(it.tip || `**${it.label}**\n${fmt(it.value)}`)}"/>`;
+    s += `<rect x="${labelW}" y="${y}" width="${w}" height="${barH}" rx="5" class="${it.cls || "f-s1"}${it.attrs ? " clickable" : ""}" data-tip="${esc(it.tip || `**${it.label}**\n${fmt(it.value)}`)}" ${it.attrs || ""}/>`;
     s += `<text class="val" x="${labelW + w + 6}" y="${y + barH / 2 + 4}">${esc(fmt(it.value))}</text>`;
   });
   for (const m of marks) {

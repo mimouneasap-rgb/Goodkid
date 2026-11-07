@@ -7,7 +7,8 @@ import * as E from "./engine.js";
 import { T1_REGISTERS, T2_REGISTERS, LOCKED_LISTS } from "./schema.js";
 import { stackedH } from "./charts.js";
 import { PRACTICE } from "./learn.js";
-import { saveFile } from "./export.js";
+import { saveFile, decorateCharts } from "./export.js";
+import { registerCharts } from "./regcharts.js";
 import { DEMO_T1, DEMO_T2 } from "./demo-data.js";
 import { esc, pill, fmtDate, pct, fmtNum, toast, confirmDialog, promptDialog, drawer, download, toCSV, $, $$, today } from "./ui.js";
 
@@ -134,8 +135,39 @@ export function optionsFor(tier, field) {
   return s.lists[field.list] || [];
 }
 
-export function inputHTML(tier, field, value, { name = field.key, cls = "" } = {}) {
+/** The records a reference field can point to, register by register. */
+export function refOptions(tier, field) {
+  const R = tier === "t1" ? T1_REGISTERS : T2_REGISTERS;
+  return field.refs.filter((g) => R[g] && Array.isArray(store[tier][g])).map((g) => {
+    const idKey = R[g].idKey || "id";
+    let rows = store[tier][g].filter((x) => has(x[idKey]));
+    if (field.refWhere) rows = rows.filter((x) => Object.entries(field.refWhere).every(([k, v]) => x[k] === v));
+    rows = rows.slice().sort((a, b) => String(b[idKey]).localeCompare(String(a[idKey]), undefined, { numeric: true }));
+    return { reg: g, short: R[g].short, rows: rows.map((x) => ({ id: String(x[idKey]), label: String(x.desc || x.title || x.product || x.topic || x.member || "").replace(/\s+/g, " ").slice(0, 70) })) };
+  });
+}
+/** The register a reference points into. */
+export function regOfRef(tier, field, id) {
+  if (!has(id)) return null;
+  const R = tier === "t1" ? T1_REGISTERS : T2_REGISTERS;
+  return field.refs.find((g) => R[g] && (store[tier][g] || []).some((x) => String(x[R[g].idKey || "id"]) === String(id))) || null;
+}
+
+export function inputHTML(tier, field, value, { name = field.key, cls = "", reg = null } = {}) {
   const v = value ?? "";
+  if (field.type === "ref") {
+    const groups = refOptions(tier, field);
+    const known = groups.some((g) => g.rows.some((x) => x.id === String(v)));
+    return `<div class="inline"><select name="${name}" class="${cls}" data-ref="${field.key}"><option value="">— none —</option>${has(v) && !known ? `<option value="${esc(v)}" selected>${esc(v)} (not on the board)</option>` : ""}
+      ${groups.map((g) => `<optgroup label="${esc(g.short)} (${g.rows.length})" data-reg="${g.reg}">${g.rows.map((x) => `<option value="${esc(x.id)}" ${x.id === String(v) ? "selected" : ""}>${esc(x.id)} — ${esc(x.label)}</option>`).join("")}</optgroup>`).join("")}</select>
+      <a class="btn sm" data-reflink="${field.key}" hidden title="Open the linked record (save first)">Open ›</a></div>`;
+  }
+  if (field.type === "text" && reg && field.key !== "id") {
+    // free text that proposes the values already used (and the list it names)
+    const vals = new Set((field.suggest ? store[tier].lists[field.suggest] || [] : []));
+    for (const x of store[tier][reg] || []) if (has(x[field.key])) vals.add(String(x[field.key]));
+    if (vals.size) return `<input type="text" name="${name}" class="${cls}" value="${esc(v)}" autocomplete="off" list="sg-${reg}-${field.key}"><datalist id="sg-${reg}-${field.key}">${[...vals].slice(0, 300).map((x) => `<option value="${esc(x)}">`).join("")}</datalist>`;
+  }
   if (field.type === "activity") {
     const acts = (store[tier].activities || E.DEFAULT_ACTIVITIES).filter((a) => a.reg === "task");
     const extra = has(v) && !acts.some((a) => a.name === v) ? `<option value="${esc(v)}" selected>${esc(v)} (not in catalogue)</option>` : "";
@@ -165,6 +197,25 @@ export function readField(field, raw) {
 
 /** Wire "Today" buttons and "Add a value…" options inside a container. */
 export function wireInputs(root, tier, fields, onChange) {
+  // reference fields: the parent registers allowed by the type field, and a link to the chosen record
+  const refFields = (fields || []).filter((f) => f.type === "ref");
+  const syncRefs = (e) => {
+    for (const f of refFields) {
+      const sel = root.querySelector(`[data-ref="${f.key}"]`);
+      if (!sel) continue;
+      if (f.refBy) {
+        const by = root.querySelector(`[name="${f.refBy.field}"]`)?.value;
+        const allowed = f.refBy.map[by];
+        sel.querySelectorAll("optgroup").forEach((g) => { g.hidden = !!allowed && !allowed.includes(g.dataset.reg); });
+        // the type was just changed: a record of another register no longer fits
+        if (e?.target?.name === f.refBy.field && sel.selectedOptions[0]?.parentElement?.hidden) sel.value = "";
+      }
+      const link = root.querySelector(`[data-reflink="${f.key}"]`);
+      const g = regOfRef(tier, f, sel.value);
+      if (link) { link.hidden = !g; if (g) link.href = `#/${tier}/reg/${g}?id=${encodeURIComponent(sel.value)}`; }
+    }
+  };
+  if (refFields.length) { syncRefs(); root.addEventListener("change", syncRefs); }
   root.addEventListener("click", (e) => {
     const b = e.target.closest("[data-today]");
     if (!b) return;
@@ -220,9 +271,9 @@ export function openEditor({ tier, reg, index = null, prefill = null, onSaved, p
     if (f.group && f.group !== lastGroup) { groups += `<div class="form-group-title">${esc(f.group)}</div>`; lastGroup = f.group; }
     const full = f.type === "long" ? " full" : "";
     groups += `<label class="field${full}" data-f="${f.key}"><span>${esc(f.label)}${f.req ? '<i class="req">*</i>' : ""}</span>
-      ${inputHTML(tier, f, rec[f.key])}${f.help ? `<small>${esc(f.help)}</small>` : ""}</label>`;
+      ${inputHTML(tier, f, rec[f.key], { reg })}${f.help ? `<small>${esc(f.help)}</small>` : ""}</label>`;
   }
-  const body = `${practice ? `<div class="callout" style="margin-bottom:12px"><b>Practice · event ${practice.n + 1}.</b> ${esc(practice.text)}</div><div data-practice></div>` : ""}<div data-fx></div><div data-flag></div><form class="form-grid" autocomplete="off">${groups}</form>${reg === "load" ? `<div data-breakdown style="margin-top:18px"></div>` : ""}${tier === "t2" && ["dev", "capa", "cc"].includes(reg) && !isNew ? linkedActionsHTML(rec.id) : ""}${tier === "t2" && reg === "act" && rec.parent ? parentLinkHTML(rec.parent) : ""}`;
+  const body = `${practice ? `<div class="callout" style="margin-bottom:12px"><b>Practice · event ${practice.n + 1}.</b> ${esc(practice.text)}</div><div data-practice></div>` : ""}<div data-fx></div><div data-flag></div><form class="form-grid" autocomplete="off">${groups}</form>${reg === "load" ? `<div data-breakdown style="margin-top:18px"></div>` : ""}${isNew ? "" : linksHTML(tier, reg, rec)}`;
   const footer = practice
     ? `<span class="pill info">Practice mode — nothing is saved</span><span class="spacer"></span><button class="btn" data-cancel>Close</button><button class="btn primary" data-check>✓ Check my entry</button>`
     : `${isNew ? "" : `<button class="btn danger" data-del>Delete</button><button class="btn" data-dup>Duplicate</button>`}
@@ -312,6 +363,36 @@ export function openEditor({ tier, reg, index = null, prefill = null, onSaved, p
 }
 
 /** The eQMS actions raised under a quality event, CAPA or change control. */
+/** Linked records of a record: its parents (reference fields) and every record that points to it. */
+function linksHTML(tier, reg, rec) {
+  const R = tier === "t1" ? T1_REGISTERS : T2_REGISTERS;
+  const s = store[tier];
+  const sc = R[reg];
+  const id = rec[sc.idKey || "id"];
+  if (!has(id)) return "";
+  const parents = sc.fields.filter((f) => f.type === "ref" && has(rec[f.key])).map((f) => ({ f, g: regOfRef(tier, f, rec[f.key]), id: rec[f.key] }));
+  const kids = [];
+  for (const [g, csc] of Object.entries(R)) {
+    for (const f of csc.fields.filter((x) => x.type === "ref" && x.refs.includes(reg))) {
+      const rows = (s[g] || []).map((x, i) => ({ x, i })).filter(({ x }) => String(x[f.key] ?? "") === String(id));
+      kids.push({ g, f, csc, rows });
+    }
+  }
+  const any = parents.length || kids.some((k) => k.rows.length);
+  const newBtn = ({ g, f, csc }) => {
+    const pre = { [f.key]: id, opened: today() };
+    if (csc.fields.some((x) => x.key === "status")) pre.status = (csc.lifecycle?.[0]) || "Open";
+    if (f.refBy) { const k = Object.entries(f.refBy.map).find(([, regs]) => regs.includes(reg)); if (k) pre[f.refBy.field] = k[0]; }
+    return `<a class="btn sm" href="#/${tier}/reg/${g}?new=1&prefill=${encodeURIComponent(JSON.stringify(pre))}">＋ ${esc(csc.short)}</a>`;
+  };
+  const live = (g, i) => { try { return computeAll(tier, g)[i]?.live || ""; } catch { return ""; } };
+  return `<div class="links-panel"><div class="card-head"><h2>Linked records</h2><div class="row">${kids.map(newBtn).join("")}</div></div>
+    ${parents.map(({ f, g, id: pid }) => `<div class="link-row"><span class="muted">${esc(f.label)}</span>${g ? `<a href="#/${tier}/reg/${g}?id=${encodeURIComponent(pid)}"><b class="mono">${esc(pid)}</b> · ${esc(R[g].short)} ›</a>` : `<span class="mono">${esc(pid)}</span> <span class="muted">(not on the board)</span>`}</div>`).join("")}
+    ${kids.filter((k) => k.rows.length).map(({ g, csc, rows }) => `<div class="link-group"><b>${esc(csc.short)}</b> <span class="muted">· ${rows.length}</span>
+      <div class="urgent">${rows.slice(0, 40).map(({ x, i }) => `<a href="#/${tier}/reg/${g}?id=${encodeURIComponent(x[csc.idKey || "id"])}"><span class="ref">${esc(x[csc.idKey || "id"])}</span><span class="desc" title="${esc(x.desc || "")}">${esc(x.desc || x.title || x.product || "")} <span class="muted">· ${esc(x.owner || x.officer || x.member || "—")}</span></span>${pill(live(g, i) || x.status)}</a>`).join("")}${rows.length > 40 ? `<span class="muted" style="font-size:12px">… and ${rows.length - 40} more</span>` : ""}</div></div>`).join("")}
+    ${any ? "" : `<div class="empty">No linked record yet — link one with the buttons above.</div>`}</div>`;
+}
+
 function linkedActionsHTML(ref) {
   const s = store.t2;
   if (!ref || !s.act?.length) return "";
@@ -373,15 +454,20 @@ export function renderRegister(root, { tier, reg, query = {} }) {
   const sc = schemaOf(tier, reg);
   const s = store[tier];
   const key = `${tier}.${reg}`;
-  const vs = viewState[key] ??= { q: "", status: "", officer: "", flagged: false, sort: null, dir: 1, limit: 80, by: {}, from: "", to: "", quick: "" };
+  const vs = viewState[key] ??= { q: "", status: "", officer: "", flagged: false, sort: null, dir: 1, limit: 80, by: {}, from: "", to: "", quick: "", view: "table", sel: new Set() };
+  vs.sel ??= new Set();
   if (query.flag) vs.flagged = true;
   const fx = fxSpec(tier, reg);
   const fieldsByKey = Object.fromEntries(sc.fields.map((f) => [f.key, f]));
   const dateKey = sc.dateKey || (fieldsByKey.opened ? "opened" : fieldsByKey.date ? "date" : fieldsByKey.mfg ? "mfg" : null);
 
   const officersFilter = tier === "t1" && !!fieldsByKey.officer;
+  const closeKey = ["closed", "decision", "done"].find((k) => fieldsByKey[k]) || null;
+  const ownerKey = ["owner", "officer", "member", "trainer", "inspector"].find((k) => fieldsByKey[k]) || null;
+  const bulkFields = sc.fields.filter((f) => ["list", "roster", "ref", "date", "activity"].includes(f.type) && f.key !== (sc.idKey || "id") && f.key !== dateKey);
   const draw = () => {
     const comp = computeAll(tier, reg);
+    for (const i of vs.sel) if (i >= s[reg].length) vs.sel.delete(i);
     const rows = s[reg].map((r, i) => ({ r, c: comp[i], i }));
     const ref = tier === "t2" ? s.setup.statusDate : s.setup.selDate;
     const mS = tier === "t2" ? E.monthStart(s.setup.month) : E.monthStart(ref);
@@ -427,6 +513,7 @@ export function renderRegister(root, { tier, reg, query = {} }) {
       + fx.map((x) => `<th class="fx ${x.num ? "num" : ""}" data-sort="${x.key}">ƒx ${esc(x.label)}${arrow(x.key)}</th>`).join("");
     const cell = (f, v) => {
       if (!has(v)) return `<td></td>`;
+      if (f.type === "ref") { const g = regOfRef(tier, f, v); return `<td class="mono" style="white-space:nowrap">${g ? `<a href="#/${tier}/reg/${g}?id=${encodeURIComponent(v)}" data-noedit>${esc(v)}</a>` : esc(v)}</td>`; }
       if (f.type === "date") return `<td style="white-space:nowrap">${fmtDate(v)}</td>`;
       if (f.type === "pct") return `<td class="num">${pct(v)}</td>`;
       if (f.type === "int" || f.type === "num") return `<td class="num">${fmtNum(v)}</td>`;
@@ -435,7 +522,8 @@ export function renderRegister(root, { tier, reg, query = {} }) {
       if (f.key === (sc.idKey || "id")) return `<td class="mono" style="white-space:nowrap">${esc(v)}</td>`;
       return `<td>${esc(v)}</td>`;
     };
-    const body = shown.map(({ r, c, i }) => `<tr data-i="${i}" class="${c.check && c.check !== "OK" ? "flag" : ""}">${cols.map((f) => cell(f, r[f.key])).join("")}${fx.map((x) => `<td class="fx ${x.num ? "num" : ""}">${x.cell(c) ?? ""}</td>`).join("")}</tr>`).join("");
+    const bulkOn = reg !== "load" && bulkFields.length;
+    const body = shown.map(({ r, c, i }) => `<tr data-i="${i}" class="${c.check && c.check !== "OK" ? "flag" : ""} ${vs.sel.has(i) ? "selrow" : ""}">${bulkOn ? `<td class="selcell" data-noedit><input type="checkbox" data-sel="${i}" ${vs.sel.has(i) ? "checked" : ""} aria-label="Select"></td>` : ""}${cols.map((f) => cell(f, r[f.key])).join("")}${fx.map((x) => `<td class="fx ${x.num ? "num" : ""}">${x.cell(c) ?? ""}</td>`).join("")}</tr>`).join("");
 
     const loadTotal = (k) => rows.reduce((a, x) => a + (+x.c[k] || 0), 0);
     const teamUtil = loadTotal("available") > 0 ? loadTotal("workload") / loadTotal("available") : "";
@@ -461,7 +549,7 @@ export function renderRegister(root, { tier, reg, query = {} }) {
           <div class="meta-row">${sc.source ? `<span>Source <b>${esc(sc.source)}</b></span>` : ""}<span>Collected by <b>${esc(sc.who)}</b></span><span>When <b>${esc(sc.when)}</b></span>
           ${sc.lifecycle?.length ? `<span class="lifecycle">${sc.lifecycle.map((x) => `<span>${esc(x)}</span>`).join("<i>→</i>")}</span>` : ""}</div>
         </div>
-        <div class="row"><button class="btn" data-csv>Export CSV</button><button class="btn primary" data-new>＋ New record</button></div>
+        <div class="row"><div class="seg-ctl" role="group" aria-label="View"><button type="button" data-view="table" aria-pressed="${vs.view !== "charts"}">▤ Table</button><button type="button" data-view="charts" aria-pressed="${vs.view === "charts"}">◔ Charts</button></div><button class="btn" data-csv>Export CSV</button><button class="btn primary" data-new>＋ New record</button></div>
       </div>
       <div class="strip">
         ${stats.map(([l, v, c]) => `<div class="stat ${c}"><div class="s-l">${l}</div><div class="s-v">${v}</div></div>`).join("")}
@@ -474,15 +562,20 @@ export function renderRegister(root, { tier, reg, query = {} }) {
         ${officers.length ? `<select data-officer aria-label="Filter by officer"><option value="">All officers</option>${officers.map((o) => `<option ${o === vs.officer ? "selected" : ""}>${esc(o)}</option>`).join("")}</select>` : ""}
         <label class="row" style="gap:6px;font-size:13px"><input type="checkbox" data-flagged ${vs.flagged ? "checked" : ""}> Flagged only</label>
         ${reg === "load" ? "" : `<div class="seg-ctl" role="group" aria-label="Quick filter">${quick.map(([v, l]) => `<button type="button" data-quick="${v}" aria-pressed="${vs.quick === v}">${l}</button>`).join("")}</div>`}
-        <span class="spacer"></span><span class="muted" style="font-size:12.5px">${list.length} of ${total} shown · click a row to edit · ƒx columns are automatic</span>
+        <span class="spacer"></span><span class="muted" style="font-size:12.5px">${list.length} of ${total} shown · ${vs.view === "charts" ? "click a bar to filter" : "click a row to edit · ƒx columns are automatic"}</span>
       </div>
       ${listFields.length || dateKey ? `<details class="fbar card" data-moref ${moreN ? "open" : ""} style="margin-bottom:12px"><summary><span class="fbar-t">⚲ More filters</span>${moreN ? `<span class="badge">${moreN}</span><span class="spacer"></span><button class="btn sm ghost" type="button" data-moreclear>Clear</button>` : `<span class="muted" style="font-size:12.5px">every drop-down field and the date range</span>`}</summary>
         <div class="fgrid">
           ${dateKey ? `<label class="fctl"><span>${esc(fieldsByKey[dateKey]?.label || "Date")} from</span><input type="date" data-from value="${esc(vs.from)}"></label><label class="fctl"><span>to</span><input type="date" data-to value="${esc(vs.to)}"></label>` : ""}
           ${listFields.map((f) => { const vals = valuesOf(f.key); return vals.length ? `<label class="fctl"><span>${esc(f.label)}</span><select data-by="${f.key}"><option value="">All</option>${vals.map((v) => `<option ${vs.by[f.key] === v ? "selected" : ""}>${esc(v)}</option>`).join("")}</select></label>` : ""; }).join("")}
         </div></details>` : ""}
-      <div class="table-wrap"><table class="data"><thead><tr>${head}</tr></thead><tbody>${body || `<tr><td colspan="${cols.length + fx.length}"><div class="empty">No record matches — clear the filters or add a new record.</div></td></tr>`}</tbody></table></div>
-      ${list.length > vs.limit ? `<div style="text-align:center;margin-top:12px"><button class="btn" data-more>Show all ${list.length} records</button></div>` : ""}`;
+      ${vs.view === "charts" ? (() => { const ch = registerCharts({ tier, reg, sc, list, ref, dateKey, closeKey, ownerKey }); return `${ch.tiles}<div data-regcharts>${ch.html}</div>`; })() : `
+      ${bulkOn && vs.sel.size ? `<div class="bulkbar card" data-bulk><b>${vs.sel.size} selected</b><span>Set</span>
+        <select data-bulkf>${bulkFields.map((f) => `<option value="${f.key}" ${vs.bulkf === f.key ? "selected" : ""}>${esc(f.label)}</option>`).join("")}</select><span>to</span>
+        <span data-bulkv>${inputHTML(tier, fieldsByKey[vs.bulkf] || bulkFields[0], "", { name: "bulkv", reg })}</span>
+        <button class="btn sm primary" data-bulkapply>Apply to ${vs.sel.size}</button><button class="btn sm ghost" data-bulkclear>Clear selection</button></div>` : ""}
+      <div class="table-wrap"><table class="data"><thead><tr>${bulkOn ? `<th class="selcell"><input type="checkbox" data-selall aria-label="Select all shown" ${shown.length && shown.every((x) => vs.sel.has(x.i)) ? "checked" : ""}></th>` : ""}${head}</tr></thead><tbody>${body || `<tr><td colspan="${cols.length + fx.length + 1}"><div class="empty">No record matches — clear the filters or add a new record.</div></td></tr>`}</tbody></table></div>
+      ${list.length > vs.limit ? `<div style="text-align:center;margin-top:12px"><button class="btn" data-more>Show all ${list.length} records</button></div>` : ""}`}`;
 
     $("[data-q]", root).oninput = (e) => { vs.q = e.target.value; const pos = e.target.selectionStart; draw(); const inp = $("[data-q]", root); inp.focus(); inp.setSelectionRange(pos, pos); };
     $("[data-status]", root).onchange = (e) => { vs.status = e.target.value; draw(); };
@@ -511,10 +604,57 @@ export function renderRegister(root, { tier, reg, query = {} }) {
       if (vs.sort === k) vs.dir = -vs.dir; else { vs.sort = k; vs.dir = 1; }
       draw();
     });
-    $("tbody", root).onclick = (e) => {
+    $$("[data-view]", root).forEach((b) => b.onclick = () => { vs.view = b.dataset.view; draw(); });
+    const charts = $("[data-regcharts]", root);
+    if (charts) {
+      decorateCharts(root);
+      charts.addEventListener("click", (e) => {
+        const t = e.target.closest("[data-fby], [data-fstatus], [data-fq]");
+        if (!t) return;
+        if (t.dataset.fby) vs.by[t.dataset.fby] = t.dataset.fv;
+        if (t.dataset.fstatus) vs.status = t.dataset.fstatus;
+        if (t.dataset.fq) vs.q = t.dataset.fq;
+        draw();
+      });
+    }
+    $("tbody", root)?.addEventListener("click", (e) => {
+      if (e.target.closest("[data-noedit], a")) return;
       const tr = e.target.closest("tr[data-i]");
       if (tr) openEditor({ tier, reg, index: +tr.dataset.i, onSaved: draw });
+    });
+    // on elements rebuilt by every draw, so the handler never stacks up
+    const onSel = (e) => {
+      const t = e.target;
+      if (t.matches("[data-sel]")) { const i = +t.dataset.sel; if (t.checked) vs.sel.add(i); else vs.sel.delete(i); draw(); }
+      if (t.matches("[data-selall]")) { shown.forEach((x) => (t.checked ? vs.sel.add(x.i) : vs.sel.delete(x.i))); draw(); }
+      if (t.matches("[data-bulkf]")) { vs.bulkf = t.value; draw(); }
     };
+    $(".table-wrap", root)?.addEventListener("change", onSel);
+    $("[data-bulk]", root)?.addEventListener("change", onSel);
+    const bulk = $("[data-bulk]", root);
+    if (bulk) {
+      const bf = fieldsByKey[vs.bulkf] || bulkFields[0];
+      wireInputs(bulk, tier, [bf]);
+      $("[data-bulkclear]", bulk).onclick = () => { vs.sel.clear(); draw(); };
+      $("[data-bulkapply]", bulk).onclick = async () => {
+        const raw = bulk.querySelector("[name=bulkv]").value;
+        const v = readField(bf, raw);
+        if (!await confirmDialog({ title: `Set ${bf.label} on ${vs.sel.size} records?`, body: `<p>${esc(bf.label)} becomes <b>${esc(v ?? "— (cleared)")}</b> on the ${vs.sel.size} selected records${store.sync ? " — for everyone on the team" : ""}. Each change is in Change history.</p>`, ok: "Apply" })) return;
+        const done = (tier === "t2" ? E.T2_FLOW[reg]?.done : null) || ["Closed", "Done", "Completed", "Released", "Rejected", "Resolved"];
+        let n = 0;
+        for (const i of vs.sel) {
+          const rec = { ...s[reg][i] };
+          if (v === undefined) delete rec[bf.key]; else rec[bf.key] = v;
+          if (bf.key === "status" && closeKey && done.includes(v) && !has(rec[closeKey])) rec[closeKey] = ref <= today() ? ref : today();
+          s[reg][i] = rec; n++;
+        }
+        store.log(tier, { reg, ref: `${n} records (bulk)`, action: "edit", changes: [{ field: bf.key, from: "", to: v ?? "" }] });
+        store.save(tier);
+        vs.sel.clear();
+        toast(`${bf.label} set on ${n} records`);
+        draw();
+      };
+    }
   };
   draw();
 

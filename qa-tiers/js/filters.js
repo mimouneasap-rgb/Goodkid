@@ -18,7 +18,7 @@ export const T1_REGS = ["dl", "br", "fn", "ac", "hd", "tr"];
 /** Every filterable dimension: the record fields it reads. */
 export const DIMS = {
   owner: { label: "Person", all: "Everyone", keys: ["owner", "officer", "member", "trainer", "inspector"] },
-  area: { label: "Area", all: "All areas", keys: ["area"] },
+  area: { label: "Area", all: "All areas", keys: ["area", "areas"] },
   product: { label: "Product", all: "All products", keys: ["product"] },
   cls: { label: "Classification", all: "All classes", keys: ["cls"] },
   sev: { label: "Severity / category", all: "All severities", keys: ["sev", "cat"] },
@@ -27,6 +27,14 @@ export const DIMS = {
   source: { label: "Source", all: "All sources", keys: ["source"] },
   dept: { label: "Department", all: "All departments", keys: ["dept", "initiator"] },
   root: { label: "Root cause", all: "All root causes", keys: ["root"] },
+  rstatus: { label: "Recorded status", all: "Any recorded status", keys: ["status"] },
+  risk: { label: "Risk / priority", all: "All risks", keys: ["risk", "prio"] },
+  eff: { label: "Effectiveness", all: "Any effectiveness", keys: ["eff"] },
+  kind: { label: "Plan / audit", all: "Plans and audits", keys: ["kind"] },
+  standard: { label: "Standard", all: "All standards", keys: ["standard"] },
+  btype: { label: "Batch type", all: "All batch types", keys: ["btype"] },
+  pillar: { label: "Pillar", all: "All pillars", keys: ["pillar"] },
+  esc: { label: "Escalated", all: "Escalated or not", keys: ["esc"] },
   state: { label: "Status", all: "Any status" },
   reg: { label: "Register", all: "All registers" },
 };

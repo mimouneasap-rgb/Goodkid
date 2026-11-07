@@ -116,7 +116,7 @@ export function renderBoard(root, { filters = null } = {}) {
     </div>
   </section>
 
-  ${filters ? "" : filterBar(boardF, { title: "Filter the board", period: false, dims: ["owner", "area", "product", "cls", "source", "dept"], note: "Every KPI, the Q-calendar and the lists below recalculate on the records that pass — e.g. one person's board, or one product's. Registers that do not record a field are counted unfiltered." })}
+  ${filters ? "" : filterBar(boardF, { title: "Filter the board", period: false, dims: ["owner", "area", "product", "cls", "sev", "type", "source", "dept", "rstatus", "state"], note: "Every KPI, the Q-calendar and the lists below recalculate on the records that pass — e.g. one person's board, or one product's. Registers that do not record a field are counted unfiltered." })}
   <div class="grid split-pulse" style="margin-top:14px">
     <div class="card card-pad ring-wrap" data-tip="${esc(`**Quality Pulse** = (G + ½A) ÷ (G + A + R)\n= (${pulse.g} + ${pulse.a / 2}) ÷ ${pulse.g + pulse.a + pulse.r}\n≥ 85 % green · ≥ 65 % amber · below that red`)}">
       <div class="ring-label">Quality Pulse</div>
@@ -491,7 +491,7 @@ export const CHARTS = [
         data: { head: ["Team member", "Role", "Workload (pd)", "Available (d)", "Utilisation", "Delayed", "Status"], rows: s.load.map((r, i) => [r.member, r.role || "", fmtNum(comp.load[i].workload), comp.load[i].available, pct(comp.load[i].util), comp.load[i].delayed, comp.load[i].status]) },
       };
     } },
-  { id: "capasrc", title: "CAPA by source", q: "What feeds the CAPA system?", dims: ["owner", "type", "state"],
+  { id: "capasrc", title: "CAPA by source", q: "What feeds the CAPA system?", dims: ["owner", "type", "rstatus", "eff", "state"],
     build({ s }) {
       const m = new Map((s.lists.CAPASource || []).map((k) => [k, 0]));
       s.capa.forEach((r) => { if (has(r.source)) m.set(r.source, (m.get(r.source) || 0) + 1); });
@@ -608,7 +608,7 @@ export function renderAnalytics(root, { filters = null, only = null, ownFilters 
   root.innerHTML = `
     <div class="page-head"><div><div class="eyebrow">Tier 2 · Analytics</div><h1>${CHARTS.length} live charts</h1><p>Every chart is recalculated from the registers. Filter the whole page, or one chart with its ⚲ Filter button; hover any bar or point for the figures; ⤓ exports a chart as PNG, SVG or CSV.</p></div>
       ${interactive ? `<div class="row"><button class="btn" data-export-all title="Every chart of this page in one ZIP file">⤓ All charts (ZIP)</button></div>` : ""}</div>
-    ${interactive ? filterBar(pageF, { title: "Page filters", dims: ["owner", "area", "product", "cls", "sev", "source", "dept", "state", "reg"], note: "A filter applies to the registers that record that field; the others are counted unfiltered. Period: records raised (or active, closed, due) in the period." }) : ""}
+    ${interactive ? filterBar(pageF, { title: "Page filters", dims: ["owner", "area", "product", "cls", "sev", "type", "source", "dept", "root", "rstatus", "risk", "eff", "btype", "esc", "state", "reg"], note: "A filter applies to the registers that record that field; the others are counted unfiltered. Period: records raised (or active, closed, due) in the period." }) : ""}
     <div class="grid g2" style="margin-top:${interactive ? 14 : 0}px">${CHARTS.map((c, i) => (!only || only.includes(c.id) ? chartCard(c, i + 1, pageF, cache, ownFilters) : "")).join("")}</div>`;
   if (!interactive) return;
   const fbar = $("[data-fbar]", root);

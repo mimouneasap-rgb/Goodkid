@@ -34,7 +34,7 @@ export const TOURS = {
     { route: "#/report", sel: "[data-type=daily]", title: "After the stand-up · daily report", text: "A one-click Word report and a summary to paste into an e-mail or chat. Tick the daily routine as you go." },
   ] },
   weekly: { title: "The weekly review", steps: [
-    { route: "#/t2/analytics", sel: "[data-fbar]", title: "Filters for every metric", text: "Filter the whole page by period, person, area, product, classification, status or register — or one chart with its own ⚲ Filter." },
+    { route: "#/t2/analytics", sel: "[data-fbar]", title: "Filters for every metric", text: "Filter the whole page by period, person, area, product, classification, type, source, department, root cause, recorded status, risk, effectiveness or register — or one chart with its own ⚲ Filter." },
     { route: "#/t2/analytics", sel: "[data-chart=flow]", title: "Raised vs closed", text: "Is the backlog growing? Two lines, twelve weeks, ending on the as-of date." },
     { route: "#/t2/analytics", sel: "[data-chart=ageing]", title: "Ageing", text: "How old the open items are, register by register — dark blue is over 90 days." },
     { route: "#/t2/analytics", sel: "[data-chart=overdueowner]", title: "Overdue by person", text: "Who needs support this week. Hover a bar for the registers behind it." },
@@ -299,6 +299,9 @@ const GUIDES = [
     ["Filter a page", "Analytics and the dashboard: page filters — period (today … year to date, or a custom range; counting records raised, active, closed or due in it), person, area, product, classification, severity, source, department, status, register."],
     ["Filter one chart", "⚲ Filter in the chart's title bar: its own filters on top of the page filters. The chips under the title say what is shown — they are in the exported picture too."],
     ["Filter a register", "Quick buttons (open, overdue, due ≤ 7 days, raised this month) and ⚲ More filters: every drop-down field and the date range. Export CSV exports what is shown."],
+    ["Chart a register", "◔ Charts at the top of any register: status, one chart per drop-down field (CAPA source, change type, department, owner…), raised vs closed, age, due horizon, overdue by person, on-time closure, cycle time. Click a bar to filter the register on it."],
+    ["Link a record to its parent", "Linked fields are drop-down lists of the records on the board (a CAPA's source record, an action's parent, a finding's audit). The type field narrows the list; Open › jumps to the parent. Each record's Linked records panel lists its children and ＋ creates one already linked."],
+    ["Update many records at once", "Tick the rows (or the header box for all shown) → Set <field> to <value> → Apply. Done statuses fill the closure date; Change history records the bulk edit."],
     ["Export a chart", "⤓ Export: PNG 2× / 3× / 4× (print), light print colours or as on screen, card / page / white / transparent background, footer on or off; Copy picture; SVG vector; CSV data."],
     ["Export every chart", "Analytics → ⤓ All charts (ZIP): every chart as PNG plus its CSV."],
     ["Report", "Reports centre: daily, weekly and monthly Word documents with the same filters, commentary and sign-off; a text summary to paste."],
