@@ -4,13 +4,14 @@
 
 import { store } from "./store.js";
 import * as E from "./engine.js";
-import { T1_REGISTERS, T2_REGISTERS, LOCKED_LISTS } from "./schema.js";
+import { T1_REGISTERS, T2_REGISTERS, LOCKED_LISTS, LIST_LABELS } from "./schema.js";
 import { stackedH } from "./charts.js";
 import { PRACTICE } from "./learn.js";
 import { saveFile, decorateCharts } from "./export.js";
 import { registerCharts } from "./regcharts.js";
 import { DEMO_T1, DEMO_T2 } from "./demo-data.js";
 import { esc, pill, fmtDate, pct, fmtNum, toast, confirmDialog, promptDialog, drawer, download, toCSV, $, $$, today } from "./ui.js";
+import { enhanceCombos } from "./combo.js";
 
 const has = (v) => v !== "" && v != null;
 export const schemaOf = (tier, reg) => (tier === "t1" ? T1_REGISTERS : T2_REGISTERS)[reg];
@@ -32,6 +33,7 @@ const FX = {
   ],
   rel: [
     { key: "stage", label: "Stage", cell: (c, r) => `<span class="stage-pill st-${c.stage}">${esc(E.BATCH_STAGE_LABEL[c.stage] || "")}</span>${c.partial ? ` <span class="stage-pill st-partial" title="${esc(`Partial rejection${c.rejRefs?.length ? ` — ${c.rejRefs.join(", ")}` : ""}`)}">partial rejection</span>` : ""}${r?.wipStep && !["released", "rejected", "registration"].includes(c.stage) ? ` <small class="muted">next: ${esc(r.wipStep)}</small>` : ""}${c.tfOver ? ' <b class="tf-over" title="WIP time frame exceeded">TF</b>' : ""}` },
+    { key: "events", label: "Events", num: true, cell: (c) => (c.events?.length ? `<span class="ev-n" title="${esc(eventsTip(c.events))}">🔗 ${c.events.length}</span>` : "") },
     { key: "target", label: "Target Release", cell: (c) => fmtDate(c.target) },
     { key: "lead", label: "Lead Time (d)", num: true, cell: (c) => c.lead },
     { key: "live", label: "Live Status", cell: (c) => pill(c.live) },
@@ -127,6 +129,13 @@ function computeOne(tier, reg, rec, index) {
   return E.t1Training(rec, sel);
 }
 
+/** "Deviations: QE-1, QE-2 · Rejections: R-7" — the records that name a batch. */
+function eventsTip(events) {
+  const m = new Map();
+  for (const e of events) { const k = T2_REGISTERS[e.reg]?.short || e.reg; m.set(k, [...(m.get(k) || []), e.id]); }
+  return [...m].map(([k, ids]) => `${k}: ${ids.slice(0, 6).join(", ")}${ids.length > 6 ? ` +${ids.length - 6}` : ""}`).join("\n");
+}
+
 /* ── Field rendering ────────────────────────────────────── */
 
 export function optionsFor(tier, field) {
@@ -159,26 +168,32 @@ export function inputHTML(tier, field, value, { name = field.key, cls = "", reg 
   if (field.type === "ref") {
     const groups = refOptions(tier, field);
     const known = groups.some((g) => g.rows.some((x) => x.id === String(v)));
-    return `<div class="inline"><select name="${name}" class="${cls}" data-ref="${field.key}"><option value="">— none —</option>${has(v) && !known ? `<option value="${esc(v)}" selected>${esc(v)} (not on the board)</option>` : ""}
+    return `<div class="inline"><select name="${name}" class="${cls}" data-ref="${field.key}" data-combo><option value="">— none —</option>${has(v) && !known ? `<option value="${esc(v)}" selected>${esc(v)} (not on the board)</option>` : ""}
       ${groups.map((g) => `<optgroup label="${esc(g.short)} (${g.rows.length})" data-reg="${g.reg}">${g.rows.map((x) => `<option value="${esc(x.id)}" ${x.id === String(v) ? "selected" : ""}>${esc(x.id)} — ${esc(x.label)}</option>`).join("")}</optgroup>`).join("")}</select>
       <a class="btn sm" data-reflink="${field.key}" hidden title="Open the linked record (save first)">Open ›</a></div>`;
+  }
+  if (field.type === "text" && field.batchPick && tier === "t2") {
+    // batch numbers: picked from the release register (several allowed), any other batch can still be typed
+    const dl = `bp-${reg || "x"}-${field.key}`;
+    const lots = (store.t2.rel || []).filter((x) => has(x.id)).slice().sort((a, b) => String(b.id).localeCompare(String(a.id), undefined, { numeric: true }));
+    return `<input type="text" name="${name}" class="${cls}" value="${esc(v)}" autocomplete="off" data-combo="text" data-multi data-src="${dl}" placeholder="Type a few digits of the batch…"><datalist id="${dl}">${lots.map((x) => `<option value="${esc(x.id)}" label="${esc([x.product, E.lotTracking(x) ? "registration" : ""].filter(Boolean).join(" · "))}">`).join("")}</datalist>`;
   }
   if (field.type === "text" && reg && field.key !== "id") {
     // free text that proposes the values already used (and the list it names)
     const vals = new Set((field.suggest ? store[tier].lists[field.suggest] || [] : []));
     for (const x of store[tier][reg] || []) if (has(x[field.key])) vals.add(String(x[field.key]));
-    if (vals.size) return `<input type="text" name="${name}" class="${cls}" value="${esc(v)}" autocomplete="off" list="sg-${reg}-${field.key}"><datalist id="sg-${reg}-${field.key}">${[...vals].slice(0, 300).map((x) => `<option value="${esc(x)}">`).join("")}</datalist>`;
+    if (vals.size) return `<input type="text" name="${name}" class="${cls}" value="${esc(v)}" autocomplete="off" data-combo="text" data-src="sg-${reg}-${field.key}"><datalist id="sg-${reg}-${field.key}">${[...vals].sort((a, b) => a.localeCompare(b, undefined, { numeric: true })).map((x) => `<option value="${esc(x)}">`).join("")}</datalist>`;
   }
   if (field.type === "activity") {
     const acts = (store[tier].activities || E.DEFAULT_ACTIVITIES).filter((a) => a.reg === "task");
     const extra = has(v) && !acts.some((a) => a.name === v) ? `<option value="${esc(v)}" selected>${esc(v)} (not in catalogue)</option>` : "";
-    return `<select name="${name}" class="${cls}"><option value="">—</option>${extra}${acts.map((a) => `<option value="${esc(a.name)}" ${a.name === v ? "selected" : ""}>${esc(a.name)} · ${a.effort} pd${a.role ? ` · ${esc(a.role)}` : ""}</option>`).join("")}</select>`;
+    return `<select name="${name}" class="${cls}" data-combo><option value="">—</option>${extra}${acts.map((a) => `<option value="${esc(a.name)}" ${a.name === v ? "selected" : ""}>${esc(a.name)} · ${a.effort} pd${a.role ? ` · ${esc(a.role)}` : ""}</option>`).join("")}</select>`;
   }
   if (field.type === "list" || field.type === "roster") {
     const opts = optionsFor(tier, field);
     const extra = has(v) && !opts.includes(v) ? `<option value="${esc(v)}" selected>${esc(v)} (not in list)</option>` : "";
     const canAdd = field.type === "list" && !LOCKED_LISTS.has(field.list);
-    return `<select name="${name}" class="${cls}" data-list="${esc(field.list || "")}">
+    return `<select name="${name}" class="${cls}" data-list="${esc(field.list || "")}" data-combo>
       <option value="">—</option>${extra}${opts.map((o) => `<option ${o === v ? "selected" : ""}>${esc(o)}</option>`).join("")}
       ${canAdd ? `<option value="__add__">＋ Add a value to this list…</option>` : ""}</select>`;
   }
@@ -214,6 +229,7 @@ export function readField(field, raw) {
 
 /** Wire "Today" buttons and "Add a value…" options inside a container. */
 export function wireInputs(root, tier, fields, onChange) {
+  enhanceCombos(root);
   // reference fields: the parent registers allowed by the type field, and a link to the chosen record
   const refFields = (fields || []).filter((f) => f.type === "ref");
   const syncRefs = (e) => {
@@ -283,7 +299,8 @@ export function wireInputs(root, tier, fields, onChange) {
     const sel = e.target;
     if (sel.tagName === "SELECT" && sel.value === "__add__") {
       const listName = sel.dataset.list;
-      const val = await promptDialog({ title: "Add a value", label: `New value for the list “${listName}”` });
+      const typed = sel.dataset.addValue; delete sel.dataset.addValue;
+      const val = typed || await promptDialog({ title: "Add a value", label: `New value for the list “${listName}”` });
       if (val) {
         const list = store[tier].lists[listName] ??= [];
         if (!list.includes(val)) list.push(val);
@@ -293,8 +310,9 @@ export function wireInputs(root, tier, fields, onChange) {
         opt.textContent = val;
         sel.insertBefore(opt, sel.querySelector('option[value="__add__"]'));
         sel.value = val;
-        toast(`“${val}” added to ${listName}`);
+        toast(`“${val}” added to the list “${LIST_LABELS[listName] || listName}”`);
       } else sel.value = "";
+      sel._cbSync?.();
     }
     onChange?.(e);
   });
@@ -444,7 +462,20 @@ function linksHTML(tier, reg, rec) {
       kids.push({ g, f, csc, rows });
     }
   }
-  const any = parents.length || kids.some((k) => k.rows.length);
+  // batch numbers: the release lot ↔ every quality event, rejection, CAPA, change or action that names it
+  const bl = tier === "t2" ? E.batchLinks(s) : null, seen = new Set(kids.flatMap((k) => k.rows.map(({ i }) => `${k.g}:${i}`)));
+  const named = [];
+  if (bl && reg === "rel") {
+    const byReg = new Map();
+    for (const e of bl.byBatch.get(String(id).trim()) || []) if (!seen.has(`${e.reg}:${e.i}`)) { seen.add(`${e.reg}:${e.i}`); if (!byReg.has(e.reg)) byReg.set(e.reg, []); byReg.get(e.reg).push({ x: s[e.reg][e.i], i: e.i }); }
+    for (const [g, rows] of byReg) if (R[g]) kids.push({ g, csc: R[g], rows, f: null, named: true });
+  } else if (bl) {
+    const i = (s[reg] || []).findIndex((x) => String(x[sc.idKey || "id"]) === String(id));
+    for (const b of bl.byRec.get(`${reg}:${i}`) || []) named.push(b);
+  }
+  const lotNew = reg === "rel" ? [["dev", { product: [rec.product, id].filter(Boolean).join(" / "), batch: id }], ["rej", { product: rec.product, batch: id, ptype: "Finished product" }], ["capa", { batch: id }], ["cc", { batch: id }]]
+    .filter(([g]) => R[g]).map(([g, p]) => { const pre = { ...p, opened: today() }; if (R[g].fields.some((x) => x.key === "status")) pre.status = R[g].lifecycle?.[0] || "Open"; return `<a class="btn sm" href="#/${tier}/reg/${g}?new=1&prefill=${encodeURIComponent(JSON.stringify(pre))}">＋ ${esc(R[g].short)}</a>`; }) : [];
+  const any = parents.length || named.length || kids.some((k) => k.rows.length);
   const newBtn = ({ g, f, csc }) => {
     const pre = { [f.key]: id, opened: today() };
     if (csc.fields.some((x) => x.key === "status")) pre.status = (csc.lifecycle?.[0]) || "Open";
@@ -452,11 +483,13 @@ function linksHTML(tier, reg, rec) {
     return `<a class="btn sm" href="#/${tier}/reg/${g}?new=1&prefill=${encodeURIComponent(JSON.stringify(pre))}">＋ ${esc(csc.short)}</a>`;
   };
   const live = (g, i) => { try { return computeAll(tier, g)[i]?.live || ""; } catch { return ""; } };
-  return `<div class="links-panel"><div class="card-head"><h2>Linked records</h2><div class="row">${kids.map(newBtn).join("")}</div></div>
+  const relC = named.length ? computeAll(tier, "rel") : null;
+  return `<div class="links-panel"><div class="card-head"><h2>${reg === "rel" ? "Linked records & quality events of this batch" : "Linked records"}</h2><div class="row">${lotNew.join("")}${kids.filter((k) => k.f).map(newBtn).join("")}</div></div>
+    ${named.map((b) => { const j = (s.rel || []).findIndex((x) => String(x.id).trim() === b); const lot = s.rel[j]; return `<div class="link-row"><span class="muted">Batch</span><a href="#/t2/reg/rel?id=${encodeURIComponent(b)}"><b class="mono">${esc(b)}</b> · ${esc(lot?.product || "")}${lot && E.lotTracking(lot) ? " · registration" : ""} ›</a>${relC?.[j] ? pill(relC[j].live) : ""}</div>`; }).join("")}
     ${parents.map(({ f, g, id: pid }) => `<div class="link-row"><span class="muted">${esc(f.label)}</span>${g ? `<a href="#/${tier}/reg/${g}?id=${encodeURIComponent(pid)}"><b class="mono">${esc(pid)}</b> · ${esc(R[g].short)} ›</a>` : `<span class="mono">${esc(pid)}</span> <span class="muted">(not on the board)</span>`}</div>`).join("")}
-    ${kids.filter((k) => k.rows.length).map(({ g, csc, rows }) => `<div class="link-group"><b>${esc(csc.short)}</b> <span class="muted">· ${rows.length}</span>
+    ${kids.filter((k) => k.rows.length).map(({ g, csc, rows, named: nm }) => `<div class="link-group"><b>${esc(csc.short)}</b> <span class="muted">· ${rows.length}${nm ? " · names this batch" : ""}</span>
       <div class="urgent">${rows.slice(0, 40).map(({ x, i }) => `<a href="#/${tier}/reg/${g}?id=${encodeURIComponent(x[csc.idKey || "id"])}"><span class="ref">${esc(x[csc.idKey || "id"])}</span><span class="desc" title="${esc(x.desc || "")}">${esc(x.desc || x.title || x.product || "")} <span class="muted">· ${esc(x.owner || x.officer || x.member || "—")}</span></span>${pill(live(g, i) || x.status)}</a>`).join("")}${rows.length > 40 ? `<span class="muted" style="font-size:12px">… and ${rows.length - 40} more</span>` : ""}</div></div>`).join("")}
-    ${any ? "" : `<div class="empty">No linked record yet — link one with the buttons above.</div>`}</div>`;
+    ${any ? "" : `<div class="empty">No linked record yet — ${reg === "rel" ? "no deviation, rejection, CAPA, change or action names this batch. Raise one with the buttons above, or write the batch number in the record’s ‘Batch No(s).’ field." : "link one with the buttons above."}</div>`}</div>`;
 }
 
 function linkedActionsHTML(ref) {

@@ -230,22 +230,11 @@ export function renderBoard(root, { filters = null } = {}) {
   });
 }
 
-/** Registration lots: their own sub-panel, kept for traceability — no figure of the dashboard counts them. */
-function registrationPanel(list, chip) {
-  if (!list.length) return "";
-  const groups = [["planned", "Not started"], ["mfg", "In manufacturing"], ["bulk", "Bulk — awaiting packaging"], ["pack", "In packaging"], ["wip", "WIP — waiting decision"], ["rejecting", "Rejection in progress"], ["registration", "Packaged — stability / dossier"], ["released", "Released"], ["rejected", "Rejected"]]
-    .map(([k, l]) => [k, l, list.filter((x) => x.c.stage === k)]).filter(([, , xs]) => xs.length);
-  return `<details class="b-reg" ${list.some((x) => !["registration", "released", "rejected"].includes(x.c.stage)) ? "open" : ""}>
-    <summary><b>Registration batches</b><span class="muted">${list.length} lots · traceability and tracking only — not counted in the pipeline, the KPI or the dashboard</span><a class="btn sm ghost" href="#/t2/reg/rel?lotType=Registration">Open in the register ›</a></summary>
-    <div class="b-reg-grid">${groups.map(([k, l, xs]) => `<div class="b-stage c-N"><div class="b-head"><b>${xs.length}</b><span>${esc(l)}</span></div><div class="b-chips">${xs.slice(0, 8).map(chip).join("")}${xs.length > 8 ? `<a class="b-more" href="#/t2/reg/rel?lotType=Registration">+${xs.length - 8} more</a>` : ""}</div></div>`).join("")}</div>
-  </details>`;
-}
-
 /** Dashboard panel: every batch where it stands — production, quality decision, release, done. */
 function batchPipeline(s, comp) {
   const all = (s.rel || []).map((r, i) => ({ r, c: comp.rel[i] })).filter((x) => x.r.id);
   // registration lots: traceability only — not counted here
-  const rows = all.filter((x) => !E.lotTracking(x.r)), tracked = all.length - rows.length;
+  const rows = all.filter((x) => !E.lotTracking(x.r));
   if (!rows.length) return "";
   const mS = E.monthStart(s.setup.month), mE = E.monthEnd(s.setup.month);
   const by = (k) => rows.filter((x) => x.c.stage === k);
@@ -253,7 +242,7 @@ function batchPipeline(s, comp) {
   const chip = (x) => {
     const warn = x.c.tfOver ? "WIP time frame exceeded" : x.c.live === "Overdue" ? "Release lead time exceeded" : "";
     const sub = ["mfg", "wip", "bulk", "pack", "planned"].includes(x.c.stage) && x.r.wipStep ? `next: ${x.r.wipStep}` : x.c.stage === "released" ? `${x.r.decision ? fmtDate(x.r.decision) : ""}${x.c.partial ? " · partial rejection" : ""}` : "";
-    return `<a class="b-chip ${warn ? "warn" : ""}" href="#/t2/reg/rel?id=${encodeURIComponent(x.r.id)}" title="${esc(`${x.r.id} · ${x.r.product || ""}${x.r.wipStatus ? `\nWIP: ${x.r.wipStatus}` : ""}${x.r.wipResp ? ` · ${x.r.wipResp}` : ""}${x.r.tf ? `\nTime frame ${fmtDate(x.r.tf)}` : ""}${warn ? `\n⚠ ${warn}` : ""}`)}"><b>${esc(x.r.id)}</b><span>${esc(prod(x))}${sub ? ` · ${esc(sub)}` : ""}</span></a>`;
+    return `<a class="b-chip ${warn ? "warn" : ""}" href="#/t2/reg/rel?id=${encodeURIComponent(x.r.id)}" title="${esc(`${x.r.id} · ${x.r.product || ""}${x.r.wipStatus ? `\nWIP: ${x.r.wipStatus}` : ""}${x.r.wipResp ? ` · ${x.r.wipResp}` : ""}${x.r.tf ? `\nTime frame ${fmtDate(x.r.tf)}` : ""}${x.c.events?.length ? `\n🔗 ${x.c.events.length} linked event(s): ${x.c.events.slice(0, 5).map((e) => e.id).join(", ")}` : ""}${warn ? `\n⚠ ${warn}` : ""}`)}"><b>${esc(x.r.id)}</b><span>${esc(prod(x))}${sub ? ` · ${esc(sub)}` : ""}</span></a>`;
   };
   const relMonth = rows.filter((x) => x.c.stage === "released" && has(x.r.decision) && x.r.decision >= mS && x.r.decision <= mE);
   const pending = rows.filter((x) => !["released", "rejected", "registration"].includes(x.c.stage));
@@ -271,7 +260,6 @@ function batchPipeline(s, comp) {
     <div class="b-flow">${phases.map((ph) => `<div class="b-phase"><div class="b-ph-t">${esc(ph)}</div><div class="b-ph-s">${E.BATCH_STAGES.filter((x) => x[3] === ph).map(tile).join("")}</div></div>`).join('<span class="b-arrow" aria-hidden="true">›</span>')}</div>
     <div class="b-done">${[["released", `Released · ${by("released").length}`, "G"], ["partial", `of which partially rejected · ${rows.filter((x) => x.c.partial).length}`, "A"], ["rejected", `Rejected · ${by("rejected").length}`, "N"]].map(([k, l, c]) => `<a class="b-done-i c-${c}" href="#/t2/reg/rel?stage=${k}">${esc(l)}</a>`).join("")}
       <span class="muted">⚠ red outline = WIP time frame or release lead time exceeded · the WIP next step places a lot in production · a lot without a CoA date waits for QC</span></div>
-    ${registrationPanel(all.filter((x) => E.lotTracking(x.r)), chip)}
   </section>`;
 }
 
@@ -523,7 +511,7 @@ export const CHARTS = [
     build({ s, comp }) {
       const rows = ["dev", "capa", "cc", "act", "find", "aud", "rej", "insp", "rel", "doc", "apqr", "esc"].filter((reg) => s[reg]).map((reg) => {
         const g = { o: 0, p: 0, c: 0, x: 0 };
-        s[reg].forEach((r, i) => { const c = comp[reg][i]; if (c.live === "Overdue") g.x++; else if (!c.open) g.c++; else if (IN_PROGRESS.includes(r.status)) g.p++; else g.o++; });
+        s[reg].forEach((r, i) => { const c = comp[reg][i]; if (reg === "rel" && E.lotTracking(r)) return; if (c.live === "Overdue") g.x++; else if (!c.open) g.c++; else if (IN_PROGRESS.includes(r.status)) g.p++; else g.o++; });
         return { reg, g };
       });
       return {

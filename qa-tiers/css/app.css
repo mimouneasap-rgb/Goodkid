@@ -1186,3 +1186,21 @@ table.matrix th.mx-name .nm { white-space: normal; text-overflow: clip; }
 .ld-num { font: 700 13.5px var(--font-display); font-variant-numeric: tabular-nums; text-align: right; } .ld-num small { font: 400 11.5px var(--font-body); color: var(--muted); }
 .ld-del { font-size: 12px; color: var(--r-ink); } .ld-del b { font-weight: 700; }
 @media (max-width: 760px) { .ld-row { grid-template-columns: minmax(0, 1fr) 64px; } .ld-row .ld-bar { grid-column: 1 / -1; order: 3; } .ld-row .ld-num, .ld-row .ld-del { display: none; } }
+
+/* ── Searchable drop-down lists ── */
+.cb { position: relative; display: block; width: 100%; min-width: 0; }
+.inline > .cb { flex: 1; }
+.cb > .cb-in { width: 100%; padding-right: 34px; text-overflow: ellipsis; }
+.cb-btn { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); width: 28px; height: 28px; border: 0; background: transparent; color: var(--muted); cursor: pointer; border-radius: 6px; font-size: 13px; }
+.cb-btn:hover { background: var(--accent-soft); color: var(--ink); }
+.cb.open > .cb-in { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent); }
+.cb-pop { position: fixed; z-index: 52; overflow-y: auto; background: var(--surface); border: 1px solid var(--line-strong); border-radius: 10px; box-shadow: var(--shadow-2); padding: 4px; font-size: 13.5px; }
+.cb-o { padding: 7px 10px; border-radius: 7px; cursor: pointer; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cb-o.act { background: var(--accent-soft); }
+.cb-o.cur { font-weight: 600; }
+.cb-o.cur::after { content: " ✓"; color: var(--accent); }
+.cb-o.add { color: var(--accent); font-weight: 600; border-top: 1px dashed var(--line); margin-top: 2px; }
+.cb-o mark { background: color-mix(in srgb, var(--accent) 30%, transparent); color: inherit; border-radius: 3px; padding: 0 1px; }
+.cb-g { padding: 8px 10px 3px; font: 600 10.5px/1.2 var(--font-display); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.cb-empty { padding: 8px 10px; color: var(--muted); font-size: 12.5px; }
+.ev-n { display: inline-block; padding: 2px 8px; border-radius: 999px; background: var(--accent-soft); color: var(--ink); font-weight: 600; font-size: 12px; white-space: nowrap; }

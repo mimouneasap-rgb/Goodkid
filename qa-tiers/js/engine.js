@@ -396,6 +396,30 @@ let tier1Source = () => null;
 export function linkTier1(getter) { tier1Source = getter; }
 
 /** All computed columns for every Tier 2 register. */
+/** The registers searched for batch numbers, in the order the links are shown. */
+export const BATCH_LINK_REGS = ["dev", "rej", "capa", "acapa", "cc", "act", "insp", "esc", "t1e", "find", "aud", "doc", "apqr", "trn", "tasks"];
+/**
+ * Every record of the board that names a batch of the release register — in its batch field, a reference to it,
+ * or its number written in the text. `byBatch` maps a batch number to [{ reg, i, id }]; `byRec` maps "reg:i" to batch numbers.
+ */
+export function batchLinks(state) {
+  const byBatch = new Map(), byRec = new Map();
+  const ids = [...new Set((state.rel || []).map((r) => String(r.id ?? "").trim()).filter((id) => id.length >= 4))];
+  if (ids.length) {
+    const rx = (x) => x.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const re = new RegExp(`(?<![\\w])(${ids.sort((a, b) => b.length - a.length).map(rx).join("|")})(?![\\w])`, "g");
+    for (const g of BATCH_LINK_REGS) (state[g] || []).forEach((r, i) => {
+      if (!r) return;
+      const text = Object.entries(r).filter(([k, v]) => k[0] !== "_" && (typeof v === "string" || typeof v === "number")).map(([, v]) => v).join(" \u0001 ");
+      const found = new Set(text.match(re) || []);
+      if (!found.size) return;
+      byRec.set(`${g}:${i}`, [...found]);
+      for (const b of found) { if (!byBatch.has(b)) byBatch.set(b, []); byBatch.get(b).push({ reg: g, i, id: r.id ?? "" }); }
+    });
+  }
+  return { byBatch, byRec };
+}
+
 export function t2Computed(state) {
   const s = state.setup, out = {};
   for (const reg of Object.keys(T2_FLOW)) out[reg] = (state[reg] || []).map((r) => t2Row(reg, r, s.statusDate));
@@ -425,13 +449,14 @@ export function t2Computed(state) {
   [...(state.capa || []), ...(state.acapa || [])].forEach((r) => { if (r.link) capaOf.set(r.link, [...(capaOf.get(r.link) || []), r.id]); });
   out.find.forEach((c, i) => { c.capa = capaOf.get(state.find[i].id) || null; });
   // a released batch with a rejection report (or a rejected quantity) was released in part
-  const rejOf = new Map();
+  const rejOf = new Map(), blinks = batchLinks(state);
   for (const j of state.rej || []) if (has(j.batch)) for (const b of String(j.batch).split(/[,;/ ]+/).filter(Boolean)) rejOf.set(b, [...(rejOf.get(b) || []), j.id]);
   out.rel = state.rel.map((r) => {
     const c = t2Release(r, s);
     const refs = [...new Set([...(has(r.rejRef) ? [r.rejRef] : []), ...(rejOf.get(String(r.id)) || [])])];
     c.partial = r.status === "Released" && (has(r.rejQty) || refs.length > 0);
     c.rejRefs = refs;
+    c.events = blinks.byBatch.get(String(r.id ?? "").trim()) || [];
     return c;
   });
   out.trn = state.trn.map((r) => t2Training(r, s));

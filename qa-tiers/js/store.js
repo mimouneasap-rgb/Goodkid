@@ -60,6 +60,10 @@ function seedLists(tier, s) {
     s.lists.LotType ??= ["Commercial", "Registration"];
     s.lists.WipStatus ??= ["Conform", "Non conform", "Under CAPA — waiting decision", "Under rejection"];
     s.lists.WipSteps ??= ["Dispensing", "Granulation", "Blending", "Compression", "Coating", "Encapsulation", "Packaging"];
+    s.lists.WipResp ??= ["Production", "R&D", "QA", "QC"];
+    // the values the WIP master uses are always in the lists
+    s.lists.WipSteps = uniq([...s.lists.WipSteps, ...s.rel.map((r) => r.wipStep)]);
+    s.lists.WipResp = uniq([...s.lists.WipResp, ...s.rel.map((r) => r.wipResp)]);
     s.lists.TrMode ??= ["Trainer-led", "Read & understood", "Trainer-led + read & understood"];
     normalizeTraining(s);
     if (s.kpis?.[8] && /sessions due to date/.test(s.kpis[8].def || "")) s.kpis[8] = { ...s.kpis[8], def: "Annual plan: employees trained ÷ to be trained (topics due to date)" };
