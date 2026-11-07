@@ -132,6 +132,18 @@ export function t2Release(r, setup) {
   return { target, lead, live, late, check, open: !final, toDue: !final && target ? diffDays(target, setup.statusDate) : "" };
 }
 
+/** Category of a training: Planned (annual plan) · Unplanned · External. */
+export const trnCat = (r) => r.cat || "Planned";
+/** Whether the training counts for the QA department (not a session QA gave to another department). */
+export const trnQA = (r) => (r.dept || "QA") !== "Other departments";
+/** Column of the corporate department report: Planned · Quality Circle · SOP Training · Others · External. */
+export function trnBucket(r) {
+  const c = trnCat(r);
+  if (c !== "Unplanned") return c;
+  if (r.type === "Quality Circle") return "Quality Circle";
+  return r.type === "Revised SOP" || r.type === "New SOP" ? "SOP Training" : "Others";
+}
+
 export function t2Training(r, setup) {
   const completion = num(r.planned) > 0 ? Math.min(1, num(r.trained) / num(r.planned)) : "";
   const closed = r.status === "Completed" || r.status === "Cancelled";
@@ -320,7 +332,8 @@ export function t2Kpis(state, comp = t2Computed(state)) {
     count(state[reg], (r) => r.status === "Closed") + overdue(reg));
   const released = count(state.rel, (r) => r.status === "Released");
   const loadAvail = sum(comp.load, (c) => c.available);
-  const trnRows = state.trn.filter((r) => has(r.date) && r.date <= s.statusDate && r.status !== "Cancelled");
+  // the KPI follows the annual department plan: unplanned and external training are tracked, not targeted
+  const trnRows = state.trn.filter((r) => trnCat(r) === "Planned" && trnQA(r) && has(r.date) && r.date <= s.statusDate && r.status !== "Cancelled");
   const actuals = [
     overdue("dev"),
     onTimeRate("capa"),
@@ -408,7 +421,10 @@ export function t2Summary(state, comp = t2Computed(state)) {
     doc: { total: state.doc.length, new: count(state.doc, (r) => inMonth(r.opened)), lines: [["Open", st("doc", "Open")], ["In course", st("doc", "In Course", "In Approval")], ["Closed", st("doc", "Closed")], ["Avg revision (d)", avg(state.doc.map((r, i) => (r.status === "Closed" ? comp.doc[i].age : null)).filter((v) => v !== null && v !== ""))]] },
     load: { total: state.load.length, new: workingDays(s.month, s), newLabel: "working days", lines: [["Absence (days)", sum(comp.load, (c) => c.absence)], ["High load (n)", count(comp.load, (c) => c.status === "High load" || c.status === "Overloaded")], ["Delayed tasks", sum(comp.load, (c) => c.delayed)], ["Utilisation", ratio(sum(comp.load, (c) => c.workload), sum(comp.load, (c) => c.available))]] },
     apqr: { total: state.apqr.length, new: count(state.apqr, (r) => inMonth(r.opened)), lines: [["Not started", st("apqr", "Not Started")], ["In progress", st("apqr", "In Progress", "In Review")], ["Closed", st("apqr", "Closed")], ["Completion", avg(comp.apqr.map((c) => c.effPct))]] },
-    trn: { total: state.trn.length, new: count(state.trn, (r) => inMonth(r.date)), lines: [["Completed", st("trn", "Completed")], ["Planned / ongoing", st("trn", "Planned", "In Progress")], ["New hires trained", sum(state.trn, (r) => r.newhires)], ["Overdue", od("trn")]] },
+    trn: (() => {
+      const due = state.trn.filter((r) => trnCat(r) === "Planned" && trnQA(r) && has(r.date) && r.date <= s.statusDate && r.status !== "Cancelled");
+      return { total: state.trn.length, new: count(state.trn, (r) => inMonth(r.done || r.date)), lines: [["Plan topics done", `${count(due, (r) => r.status === "Completed")} / ${due.length}`], ["Unplanned", count(state.trn, (r) => trnCat(r) === "Unplanned")], ["External", count(state.trn, (r) => trnCat(r) === "External")], ["Overdue", od("trn")]] };
+    })(),
     esc: { total: state.esc.length, new: count(state.esc, (r) => inMonth(r.opened)), lines: [["Open", st("esc", "Open")], ["In progress", st("esc", "In Progress")], ["Resolved", st("esc", "Resolved")], ["Overdue", od("esc")]] },
   };
 }

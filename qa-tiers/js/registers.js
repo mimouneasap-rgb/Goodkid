@@ -181,6 +181,22 @@ export function inputHTML(tier, field, value, { name = field.key, cls = "", reg 
       <option value="">—</option>${extra}${opts.map((o) => `<option ${o === v ? "selected" : ""}>${esc(o)}</option>`).join("")}
       ${canAdd ? `<option value="__add__">＋ Add a value to this list…</option>` : ""}</select>`;
   }
+  if (field.type === "people") {
+    // tick the people: the team list first, then any other name already on the record; free names can be added
+    const chosen = String(v || "").split(",").map((x) => x.trim()).filter(Boolean);
+    const team = optionsFor(tier, { type: "list", list: "People" });
+    const loadNames = (store[tier].load || []).map((r) => r.member).filter(Boolean);
+    const first = [...new Set([...loadNames, ...chosen])];
+    const rest = team.filter((p) => !first.includes(p));
+    const box = (p) => `<label class="pp ${chosen.includes(p) ? "on" : ""}"><input type="checkbox" value="${esc(p)}" ${chosen.includes(p) ? "checked" : ""}> ${esc(p)}</label>`;
+    return `<div class="people-pick ${cls}" data-people="${name}"${field.countInto ? ` data-count="${field.countInto}"` : ""}>
+      <input type="hidden" name="${name}" value="${esc(chosen.join(", "))}">
+      <div class="pp-head"><b data-ppn>${chosen.length}</b> selected <span class="spacer"></span><button type="button" class="btn sm ghost" data-ppall>QA team</button><button type="button" class="btn sm ghost" data-ppnone>None</button></div>
+      <div class="pp-list">${first.map(box).join("")}</div>
+      ${rest.length ? `<details class="pp-more"><summary>Other people (${rest.length})</summary><div class="pp-list">${rest.map(box).join("")}</div></details>` : ""}
+      <div class="inline" style="margin-top:6px"><input type="text" data-ppadd placeholder="Add a name (e.g. a trainee from another department)" autocomplete="off"><button type="button" class="btn sm" data-ppaddbtn>Add</button></div>
+    </div>`;
+  }
   if (field.type === "long") return `<textarea name="${name}" class="${cls}" rows="2">${esc(v)}</textarea>`;
   if (field.type === "date") return `<div class="inline"><input type="date" name="${name}" class="${cls}" value="${esc(v)}"><button type="button" class="btn sm" data-today="${name}" title="Insert today's date">Today</button></div>`;
   if (field.type === "int" || field.type === "num") return `<input type="number" inputmode="decimal" min="0" step="${field.type === "int" ? 1 : 0.5}" name="${name}" class="${cls}" value="${esc(v)}">`;
@@ -216,6 +232,31 @@ export function wireInputs(root, tier, fields, onChange) {
     }
   };
   if (refFields.length) { syncRefs(); root.addEventListener("change", syncRefs); }
+  // people pickers: the hidden value, the count, and the number field it fills
+  root.querySelectorAll("[data-people]").forEach((pp) => {
+    const team = (store[tier].load || []).filter((r) => /\bQA\b/i.test(r.role || "")).map((r) => r.member).filter(Boolean);
+    const sync = () => {
+      const names = [...pp.querySelectorAll("input[type=checkbox]:checked")].map((c) => c.value);
+      pp.querySelector("input[type=hidden]").value = names.join(", ");
+      pp.querySelector("[data-ppn]").textContent = names.length;
+      pp.querySelectorAll("label.pp").forEach((l) => l.classList.toggle("on", l.querySelector("input").checked));
+      const target = pp.dataset.count && root.querySelector(`[name="${pp.dataset.count}"]`);
+      if (target) target.value = names.length || "";
+    };
+    pp.addEventListener("change", (e) => { if (e.target.matches("input[type=checkbox]")) sync(); });
+    pp.querySelector("[data-ppall]").onclick = () => { pp.querySelectorAll("input[type=checkbox]").forEach((c) => { if (team.includes(c.value)) c.checked = true; }); sync(); };
+    pp.querySelector("[data-ppnone]").onclick = () => { pp.querySelectorAll("input[type=checkbox]").forEach((c) => { c.checked = false; }); sync(); };
+    const add = () => {
+      const inp = pp.querySelector("[data-ppadd]"), n = inp.value.trim();
+      if (!n) return;
+      const exist = [...pp.querySelectorAll("input[type=checkbox]")].find((c) => c.value.toLowerCase() === n.toLowerCase());
+      if (exist) exist.checked = true;
+      else pp.querySelector(".pp-list").insertAdjacentHTML("beforeend", `<label class="pp on"><input type="checkbox" value="${esc(n)}" checked> ${esc(n)}</label>`);
+      inp.value = ""; sync();
+    };
+    pp.querySelector("[data-ppaddbtn]").onclick = add;
+    pp.querySelector("[data-ppadd]").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); add(); } });
+  });
   root.addEventListener("click", (e) => {
     const b = e.target.closest("[data-today]");
     if (!b) return;
@@ -515,6 +556,7 @@ export function renderRegister(root, { tier, reg, query = {} }) {
       if (!has(v)) return `<td></td>`;
       if (f.type === "ref") { const g = regOfRef(tier, f, v); return `<td class="mono" style="white-space:nowrap">${g ? `<a href="#/${tier}/reg/${g}?id=${encodeURIComponent(v)}" data-noedit>${esc(v)}</a>` : esc(v)}</td>`; }
       if (f.type === "date") return `<td style="white-space:nowrap">${fmtDate(v)}</td>`;
+      if (f.type === "people") { const n = String(v).split(",").filter((x) => x.trim()).length; return `<td class="wrap"><div class="clip" title="${esc(v)}"><b>${n}</b> · ${esc(v)}</div></td>`; }
       if (f.type === "pct") return `<td class="num">${pct(v)}</td>`;
       if (f.type === "int" || f.type === "num") return `<td class="num">${fmtNum(v)}</td>`;
       if (f.type === "long" || f.key === "desc" || f.key === "title" || f.key === "topic" || /^p\d$/.test(f.key)) return `<td class="wrap"><div class="clip">${esc(v)}</div></td>`;
@@ -550,7 +592,7 @@ export function renderRegister(root, { tier, reg, query = {} }) {
           <div class="meta-row">${sc.source ? `<span>Source <b>${esc(sc.source)}</b></span>` : ""}<span>Collected by <b>${esc(sc.who)}</b></span><span>When <b>${esc(sc.when)}</b></span>
           ${sc.lifecycle?.length ? `<span class="lifecycle">${sc.lifecycle.map((x) => `<span>${esc(x)}</span>`).join("<i>→</i>")}</span>` : ""}</div>
         </div>
-        <div class="row"><div class="seg-ctl" role="group" aria-label="View"><button type="button" data-view="table" aria-pressed="${vs.view !== "charts"}">▤ Table</button><button type="button" data-view="charts" aria-pressed="${vs.view === "charts"}">◔ Charts</button></div><button class="btn" data-csv>Export CSV</button><button class="btn primary" data-new>＋ New record</button></div>
+        <div class="row">${tier === "t2" && reg === "trn" ? `<a class="btn" href="#/t2/training">◂ Training overview</a>` : ""}<div class="seg-ctl" role="group" aria-label="View"><button type="button" data-view="table" aria-pressed="${vs.view !== "charts"}">▤ Table</button><button type="button" data-view="charts" aria-pressed="${vs.view === "charts"}">◔ Charts</button></div><button class="btn" data-csv>Export CSV</button><button class="btn primary" data-new>＋ New record</button></div>
       </div>
       <div class="strip">
         ${stats.map(([l, v, c]) => `<div class="stat ${c}"><div class="s-l">${l}</div><div class="s-v">${v}</div></div>`).join("")}

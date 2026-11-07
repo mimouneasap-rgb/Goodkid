@@ -50,6 +50,12 @@ function seedLists(tier, s) {
     s.lists.AudStandard ??= uniq(["GMP", "GDP", "GLP", "ISO 9001", "ICH Q10", ...(s.aud || []).map((r) => r.standard)]);
     s.lists.AuditAreas ??= uniq(["Quality Assurance", "Quality Control", "Manufacturing", "Packaging", "Warehouse", "Engineering", "IT Infrastructure", ...(s.aud || []).map((r) => r.areas), ...(s.find || []).map((r) => r.area)]);
     s.lists.BatchType ??= uniq(["Industrial", "Registration", "Validation", "Pilot", "Commercial", ...(s.rej || []).map((r) => String(r.btype ?? "").trim()).filter((v) => /[a-z]/i.test(v))]);
+    const TR_TYPES = ["SOP (annual plan)", "GMP chapter", "HSE periodic topic", "Basic GMP", "Environment (ISO 14001)", "Revised SOP", "New SOP", "Quality Circle", "Corporate", "Audit / CAPA driven", "On the job", "Induction / New Hire", "External course", "Other"];
+    s.lists.TrType = uniq([...TR_TYPES, ...(s.lists.TrType || []).filter((t) => !["GMP", "SOP", "Containment / HSE", "Data Integrity", "Technical", "Induction / New Hire"].includes(t) || (s.trn || []).some((r) => r.type === t))]);
+    s.lists.TrCat = ["Planned", "Unplanned", "External"];
+    s.lists.TrStatus = uniq(["Planned", "Rescheduled", "In Progress", "Completed", "Cancelled", ...(s.lists.TrStatus || [])]);
+    s.lists.TrAudience ??= ["QA", "Other departments"];
+    if (s.kpis?.[8] && /sessions due to date/.test(s.kpis[8].def || "")) s.kpis[8] = { ...s.kpis[8], def: "Annual plan: employees trained ÷ to be trained (topics due to date)" };
     s.lists.T1EStatus ??= ["Open", "In Progress", "Resolved", "Escalated to Tier 3"];
     s.lists.Pillars ??= ["S · Safety", "Q · Quality", "D · Delivery", "C · Compliance", "P · People"];
     s.lists.RejStatus ??= ["Open", "In Progress", "Pending Signature", "Closed"];

@@ -29,7 +29,7 @@ export function kpiTile(k, i, s) {
   const m = +s.setup.month.slice(5, 7) - 1;
   if (series.length) series[m] = k.actual === "" ? null : k.actual;
   const tip = `**${k.name}**\n${k.def}\nActual ${fmtKpi(k.actual, k.unit)} · target ${k.targetText} · amber ${k.unit === "%" ? pct(k.amber) : k.amber}\n${k.why || ""}${k.prev !== "" ? `\nLast month ${fmtKpi(k.prev, k.unit)}` : ""}`;
-  return `<a class="kpi ${RAGCLS[k.rag]}" href="#/t2/reg/${KPI_LINKS[i]}" data-tip="${esc(tip)}" style="text-decoration:none;color:inherit">
+  return `<a class="kpi ${RAGCLS[k.rag]}" href="#/t2/${KPI_LINKS[i] === "trn" ? "training" : `reg/${KPI_LINKS[i]}`}" data-tip="${esc(tip)}" style="text-decoration:none;color:inherit">
     <div class="k-name">${esc(k.name)}<br><span style="font-weight:400">${esc(k.def.length > 46 ? k.def.slice(0, 44) + "…" : k.def)}</span></div>
     <div class="k-val">${fmtKpi(k.actual, k.unit)}<span class="k-trend ${trendClass(k)}">${k.trend}</span></div>
     ${spark(series, k.rag === "R" ? "st-R" : k.rag === "A" ? "st-A" : "st-s1", { current: m })}

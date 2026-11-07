@@ -306,6 +306,14 @@ const GUIDES = [
     ["Export every chart", "Analytics → ⤓ All charts (ZIP): every chart as PNG plus its CSV."],
     ["Report", "Reports centre: daily, weekly and monthly Word documents with the same filters, commentary and sign-off; a text summary to paste."],
   ] },
+  { id: "training", tour: null, icon: "✎", title: "Training — plan, unplanned, external", when: "After each session · month-end report", steps: [
+    ["Annual plan", "Training → Annual plan: the topics of the department plan (GS0024/Onc/T06) by month. Click a topic, tick the people trained (the count follows), set the completion date and status. Moving a topic: Rescheduled = Yes and a new planned date."],
+    ["Unplanned training", "＋ New training, category Unplanned: Revised SOP, New SOP, Quality circle, Corporate, Audit / CAPA driven (link the audit or CAPA), On the job, Induction. Trained department = Other departments when QA trains another department."],
+    ["External training", "Category External: the course, the provider, the people who attended and the date (or the year when the date is not known)."],
+    ["KPI", "The Training KPI counts the annual plan only: employees trained ÷ employees to be trained on the topics due to date. A topic is executed when at least 80 % of the group is trained. Unplanned and external training are tracked, not targeted."],
+    ["Month-end report", "Training → ⤓ Department report (xlsx): the QA_Onc row of the corporate file — Planned (P, E, to be trained, trained) and Unplanned (quality circle, SOP, others) — plus the register."],
+    ["Training cards", "Training → Training cards: each person's card in the GS0024/Onc/T03 layout, built from the register; ⤓ one card or all cards. No employee code or hiring date."],
+  ] },
   { id: "import", tour: null, icon: "⤒", title: "Update from Scigeniq", when: "Weekly — or before any review", steps: [
     ["Export from Scigeniq", "Tasks → All tasks → filter by Type → Export → Excel, once per list: actions (Actions + Standalone Actions), Quality Event, CAPA, Change Control, Audit Plan, Audit, Audit Findings, APQR (+ its data-collection tasks). File names do not matter."],
     ["Drop them in the app", "Import from Scigeniq → drop every file at once. Each file is recognised by its content."],
