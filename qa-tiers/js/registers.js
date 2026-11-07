@@ -498,6 +498,7 @@ export function renderRegister(root, { tier, reg, query = {} }) {
   const vs = viewState[key] ??= { q: "", status: "", officer: "", flagged: false, sort: null, dir: 1, limit: 80, by: {}, from: "", to: "", quick: "", view: "table", sel: new Set() };
   vs.sel ??= new Set();
   if (query.flag) vs.flagged = true;
+  if (query.quick != null) vs.quick = query.quick; // e.g. from the dashboard's "new today" panel
   const fx = fxSpec(tier, reg);
   const fieldsByKey = Object.fromEntries(sc.fields.map((f) => [f.key, f]));
   const dateKey = sc.dateKey || (fieldsByKey.opened ? "opened" : fieldsByKey.date ? "date" : fieldsByKey.mfg ? "mfg" : null);
@@ -517,6 +518,7 @@ export function renderRegister(root, { tier, reg, query = {} }) {
     const active = rows.filter((x) => x.c.open).length;
     const overdue = rows.filter((x) => x.c.live === "Overdue").length;
     const fresh = dateKey ? rows.filter((x) => has(x.r[dateKey]) && x.r[dateKey] >= mS && x.r[dateKey] <= mE).length : null;
+    const freshToday = dateKey ? rows.filter((x) => x.r[dateKey] === ref).length : null;
     const flaggedN = rows.filter((x) => x.c.check && x.c.check !== "OK").length;
     const liveValues = [...new Set(rows.map((x) => x.c.live || x.c.status || x.r.status || x.r.att).filter(Boolean))];
 
@@ -533,6 +535,7 @@ export function renderRegister(root, { tier, reg, query = {} }) {
     if (dateKey && vs.to) list = list.filter((x) => has(x.r[dateKey]) && x.r[dateKey] <= vs.to);
     if (vs.quick === "open") list = list.filter((x) => x.c.open);
     if (vs.quick === "overdue") list = list.filter((x) => x.c.live === "Overdue");
+    if (vs.quick === "today" && dateKey) list = list.filter((x) => x.r[dateKey] === ref);
     if (vs.quick === "month" && dateKey) list = list.filter((x) => has(x.r[dateKey]) && x.r[dateKey] >= mS && x.r[dateKey] <= mE);
     if (vs.quick === "soon") list = list.filter((x) => x.c.open && has(x.r.due) && E.diffDays(x.r.due, ref) >= 0 && E.diffDays(x.r.due, ref) <= 7);
     const moreN = Object.values(vs.by).filter(Boolean).length + (vs.from ? 1 : 0) + (vs.to ? 1 : 0);
@@ -575,13 +578,14 @@ export function renderRegister(root, { tier, reg, query = {} }) {
       ["Team utilisation", pct(teamUtil), teamUtil === "" ? "" : teamUtil > s.setup.overLoad ? "R" : teamUtil >= s.setup.highLoad ? "A" : "G"],
       ["Delayed tasks", loadTotal("delayed"), loadTotal("delayed") ? "R" : "G"],
     ] : [
-      ["Total", total, ""], ["Active", active, ""],
-      ...(reg === "load" || reg === "dl" || reg === "hd" ? [] : [["Overdue", overdue, overdue ? "R" : "G"]]),
-      ...(fresh != null ? [[tier === "t1" ? "Month to date" : "New this month", fresh, ""]] : []),
+      ["Total", total, "", ""], ["Active", active, "", "open"],
+      ...(reg === "load" || reg === "dl" || reg === "hd" ? [] : [["Overdue", overdue, overdue ? "R" : "G", "overdue"]]),
+      ...(freshToday != null ? [[`New today · ${fmtDate(ref)}`, freshToday, freshToday ? "new" : "", "today"]] : []),
+      ...(fresh != null ? [[tier === "t1" ? "Month to date" : "New this month", fresh, fresh ? "new" : "", "month"]] : []),
     ];
     const officers = officersFilter ? s.roster.map((o) => o.name) : [];
     const valuesOf = (k) => [...new Set(rows.map((x) => x.r[k]).filter(has).map(String))].sort((a, b) => a.localeCompare(b));
-    const quick = [["", "All"], ["open", "Open"], ["overdue", "Overdue"], ...(fieldsByKey.due ? [["soon", "Due ≤ 7 days"]] : []), ...(dateKey ? [["month", tier === "t1" ? "This month" : "Raised this month"]] : [])];
+    const quick = [["", "All"], ["open", "Open"], ["overdue", "Overdue"], ...(fieldsByKey.due ? [["soon", "Due ≤ 7 days"]] : []), ...(dateKey ? [["today", tier === "t1" ? "Today" : "Raised today"], ["month", tier === "t1" ? "This month" : "Raised this month"]] : [])];
     root.innerHTML = `
       <div class="reg-head">
         <div class="reg-no">${esc(sc.no)}</div>
@@ -595,7 +599,7 @@ export function renderRegister(root, { tier, reg, query = {} }) {
         <div class="row">${tier === "t2" && reg === "trn" ? `<a class="btn" href="#/t2/training">◂ Training overview</a>` : ""}<div class="seg-ctl" role="group" aria-label="View"><button type="button" data-view="table" aria-pressed="${vs.view !== "charts"}">▤ Table</button><button type="button" data-view="charts" aria-pressed="${vs.view === "charts"}">◔ Charts</button></div><button class="btn" data-csv>Export CSV</button><button class="btn primary" data-new>＋ New record</button></div>
       </div>
       <div class="strip">
-        ${stats.map(([l, v, c]) => `<div class="stat ${c}"><div class="s-l">${l}</div><div class="s-v">${v}</div></div>`).join("")}
+        ${stats.map(([l, v, c, q]) => q && reg !== "load" ? `<button type="button" class="stat click ${c} ${vs.quick === q ? "on" : ""}" data-quick="${vs.quick === q ? "" : q}" title="Show ${esc(l.toLowerCase())}">${`<div class="s-l">${esc(l)}</div><div class="s-v">${v}</div>`}</button>` : `<div class="stat ${c}"><div class="s-l">${esc(l)}</div><div class="s-v">${v}</div></div>`).join("")}
         ${fx.some((x) => x.key === "check") ? `<button class="check-strip ${flaggedN ? "bad" : "ok"}" data-flagbtn>${flaggedN ? `⚠ Data check: ${flaggedN} record${flaggedN > 1 ? "s" : ""} need attention — ${vs.flagged ? "show all" : "show them"}` : "✓ Data check: all records consistent"}</button>` : ""}
       </div>
       ${tier === "t2" && reg === "load" ? loadPanel(comp, s.setup) : ""}

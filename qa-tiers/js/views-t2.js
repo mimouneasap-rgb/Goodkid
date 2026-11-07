@@ -24,6 +24,37 @@ function trendClass(k) {
   return k.trendCode > 0 ? "up" : k.trendCode < 0 ? "down" : "flat";
 }
 
+/** The date a register's records are raised on (the one "new" counts). */
+const rawDateKey = (reg) => {
+  const sc = T2_REGISTERS[reg];
+  if (!sc) return null;
+  const has_ = (k) => sc.fields.some((f) => f.key === k);
+  return sc.dateKey || (has_("opened") ? "opened" : has_("date") ? "date" : has_("mfg") ? "mfg" : null);
+};
+/** Records raised on the board date and in the reporting month, with the daily counts of the month. */
+export function newCounts(s, reg) {
+  const dk = rawDateKey(reg);
+  if (!dk || !Array.isArray(s[reg])) return null;
+  const ref = s.setup.statusDate, mS = E.monthStart(s.setup.month), mE = E.monthEnd(s.setup.month);
+  const days = +mE.slice(8, 10), series = Array(days).fill(0);
+  let day = 0, month = 0;
+  for (const r of s[reg]) {
+    const d = r[dk];
+    if (!has(d)) continue;
+    if (d === ref) day++;
+    if (d >= mS && d <= mE) { month++; series[+d.slice(8, 10) - 1]++; }
+  }
+  return { day, month, series, last: ref >= mS && ref <= mE ? +ref.slice(8, 10) : days };
+}
+/** Tiny day-by-day columns of the month (future days left empty). */
+function dayBars(n) {
+  const max = Math.max(1, ...n.series), w = 3.6, gap = 1.2, H = 24;
+  return `<svg class="nw-bars" viewBox="0 0 ${n.series.length * (w + gap)} ${H}" preserveAspectRatio="none" aria-hidden="true">${n.series.map((v, i) => {
+    const h = v ? Math.max(3, (v / max) * (H - 2)) : 1.2;
+    return `<rect x="${i * (w + gap)}" y="${H - h}" width="${w}" height="${h}" rx="1" class="${i + 1 === n.last ? "today" : i + 1 > n.last ? "fut" : v ? "on" : "off"}"/>`;
+  }).join("")}</svg>`;
+}
+
 export function kpiTile(k, i, s) {
   const series = s.trend.rows[i] ? s.trend.rows[i].slice() : [];
   const m = +s.setup.month.slice(5, 7) - 1;
@@ -32,6 +63,7 @@ export function kpiTile(k, i, s) {
   return `<a class="kpi ${RAGCLS[k.rag]}" href="#/t2/${KPI_LINKS[i] === "trn" ? "training" : `reg/${KPI_LINKS[i]}`}" data-tip="${esc(tip)}" style="text-decoration:none;color:inherit">
     <div class="k-name">${esc(k.name)}<br><span style="font-weight:400">${esc(k.def.length > 46 ? k.def.slice(0, 44) + "…" : k.def)}</span></div>
     <div class="k-val">${fmtKpi(k.actual, k.unit)}<span class="k-trend ${trendClass(k)}">${k.trend}</span></div>
+    ${(() => { const n = newCounts(s, KPI_LINKS[i]); return n ? `<div class="k-new" title="Records raised on ${fmtDate(s.setup.statusDate)} and in ${fmtMonth(s.setup.month)}"><span class="${n.day ? "on" : ""}"><b>+${n.day}</b> today</span><span><b>+${n.month}</b> this month</span></div>` : ""; })()}
     ${spark(series, k.rag === "R" ? "st-R" : k.rag === "A" ? "st-A" : "st-s1", { current: m })}
     <div class="k-foot"><span>Target ${esc(k.targetText)}</span><span class="pill ${k.rag}">${E.RAG_TEXT[k.rag]}</span></div></a>`;
 }
@@ -131,6 +163,8 @@ export function renderBoard(root, { filters = null } = {}) {
     </div>
   </div>
 
+  ${newPanel(s)}
+
   <div class="grid split-wide" style="margin-top:16px">
     <div class="card card-pad">
       <div class="card-head"><h2>Q-calendar <span class="sub">${fmtMonth(st.month)} · ${critDays} critical day${critDays === 1 ? "" : "s"} · click a day to log the stand-up</span></h2><a class="btn sm" href="#/t2/calendar">Open Daily Log ›</a></div>
@@ -191,6 +225,25 @@ export function renderBoard(root, { filters = null } = {}) {
     const b = e.target.closest("[data-day]");
     if (b) dayEditor(b.dataset.day, () => renderBoard(root));
   });
+}
+
+/** Dashboard panel: what was raised today and this month, register by register. */
+const NEW_REGS = ["dev", "capa", "cc", "act", "insp", "rel", "doc", "apqr", "trn", "esc", "t1e", "rej", "aud", "find", "acapa"];
+function newPanel(s) {
+  const regs = NEW_REGS.filter((r) => T2_REGISTERS[r] && (r !== "t1e" || !hasTier("t1")));
+  const all = regs.map((reg) => ({ reg, sc: T2_REGISTERS[reg], n: newCounts(s, reg) })).filter((x) => x.n);
+  const qa = all.filter((x) => !x.sc.trackOnly);
+  const tDay = qa.reduce((a, x) => a + x.n.day, 0), tMonth = qa.reduce((a, x) => a + x.n.month, 0);
+  const href = (reg, q) => (reg === "trn" ? "#/t2/training" : `#/t2/reg/${reg}?quick=${q}`);
+  return `<section class="card card-pad nw-panel" style="margin-top:16px">
+    <div class="card-head"><h2>New records <span class="sub">raised on ${fmtLong(s.setup.statusDate)} and in ${fmtMonth(s.setup.month)} · click a figure to open the list</span></h2>
+      <div class="nw-total"><span><b>+${tDay}</b> today</span><span><b>+${tMonth}</b> this month</span></div></div>
+    <div class="nw-grid">${all.map(({ reg, sc, n }) => `<div class="nw ${n.day ? "hot" : ""} ${sc.trackOnly ? "track" : ""}">
+      <div class="nw-top"><span class="mono">${esc(sc.no)}</span><b>${esc(sc.short)}</b>${sc.trackOnly ? `<i title="Tracking only — not in the QA totals" aria-label="Tracking only">◌</i>` : ""}</div>
+      <div class="nw-figs"><a href="${href(reg, "today")}" class="nw-day" title="Raised on ${fmtDate(s.setup.statusDate)}"><b>+${n.day}</b><small>today</small></a><a href="${href(reg, "month")}" class="nw-month" title="Raised in ${fmtMonth(s.setup.month)}"><b>+${n.month}</b><small>this month</small></a></div>
+      ${dayBars(n)}</div>`).join("")}</div>
+    <p class="muted" style="margin:10px 0 0;font-size:12px">Each column is a day of the month (today highlighted). Totals leave out the registers tracked only (Audit CAPA). Board filters apply.</p>
+  </section>`;
 }
 
 /* ── Day editor (Daily Log row) ─────────────────────────── */
