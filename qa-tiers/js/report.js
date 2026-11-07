@@ -171,7 +171,7 @@ export function facts(per, F = {}) {
   const flags1 = Object.entries(c1).reduce((a, [reg, c]) => a + (T1_REGISTERS[reg] ? E.flagged(c) : 0), 0);
   const t1open = E.t1OpenActions(ctx).open;
   const esc3 = s2.esc.map((r, i) => ({ reg: "esc", r, c: comp.esc[i] })).filter((x) => x.c.open);
-  const flags = Object.entries(comp).reduce((a, [reg, c]) => a + (T2_REGISTERS[reg] ? E.flagged(c) : 0), 0);
+  const flags = Object.entries(comp).reduce((a, [reg, c]) => a + (T2_REGISTERS[reg] && !T2_REGISTERS[reg].trackOnly ? E.flagged(c) : 0), 0);
   const util = (() => { const w = comp.load.reduce((a, c) => a + c.workload, 0), av = comp.load.reduce((a, c) => a + c.available, 0); return av ? w / av : ""; })();
   return { per, F, s2, s1, comp, kpis, other, pulse, cal, ctx, k1, raised, closed, raisedPrev, closedPrev, open, overdueN, overdue, dueToday: dueWithin(0, 1), dueNext: dueWithin(0, 7), raisedList, t1days, t1esc, esc3, flags, flags1, t1open, util, dueOf, officer };
 }

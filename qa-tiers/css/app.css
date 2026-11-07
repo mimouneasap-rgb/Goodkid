@@ -1,17 +1,17 @@
 /* QA Tier Boards — "control room" design.
-   Navy command rail · warm paper work surface · cream = you type here,
+   Navy command rail · cool clinical work surface (grade-A cleanroom greys) · cream = you type here,
    navy ƒx = automatic (the colour code of the workbooks, kept on purpose).
    RAG colours are semantic only; teal is the single interactive accent. */
 :root {
-  --paper: #f3f1ec;
+  --paper: #ecf0f4;
   --surface: #ffffff;
-  --surface-2: #f8f7f3;
-  --surface-3: #eeece6;
-  --ink: #0f1c2e;
-  --ink-2: #33415a;
-  --muted: #6b7689;
-  --line: #e2dfd7;
-  --line-strong: #cfcac0;
+  --surface-2: #f5f7fa;
+  --surface-3: #e6ebf1;
+  --ink: #0e1a2b;
+  --ink-2: #2f3d55;
+  --muted: #5e6a7e;
+  --line: #dae1e9;
+  --line-strong: #c1cbd8;
 
   --navy: #0f2340;
   --navy-2: #16305a;
@@ -40,14 +40,14 @@
   --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100; --s5: #e87ba4; --s6: #008300; --s7: #6250d6; --s8: #e34948; --s-other: #9aa1ab;
   --q1: #86b6ef; --q2: #2a78d6; --q3: #104281;
 
-  --shadow-1: 0 1px 0 rgba(15, 28, 46, .04), 0 1px 3px rgba(15, 28, 46, .07);
+  --shadow-1: 0 1px 2px rgba(14, 26, 43, .05), 0 6px 16px -8px rgba(14, 26, 43, .12);
   --shadow-2: 0 18px 50px rgba(8, 18, 34, .28);
   --overlay: rgba(8, 16, 30, .5);
   --radius: 14px;
   --radius-sm: 9px;
-  --font-display: "IBM Plex Sans Condensed", "Arial Narrow", system-ui, sans-serif;
-  --font-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --font-display: "Archivo", "Helvetica Neue", Arial, system-ui, sans-serif;
+  --font-body: "Source Sans 3", "Source Sans Pro", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   color-scheme: light;
 }
 
@@ -798,3 +798,58 @@ td a.reflink { color: var(--accent-2); font-family: var(--font-mono); font-size:
 svg.chart rect.clickable { cursor: pointer; }
 svg.chart rect.clickable:hover { opacity: .8; }
 [data-regcharts] .card { break-inside: avoid; }
+
+
+/* ── Refresh: type scale, tiles, tables, navigation ─────────────────────
+   Archivo (wide, for headings and labels) · Source Sans 3 (reading) ·
+   JetBrains Mono (record numbers). Scale: 12 · 13.5 · 14.5 · 16 · 20 · 34. */
+body { font-size: 14.5px; line-height: 1.55; font-feature-settings: "tnum" 0; }
+h1, h2, h3, h4 { text-wrap: balance; }
+h1 { font-stretch: 112%; font-weight: 800; letter-spacing: -.012em; }
+.page-head h1 { font-size: 34px; line-height: 1.05; }
+.hero h1 { font-size: 36px; }
+.card h2 { font-size: 13.5px; font-weight: 700; letter-spacing: .09em; font-stretch: 108%; color: var(--ink); }
+.eyebrow { font-stretch: 112%; font-weight: 700; letter-spacing: .18em; }
+.mono, table.data td.mono, .ref { font-family: var(--font-mono); font-size: .88em; letter-spacing: -.01em; }
+td, .num, .kpi, .tile, .glance, .badge { font-variant-numeric: tabular-nums; }
+
+/* navigation: the current page reads as a lit row, not a bar */
+.nav a { font-size: 14px; padding: 7px 10px; transition: background .12s; }
+.nav a[aria-current="page"] { box-shadow: none; background: linear-gradient(90deg, rgba(47, 193, 185, .24), rgba(47, 193, 185, .05)); }
+.nav a[aria-current="page"] .ic { color: #6fe0d8; opacity: 1; }
+.nav-title { font-stretch: 112%; font-weight: 700; }
+.nav-track { margin-top: 14px; padding-top: 10px; border-top: 1px dashed var(--navy-line); }
+.nav-track a { opacity: .78; }
+.brand b { font-stretch: 110%; font-weight: 700; }
+.brand-mark { font-stretch: 115%; font-weight: 800; letter-spacing: .02em; }
+
+/* KPI tiles: status is the tint and the value colour, with the pill as its label */
+.kpi { border-radius: 14px; padding: 14px 16px 12px; gap: 6px; transition: transform .12s, box-shadow .12s; }
+.kpi::before { display: none; }
+.kpi .k-name { font-size: 12.5px; color: var(--ink-2); }
+.kpi .k-val { font-size: 32px; font-weight: 700; font-stretch: 108%; }
+.kpi.G { background: linear-gradient(180deg, color-mix(in srgb, var(--g-bg) 55%, var(--surface)), var(--surface) 70%); }
+.kpi.A { background: linear-gradient(180deg, color-mix(in srgb, var(--a-bg) 70%, var(--surface)), var(--surface) 70%); border-color: color-mix(in srgb, var(--a) 35%, var(--line)); }
+.kpi.R { background: linear-gradient(180deg, color-mix(in srgb, var(--r-bg) 70%, var(--surface)), var(--surface) 70%); border-color: color-mix(in srgb, var(--r) 35%, var(--line)); }
+.kpi.R .k-val { color: var(--r-ink); } .kpi.A .k-val { color: var(--a-ink); }
+a.kpi:hover, .kpi[href]:hover { transform: translateY(-1px); box-shadow: var(--shadow-1); }
+
+/* cards and buttons */
+.card { border-radius: 16px; }
+.btn { border-radius: 10px; font-weight: 600; transition: background .12s, border-color .12s; }
+.btn.primary { box-shadow: 0 1px 0 rgba(255, 255, 255, .18) inset, 0 4px 12px -6px color-mix(in srgb, var(--accent) 70%, transparent); }
+.pill { font-weight: 700; letter-spacing: .01em; }
+
+/* tables: quiet zebra, a clear header, a lit row on hover */
+.table-wrap { border-radius: 14px; box-shadow: var(--shadow-1); }
+table.data { font-size: 13.5px; }
+table.data th { font-size: 11px; font-stretch: 108%; font-weight: 700; background: var(--surface-3); color: var(--ink-2); padding: 11px 10px; }
+table.data tbody tr:nth-child(even) td { background: color-mix(in srgb, var(--surface-2) 70%, var(--surface)); }
+table.data tbody tr:hover td { background: var(--accent-soft); }
+table.data td { padding: 9px 10px; }
+
+/* the audit group: tracking only, said on the page as well as in the menu */
+.track-note { display: inline-flex; align-items: center; gap: 6px; margin-top: 8px; padding: 4px 10px; border-radius: 999px; font-size: 12.5px; font-weight: 600;
+  background: var(--n-bg); color: var(--n-ink); border: 1px dashed var(--line-strong); }
+
+@media (prefers-reduced-motion: reduce) { .kpi, .btn, .nav a { transition: none; } a.kpi:hover { transform: none; } }

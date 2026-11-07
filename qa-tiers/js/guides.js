@@ -311,6 +311,7 @@ const GUIDES = [
     ["Drop them in the app", "Import from Scigeniq → drop every file at once. Each file is recognised by its content."],
     ["Check the preview", "Per register: new, updated, unchanged, only on the board. Open “see the changes” for each field before → after."],
     ["Apply", "One click updates the shared board for the whole team; Change history records it, the import history keeps the export date."],
+    ["Audit CAPA apart", "CAPA whose source is Audit or Self-inspection (or that answer an audit finding) land in Audits → Audit CAPA: tracked for follow-up, not counted in the QA KPIs, Q-calendar or QA load. Change a CAPA's source and it moves register by itself."],
     ["What is kept", "Records missing from an export stay on the board; fields Scigeniq does not carry (area, comments you typed on other fields) are kept."],
   ] },
   { id: "team", tour: null, icon: "⎘", title: "Sharing & data integrity", when: "Always", steps: [

@@ -67,10 +67,27 @@ export function nextId(records, key = "id", fallback = "NEW-001") {
 
 /* ───────────────────────────── TIER 2 ───────────────────────────── */
 
+/** CAPA raised by audits and self-inspections belong to the audited departments:
+ * the board tracks them in their own register, outside the QA KPIs, Q-calendar and QA load. */
+export const AUDIT_CAPA_SOURCES = ["Audit", "Self-inspection"];
+export const isAuditCapa = (r) => AUDIT_CAPA_SOURCES.includes(r?.source) || ((!r?.source || r.source === "Other") && /^(FIND|AUDT|AUDP)-/i.test(String(r?.link || "")));
+
+/** Put every CAPA in the register its source decides; returns how many moved. */
+export function splitAuditCapa(s) {
+  if (!Array.isArray(s.capa)) return 0;
+  s.acapa ??= [];
+  const toAudit = s.capa.filter(isAuditCapa), toQa = s.acapa.filter((r) => !isAuditCapa(r));
+  if (!toAudit.length && !toQa.length) return 0;
+  s.capa = s.capa.filter((r) => !isAuditCapa(r)).concat(toQa);
+  s.acapa = s.acapa.filter(isAuditCapa).concat(toAudit);
+  return toAudit.length + toQa.length;
+}
+
 /** Life-cycle columns of the Tier 2 registers that share the generic formulas. */
 export const T2_FLOW = {
   dev: { done: ["Closed", "Canceled"] },
   capa: { done: ["Closed", "Canceled"] },
+  acapa: { done: ["Closed", "Canceled"] },
   cc: { done: ["Implemented", "Closed", "Rejected", "Canceled"] },
   insp: { done: ["Closed"] },
   doc: { done: ["Closed"] },
@@ -172,7 +189,7 @@ export const DEFAULT_ACTIVITIES = [
 ];
 
 export const LOAD_SOURCES = {
-  dev: "Deviations", capa: "CAPA", cc: "Change control", insp: "Inspections", rel: "Batch release", doc: "Documentation",
+  dev: "Deviations", capa: "CAPA", acapa: "Audit CAPA", cc: "Change control", insp: "Inspections", rel: "Batch release", doc: "Documentation",
   apqr: "APQR", trn: "Training", esc: "Escalations", tasks: "Task planner", t1ac: "Tier 1 actions", act: "eQMS actions", aud: "Audits", find: "Audit findings", rej: "Rejections", t1e: "Escalations from Tier 1",
 };
 
@@ -267,7 +284,7 @@ export function t2Computed(state) {
     if (out.act[i].live === "Overdue") l.overdue++;
     links.set(a.parent, l);
   });
-  for (const reg of ["dev", "capa", "cc", "aud", "find"]) out[reg].forEach((c, i) => { c.actions = links.get(state[reg][i].id) || null; });
+  for (const reg of ["dev", "capa", "acapa", "cc", "aud", "find"]) (out[reg] || []).forEach((c, i) => { c.actions = links.get(state[reg][i].id) || null; });
   // findings of each audit, and the CAPA that answer each finding
   const finds = new Map();
   (state.find || []).forEach((r, i) => {
@@ -280,7 +297,7 @@ export function t2Computed(state) {
   });
   out.aud.forEach((c, i) => { c.findings = finds.get(state.aud[i].id) || null; });
   const capaOf = new Map();
-  (state.capa || []).forEach((r) => { if (r.link) capaOf.set(r.link, [...(capaOf.get(r.link) || []), r.id]); });
+  [...(state.capa || []), ...(state.acapa || [])].forEach((r) => { if (r.link) capaOf.set(r.link, [...(capaOf.get(r.link) || []), r.id]); });
   out.find.forEach((c, i) => { c.capa = capaOf.get(state.find[i].id) || null; });
   out.rel = state.rel.map((r) => t2Release(r, s));
   out.trn = state.trn.map((r) => t2Training(r, s));

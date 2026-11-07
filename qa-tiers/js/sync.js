@@ -12,7 +12,7 @@
 
 export const REGS = {
   t1: ["dl", "br", "fn", "ac", "hd", "tr"],
-  t2: ["dev", "capa", "cc", "insp", "rel", "doc", "load", "tasks", "apqr", "trn", "esc", "act", "aud", "find", "rej", "t1e"],
+  t2: ["dev", "capa", "cc", "insp", "rel", "doc", "load", "tasks", "apqr", "trn", "esc", "act", "aud", "find", "rej", "t1e", "acapa"],
 };
 const LOCAL_ONLY = { t1: { setup: ["selDate"] }, t2: {} }; // per-viewer view state, never shared
 const CONCURRENCY = 4;
@@ -75,7 +75,9 @@ export function docsOf(tier, state) {
     out.set(`${tier}-meta/${part}`, json({ v: value }));
   }
   if (tier === "t2") for (const [date, log] of Object.entries(state.daily || {})) out.set(`t2-daily/${date}`, json(log));
-  for (const reg of REGS[tier]) for (const r of state[reg] || []) out.set(`${tier}-${reg}/${r._k}`, json(r));
+  // small registers first: an upload cut short still leaves every register with its records
+  const bySize = [...REGS[tier]].sort((a, b) => (state[a]?.length || 0) - (state[b]?.length || 0));
+  for (const reg of bySize) for (const r of state[reg] || []) out.set(`${tier}-${reg}/${r._k}`, json(r));
   return out;
 }
 

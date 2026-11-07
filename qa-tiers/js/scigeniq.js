@@ -248,7 +248,7 @@ export function mapExports(files) {
 
 /* ── comparing with the board ────────────────────────────── */
 
-const REGS = ["dev", "capa", "cc", "act", "aud", "find", "apqr"];
+const REGS = ["dev", "capa", "acapa", "cc", "act", "aud", "find", "apqr"];
 const DONE = (reg, st) => (E.T2_FLOW[reg]?.done || []).includes(st);
 
 /** Find the board APQR an imported APQR (or a group of data tasks) belongs to. */
@@ -261,6 +261,9 @@ function apqrMatch(rows, rec) {
 
 export function planImport(mapped, { update = true, add = true } = {}) {
   const s = store.t2;
+  // CAPA from audits go to the Audit CAPA register (an older export or update has them under capa)
+  const allCapa = [...(mapped.capa || []), ...(mapped.acapa || [])];
+  mapped = { ...mapped, capa: allCapa.filter((r) => !E.isAuditCapa(r)), acapa: allCapa.filter(E.isAuditCapa) };
   const plan = {};
   for (const reg of REGS) {
     const rows = s[reg] || [];

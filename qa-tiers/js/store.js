@@ -5,7 +5,7 @@
 import { DEMO_T1, DEMO_T2 } from "./demo-data.js";
 import * as SITE from "./real-data.js";
 const { REAL_T1, REAL_T2 } = SITE;
-import { DEFAULT_ACTIVITIES, monthEnd } from "./engine.js";
+import { DEFAULT_ACTIVITIES, monthEnd, splitAuditCapa } from "./engine.js";
 import { EDITION, hasTier } from "./edition.js";
 import { ensureKeys, stateFrom, dedupe } from "./sync.js";
 
@@ -45,7 +45,8 @@ function seedLists(tier, s) {
     s.tasks ??= /El Kendi/.test(s.setup.site) && s.setup.month === "2026-09-01" ? clone(DEMO_TASKS) : [];
     s.activities = s.activities.concat(DEFAULT_ACTIVITIES.filter((a) => !s.activities.some((x) => x.name === a.name)).map((a) => ({ ...a, role: REAL_ROLES[a.role] ?? a.role })));
     s.act ??= [];
-    s.aud ??= []; s.find ??= []; s.rej ??= []; s.t1e ??= [];
+    s.aud ??= []; s.find ??= []; s.rej ??= []; s.t1e ??= []; s.acapa ??= [];
+    splitAuditCapa(s);
     s.lists.AudStandard ??= uniq(["GMP", "GDP", "GLP", "ISO 9001", "ICH Q10", ...(s.aud || []).map((r) => r.standard)]);
     s.lists.AuditAreas ??= uniq(["Quality Assurance", "Quality Control", "Manufacturing", "Packaging", "Warehouse", "Engineering", "IT Infrastructure", ...(s.aud || []).map((r) => r.areas), ...(s.find || []).map((r) => r.area)]);
     s.lists.BatchType ??= uniq(["Industrial", "Registration", "Validation", "Pilot", "Commercial", ...(s.rej || []).map((r) => String(r.btype ?? "").trim()).filter((v) => /[a-z]/i.test(v))]);
@@ -97,7 +98,7 @@ export const demoAllowed = () => !isRealBoard() && EDITION.start === "demo";
 export const DEFAULT_SOURCE = HAS_REAL ? "real" : EDITION.start;
 
 const T1_REGS = ["dl", "br", "fn", "ac", "hd", "tr"];
-const T2_REGS = ["dev", "capa", "cc", "insp", "rel", "doc", "load", "apqr", "trn", "esc", "tasks", "act", "aud", "find", "rej", "t1e"];
+const T2_REGS = ["dev", "capa", "cc", "insp", "rel", "doc", "load", "apqr", "trn", "esc", "tasks", "act", "aud", "find", "rej", "t1e", "acapa"];
 const isoToday = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
 
 /** An empty board for the edition's reporting month: the standard lists,
@@ -140,6 +141,31 @@ function fresh(tier, source = DEFAULT_SOURCE) {
   return seedLists(tier, s);
 }
 
+/** Records of the site data this copy ships that the shared board lacks — an
+ * upload cut short when the page closed. Only on a board loaded from that same
+ * site data, never for records deleted on purpose. Returns how many were added. */
+const siteCache = {};
+function fillFromSite(tier, s) {
+  const src = realOf(tier);
+  if (!src || s.dataset !== REAL_INFO.dataset || s.fill === "off") return 0;
+  const site = (siteCache[tier] ??= (() => { const x = clone(src); if (tier === "t2") splitAuditCapa(x); return x; })());
+  const gone = new Set(s.removed || []);
+  const idOf = (r) => r?.id ?? r?.member;
+  const regs = Object.keys(site).filter((k) => Array.isArray(site[k]) && Array.isArray(s[k]) && site[k].some((r) => r && typeof r === "object" && idOf(r) != null));
+  const capaIds = new Set([...(s.capa || []), ...(s.acapa || [])].map(idOf));
+  let n = 0;
+  for (const reg of regs) {
+    const have = reg === "capa" || reg === "acapa" ? capaIds : new Set(s[reg].map(idOf));
+    let o = s[reg].length ? Math.max(...s[reg].map((r) => r._o ?? 0)) + 1 : 0;
+    for (const r of site[reg]) {
+      const id = idOf(r);
+      if (id == null || id === "" || have.has(id) || gone.has(`${reg}/${id}`) || (reg === "capa" || reg === "acapa") && gone.has(`capa/${id}`)) continue;
+      s[reg].push({ ...r, _o: o++ }); have.add(id); n++;
+    }
+  }
+  return n;
+}
+
 function read(key) {
   try { return JSON.parse(localStorage.getItem(key)); } catch { return null; }
 }
@@ -170,6 +196,7 @@ export const store = {
   save(tier) {
     if (tier && this.viewing) { this.listeners.forEach((fn) => fn(tier, "blocked")); return; }
     if (tier) {
+      if (tier === "t2") splitAuditCapa(this.t2); // a CAPA whose source became Audit moves to Audit CAPA (and back)
       ensureKeys(tier, this[tier]);
       write(KEYS[tier], this[tier]);
       this.sync?.push(tier, this[tier]);
@@ -193,6 +220,8 @@ export const store = {
     const next = seedLists(tier, raw);
     const copies = dedupe(tier, next); // copies left by a double upload: removed for everyone by the push below
     if (copies) this.listeners.forEach((fn) => fn(tier, "deduped", copies));
+    const filled = fillFromSite(tier, next); // records of the site data an interrupted upload never sent
+    if (filled) this.listeners.forEach((fn) => fn(tier, "filled", filled));
     next.audit = host[tier]?.audit || [];
     host[tier] = ensureKeys(tier, next);
     write(KEYS[tier], host[tier]);
@@ -241,7 +270,10 @@ export const store = {
     return index;
   },
   remove(tier, reg, index, label) {
-    this[tier][reg].splice(index, 1);
+    const [gone] = this[tier][reg].splice(index, 1);
+    // remembered, so the site-data repair never brings a deleted record back
+    const id = gone?.id ?? gone?.member;
+    if (id != null && id !== "") this[tier].removed = [...new Set([...(this[tier].removed || []), `${reg}/${id}`])].slice(-2000);
     this.log(tier, { reg, ref: label, action: "delete", changes: [] });
     this.save(tier);
   },
@@ -268,8 +300,9 @@ export const store = {
       this[tier] = s; this.save(tier); return;
     }
     const s = fresh(tier, "real");
-    const regs = tier === "t1" ? ["dl", "br", "fn", "ac", "hd", "tr"] : ["dev", "capa", "cc", "insp", "rel", "doc", "apqr", "trn", "esc", "tasks", "act", "aud", "find", "rej", "t1e"];
+    const regs = tier === "t1" ? ["dl", "br", "fn", "ac", "hd", "tr"] : ["dev", "capa", "cc", "insp", "rel", "doc", "apqr", "trn", "esc", "tasks", "act", "aud", "find", "rej", "t1e", "acapa"];
     for (const r of regs) s[r] = [];
+    s.fill = "off"; // emptied on purpose: never refilled from the site data
     if (tier === "t2") { s.daily = {}; s.trend.rows = s.trend.rows.map(() => Array(12).fill(null)); }
     this[tier] = s; this.save(tier);
   },

@@ -35,7 +35,7 @@ export const T2_REGISTERS = {
   },
   capa: {
     no: "02", title: "CAPA", icon: "⟲", short: "CAPA",
-    lead: "Corrective and preventive actions — from deviation, audit, complaint or trend to verified effectiveness.",
+    lead: "Corrective and preventive actions owned by QA — from deviation, complaint, OOS or trend to verified effectiveness. CAPA from audits are tracked apart, in Audit CAPA.",
     source: "eQMS CAPA module · investigation reports", who: "QA officer / CAPA owner", when: "On every status change",
     lifecycle: ["Open", "In Progress", "Effectiveness Check", "Closed"], kpi: 1, idHint: "CAPA-26-001",
     fields: [
@@ -187,7 +187,7 @@ export const T2_REGISTERS = {
       f("id", "Escalation No.", "text", { req: true, help: "e.g. ESC-26-014 · one row per escalation" }),
       f("opened", "Date Raised", "date", { req: true, help: "Date of the Tier 2 meeting that escalated it" }),
       f("source", "Source", "list", { list: "EscSource", help: "Process concerned" }),
-      f("link", "Linked Record", "ref", { refs: ["dev", "capa", "cc", "find", "aud", "rel", "rej", "apqr", "t1e"], help: "Pick the record the escalation is about" }),
+      f("link", "Linked Record", "ref", { refs: ["dev", "capa", "acapa", "cc", "find", "aud", "rel", "rej", "apqr", "t1e"], help: "Pick the record the escalation is about" }),
       f("desc", "Issue", "long", { help: "The problem in one line" }),
       f("support", "Support Requested", "long", { help: "Decision, resource, budget, vendor… — be explicit" }),
       f("to", "Escalated To (Tier 3)", "list", { list: "Tier3", help: "Tier 3 function or person" }),
@@ -207,7 +207,7 @@ export const T2_REGISTERS = {
     fields: [
       f("id", "Action No.", "text", { req: true, help: "Number exactly as in Scigeniq, e.g. ACTION-KO-1782" }),
       f("ptype", "Raised under", "list", { list: "ActParent", help: "Quality Event · CAPA · Change Control" }),
-      f("parent", "Parent Record", "ref", { refs: ["dev", "capa", "cc", "find", "aud", "apqr"], refBy: { field: "ptype", map: { "Quality Event": ["dev"], CAPA: ["capa"], "Change Control": ["cc"], Audit: ["find", "aud"], APQR: ["apqr"] } }, help: "Pick the quality event, CAPA, change, audit or APQR — the action shows on it" }),
+      f("parent", "Parent Record", "ref", { refs: ["dev", "capa", "acapa", "cc", "find", "aud", "apqr"], refBy: { field: "ptype", map: { "Quality Event": ["dev"], CAPA: ["capa", "acapa"], "Change Control": ["cc"], Audit: ["find", "aud"], APQR: ["apqr"] } }, help: "Pick the quality event, CAPA, change, audit or APQR — the action shows on it" }),
       f("desc", "Action", "long", { help: "Start with a verb" }),
       f("owner", "Owner", "list", { list: "People", help: "Assigned user, or the department when Scigeniq assigns a role" }),
       f("dept", "Department", "list", { list: "Departments" }),
@@ -243,7 +243,7 @@ export const T2_REGISTERS = {
       f("member", "Assigned To", "list", { list: "People", req: true, help: "Team member doing the work — must match the name in QA Load" }),
       f("activity", "QA Activity", "activity", { req: true, help: "From the activity catalogue in Setup — sets the standard effort" }),
       f("desc", "Task", "long", { help: "Start with a verb: ‘Review…’, ‘Audit…’" }),
-      f("link", "Linked Record", "ref", { refs: ["cc", "capa", "dev", "aud", "find", "apqr", "rel"], help: "The change, CAPA, deviation or audit this task serves, if any" }),
+      f("link", "Linked Record", "ref", { refs: ["cc", "capa", "acapa", "dev", "aud", "find", "apqr", "rel"], help: "The change, CAPA, deviation or audit this task serves, if any" }),
       f("opened", "Start Date", "date", { req: true, help: "Effort is spread from start to due date and counted month by month" }),
       f("due", "Due Date", "date", { help: "Committed completion date" }),
       f("effort", "Effort (person-days)", "num", { help: "Leave blank to use the activity's standard effort" }),
@@ -300,6 +300,28 @@ export const T2_REGISTERS = {
     table: ["id", "audit", "desc", "cls", "owner", "status", "due"],
     sortDesc: true,
   },
+  acapa: {
+    no: "12·A", title: "Audit CAPA", icon: "⟲", short: "Audit CAPA", trackOnly: true,
+    lead: "CAPA raised by audits and self-inspections. Owned by the audited departments — tracked here for follow-up only: not counted in the QA KPIs, the Q-calendar or QA load.",
+    source: "Scigeniq CAPA (source Audit / Self-inspection)", who: "Audited department · audit owner", when: "On every status change",
+    lifecycle: ["Open", "In Progress", "Effectiveness Check", "Closed"], kpi: null, idHint: "CAPA-KO-201",
+    fields: [
+      f("id", "CAPA No.", "text", { req: true, help: "Number exactly as in the eQMS · one row per action" }),
+      f("opened", "Date Opened", "date", { req: true, help: "Date the CAPA was approved / raised" }),
+      f("source", "Source", "list", { list: "CAPASource", help: "Audit · Self-inspection — another source moves the CAPA to the QA CAPA register" }),
+      f("link", "Source Record", "ref", { refs: ["dev", "find", "aud", "cc", "apqr", "rej", "t1e"], refBy: { field: "source", map: { Audit: ["find", "aud"], "Self-inspection": ["find", "aud"] } }, help: "Pick the finding (or audit) the CAPA answers — the CAPA then shows on it" }),
+      f("desc", "Action Description", "long", { help: "Start with a verb: ‘Revise…’, ‘Install…’ · one action per row" }),
+      f("type", "Action Type", "list", { list: "ActionType", help: "Corrective · Preventive · Correction" }),
+      f("owner", "Owner", "list", { list: "People", help: "Person or department doing the action" }),
+      f("status", "Status", "list", { list: "CAPAStatus", req: true, help: "Open · In Progress · Effectiveness Check · Closed" }),
+      f("due", "Due Date", "date", { help: "Committed completion date — extensions need a reason" }),
+      f("closed", "Closure Date", "date", { help: "Date QA verified the action complete — only when Closed" }),
+      f("eff", "Effectiveness Verified", "list", { list: "EffVerified", help: "Pending → Yes / No after the check" }),
+      f("comments", "Comments", "long", { help: "Evidence location, extension reason" }),
+    ],
+    table: ["id", "link", "desc", "owner", "status", "due", "eff"],
+    sortDesc: true,
+  },
   t1e: {
     no: "10·A", title: "Escalations from Tier 1", icon: "⇧", short: "From Tier 1",
     lead: "Every problem the 08:30 huddle could not solve and handed to the 10:30 stand-up: what, which SQDCP letter, who raised it, who owns it now at Tier 2 and by when.",
@@ -334,7 +356,7 @@ export const T2_REGISTERS = {
       f("ptype", "Rejection Type", "list", { list: "RejType", help: "Raw material · Packaging material · Intermediate / bulk · Validation batch · Finished product" }),
       f("btype", "Batch Type", "list", { list: "BatchType", help: "Industrial · Registration · Validation…" }),
       f("batch", "Batch No.", "text"),
-      f("link", "Related OOS / Deviation", "ref", { refs: ["dev", "capa"], help: "The quality event behind the rejection" }),
+      f("link", "Related OOS / Deviation", "ref", { refs: ["dev", "capa", "acapa"], help: "The quality event behind the rejection" }),
       f("qty", "Quantity Rejected", "text", { help: "As written on the report, e.g. 7,35 kg" }),
       f("kg", "Quantity (kg)", "num"),
       f("reason", "Reason for Rejection", "long"),
@@ -350,7 +372,9 @@ export const T2_REGISTERS = {
 };
 
 /** Order of the registers on the Tier 2 navigation. */
-export const T2_ORDER = ["dev", "capa", "cc", "act", "insp", "rel", "doc", "load", "tasks", "apqr", "trn", "esc", "t1e", "aud", "find", "rej"];
+export const T2_ORDER = ["dev", "capa", "cc", "act", "insp", "rel", "doc", "load", "tasks", "apqr", "trn", "esc", "t1e", "rej", "aud", "find", "acapa"];
+/** Registers tracked for follow-up only, in their own menu (not QA's responsibility). */
+export const AUDIT_GROUP = ["aud", "find", "acapa"];
 
 /** Tier 2 Daily Log (calendar) inputs. */
 export const T2_DAILY_FIELDS = [

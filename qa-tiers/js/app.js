@@ -4,7 +4,7 @@
 import { store, HAS_REAL, demoAllowed, REAL_INFO } from "./store.js";
 import { EDITION, hasTier, ONE_TIER, MAIN_TIER } from "./edition.js";
 import * as E from "./engine.js";
-import { T1_REGISTERS, T2_REGISTERS, T1_ORDER, T2_ORDER } from "./schema.js";
+import { T1_REGISTERS, T2_REGISTERS, T1_ORDER, T2_ORDER, AUDIT_GROUP } from "./schema.js";
 import { ring } from "./charts.js";
 import { renderRegister } from "./registers.js";
 import * as T1 from "./views-t1.js";
@@ -35,7 +35,7 @@ function flagCounts() {
   const t2 = hasTier("t2") ? E.t2Computed(store.t2) : {};
   const t1 = hasTier("t1") ? E.t1Computed(store.t1, store.t1.setup.selDate) : {};
   const out = {};
-  for (const [reg, c] of Object.entries(t2)) out[`t2/reg/${reg}`] = E.flagged(c) + c.filter((x) => x.live === "Overdue").length;
+  for (const [reg, c] of Object.entries(t2)) out[`t2/reg/${reg}`] = (T2_REGISTERS[reg]?.trackOnly ? 0 : E.flagged(c)) + c.filter((x) => x.live === "Overdue").length;
   for (const [reg, c] of Object.entries(t1)) out[`t1/reg/${reg}`] = E.flagged(c) + c.filter((x) => x.live === "Overdue").length;
   return out;
 }
@@ -59,10 +59,13 @@ function navHTML() {
       ${hasTier("t2") ? `<div class="nav-group"><div class="nav-title" style="--dot:var(--accent-2)"><i class="tier-dot"></i>Tier 2 · Stand-up ${esc(store.t2.setup.meetingTime || "10:30")}</div>
         ${a("t2/board", "◫", "Dashboard")}
         ${a("t2/calendar", "▣", "Daily Log")}
-        ${T2_ORDER.filter((r) => r !== "t1e" || !hasTier("t1")).map((r) => a(`t2/reg/${r}`, T2_REGISTERS[r].no, T2_REGISTERS[r].short)).join("")}
+        ${T2_ORDER.filter((r) => (r !== "t1e" || !hasTier("t1")) && !AUDIT_GROUP.includes(r)).map((r) => a(`t2/reg/${r}`, T2_REGISTERS[r].no, T2_REGISTERS[r].short)).join("")}
         ${a("t2/trend", "↗", "KPI Trend")}
         ${a("t2/analytics", "◔", "Analytics")}
         ${a("t2/setup", "⚙", "Setup")}
+      </div>
+      <div class="nav-group nav-track"><div class="nav-title" style="--dot:var(--s8)"><i class="tier-dot"></i>Audits</div>
+        ${AUDIT_GROUP.map((r) => a(`t2/reg/${r}`, T2_REGISTERS[r].no, T2_REGISTERS[r].short)).join("")}
       </div>` : ""}
       <div class="nav-group"><div class="nav-title">Reports & data</div>${hasTier("t2") ? a("import", "⤒", "Import from Scigeniq") : ""}${a("report", "⤓", "Reports centre")}${a("close", "✓", "Month-end close")}${a("archive", "🗄", "Archive")}${a("guide", "?", "How-to guides")}${a("audit", "⎘", "Change history")}</div>
     </nav>
@@ -108,7 +111,7 @@ function renderHome(root) {
   const comp = E.t2Computed(t2);
   const { pulse } = E.t2Kpis(t2, comp);
   const cal = E.t2Calendar(t2);
-  const overdue2 = Object.values(comp).reduce((a, c) => a + c.filter((x) => x.live === "Overdue").length, 0);
+  const overdue2 = Object.entries(comp).reduce((a, [r, c]) => a + (T2_REGISTERS[r]?.trackOnly ? 0 : c.filter((x) => x.live === "Overdue").length), 0);
   const openEsc = E.t2Top(t2, "esc", 5, comp);
   const flags = flagCounts();
   const lp = learnProgress();
@@ -440,7 +443,10 @@ document.addEventListener("click", (e) => {
   navigate(a.getAttribute("href"));
 }, true);
 const dedupeShown = new Set();
+// closing the page while changes are still on their way to the shared board would lose them
+window.addEventListener("beforeunload", (e) => { if (team.pending > 0) { e.preventDefault(); e.returnValue = ""; } });
 store.onChange((tier, kind, n) => {
+  if (kind === "filled") { if (dedupeShown.has(`fill-${tier}`)) return; dedupeShown.add(`fill-${tier}`); toast(`${n} records of the site data were missing from the shared board (an upload cut short) — restored${store.sync?.readOnly ? "" : "; keep the page open until the status says live"}`); return; }
   if (kind === "deduped") { if (dedupeShown.has(tier)) return; dedupeShown.add(tier); toast(store.sync?.readOnly ? `${n} duplicate records hidden — the board owner's next visit removes them` : `${n} duplicate records removed from the shared board — keep the page open until the status says live`); return; }
   if (kind === "blocked") { toast(store.viewing?.kind === "practice" ? "Practice mode — nothing is saved" : "Read-only archive — return to the live board to make changes"); return; }
   renderNav();

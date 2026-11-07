@@ -85,7 +85,7 @@ FX.ac = FX.fn;
 FX.apqr = [...FX.generic.slice(0, 1), { key: "effPct", label: "Effective %", num: true, cell: (c) => pct(c.effPct) }, ...FX.generic.slice(1)];
 
 function fxSpec(tier, reg) {
-  if (tier === "t2" && ["dev", "capa", "cc", "find"].includes(reg)) return [...FX.generic.slice(0, 3), { key: "actions", label: "Actions", cell: actionsCell }, ...(reg === "find" ? [{ key: "capa", label: "CAPA", cell: (c) => (c.capa ? esc(c.capa.join(", ")) : "") }] : []), ...FX.generic.slice(3)];
+  if (tier === "t2" && ["dev", "capa", "acapa", "cc", "find"].includes(reg)) return [...FX.generic.slice(0, 3), { key: "actions", label: "Actions", cell: actionsCell }, ...(reg === "find" ? [{ key: "capa", label: "CAPA", cell: (c) => (c.capa ? esc(c.capa.join(", ")) : "") }] : []), ...FX.generic.slice(3)];
   if (tier === "t2" && reg === "aud") return [...FX.generic.slice(0, 3), { key: "findings", label: "Findings", cell: (c) => (c.findings ? `${c.findings.open} open / ${c.findings.total}${c.findings.overdue ? ` · <b style="color:var(--r)">${c.findings.overdue} overdue</b>` : ""}` : "") }, { key: "actions", label: "Actions", cell: actionsCell }, ...FX.generic.slice(3)];
   if (tier === "t2") return reg === "rel" ? FX.rel : reg === "trn" ? FX.trn2 : reg === "load" ? FX.load : reg === "tasks" ? FX.tasks : reg === "apqr" ? FX.apqr : FX.generic;
   return reg === "tr" ? FX.tr1 : FX[reg];
@@ -112,7 +112,7 @@ function computeOne(tier, reg, rec, index) {
       return { ...c, std, effort: has(rec.effort) ? +rec.effort : std, check: c.check === "OK" && !act ? "Activity not in the catalogue" : c.check };
     }
     const c = E.t2Row(reg, rec, s.setup.statusDate);
-    if (["dev", "capa", "cc", "aud", "find"].includes(reg) && index != null) { const x = E.t2Computed(s)[reg][index]; c.actions = x?.actions || null; c.findings = x?.findings || null; c.capa = x?.capa || null; }
+    if (["dev", "capa", "acapa", "cc", "aud", "find"].includes(reg) && index != null) { const x = E.t2Computed(s)[reg][index]; c.actions = x?.actions || null; c.findings = x?.findings || null; c.capa = x?.capa || null; }
     return c;
   }
   const sel = s.setup.selDate;
@@ -404,7 +404,7 @@ function linkedActionsHTML(ref) {
     <div class="urgent">${rows.map(({ a, c }) => `<a href="#/t2/reg/act?id=${encodeURIComponent(a.id)}"><span class="ref">${esc(a.id)}</span><span class="desc" title="${esc(a.desc)}">${esc(a.desc)} <span class="muted">· ${esc(a.owner || "—")}</span></span>${pill(c.live)}</a>`).join("")}</div></div>`;
 }
 function parentLinkHTML(ref) {
-  const reg = ref.startsWith("QE") ? "dev" : ref.startsWith("CAPA") ? "capa" : ref.startsWith("CC") ? "cc" : null;
+  const reg = ref.startsWith("QE") ? "dev" : ref.startsWith("CAPA") ? ((store.t2.acapa || []).some((r) => r.id === ref) ? "acapa" : "capa") : ref.startsWith("CC") ? "cc" : null;
   return reg ? `<div style="margin-top:16px"><a class="btn sm" href="#/t2/reg/${reg}?id=${encodeURIComponent(ref)}">Open ${esc(ref)} ›</a></div>` : "";
 }
 
@@ -543,9 +543,10 @@ export function renderRegister(root, { tier, reg, query = {} }) {
     root.innerHTML = `
       <div class="reg-head">
         <div class="reg-no">${esc(sc.no)}</div>
-        <div><div class="eyebrow">${tier === "t1" ? "Tier 1 · Huddle board" : "Tier 2 · Daily management"} · register</div>
+        <div><div class="eyebrow">${tier === "t1" ? "Tier 1 · Huddle board" : sc.trackOnly ? "Audits · tracking only" : ["aud", "find"].includes(reg) ? "Tier 2 · Audits" : "Tier 2 · Daily management"} · register</div>
           <h1 style="font-size:28px;margin-top:4px">${esc(sc.title)}</h1>
           <p class="muted" style="margin:4px 0 0;max-width:780px">${esc(sc.lead)}</p>
+          ${tier === "t2" && sc.trackOnly ? `<span class="track-note">◌ Tracking only — not counted in the QA KPIs, Q-calendar or QA load</span>` : ""}
           <div class="meta-row">${sc.source ? `<span>Source <b>${esc(sc.source)}</b></span>` : ""}<span>Collected by <b>${esc(sc.who)}</b></span><span>When <b>${esc(sc.when)}</b></span>
           ${sc.lifecycle?.length ? `<span class="lifecycle">${sc.lifecycle.map((x) => `<span>${esc(x)}</span>`).join("<i>→</i>")}</span>` : ""}</div>
         </div>

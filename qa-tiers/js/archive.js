@@ -36,7 +36,7 @@ function headline() {
   const s = store.t2, comp = hasTier("t2") ? E.t2Computed(s) : {};
   const pulse = hasTier("t2") ? E.t2Kpis(s, comp).pulse : { score: "" };
   const k1 = E.t1Kpis(E.t1Context(store.t1, store.t1.setup.selDate, "All team"));
-  const overdue = Object.values(comp).reduce((a, c) => a + c.filter((x) => x.live === "Overdue").length, 0);
+  const overdue = Object.entries(comp).reduce((a, [r, c]) => a + (T2_REGISTERS[r]?.trackOnly ? 0 : c.filter((x) => x.live === "Overdue").length), 0);
   const records = (hasTier("t2") ? T2_ORDER.reduce((a, r) => a + (s[r]?.length || 0), 0) : 0) + (hasTier("t1") ? T1_ORDER.reduce((a, r) => a + (store.t1[r]?.length || 0), 0) : 0);
   return { pulse: pulse.score, health: hasTier("t1") ? k1.health.score : "", overdue, records };
 }
@@ -236,7 +236,7 @@ function closeSteps() {
   const s = store.t2, st = s.setup, M = st.month;
   const comp = E.t2Computed(s);
   const c1 = E.t1Computed(store.t1, store.t1.setup.selDate);
-  const flags2 = Object.entries(comp).reduce((a, [r, c]) => a + (T2_REGISTERS[r] ? E.flagged(c) : 0), 0);
+  const flags2 = Object.entries(comp).reduce((a, [r, c]) => a + (T2_REGISTERS[r] && !T2_REGISTERS[r].trackOnly ? E.flagged(c) : 0), 0);
   const flags1 = hasTier("t1") ? Object.entries(c1).reduce((a, [r, c]) => a + (T1_REGISTERS[r] ? E.flagged(c) : 0), 0) : 0;
   const cal = E.t2Calendar(s);
   const work = cal.filter((d) => !d.weekend && !d.future);
