@@ -1137,3 +1137,52 @@ table.matrix th.mx-name .nm { white-space: normal; text-overflow: clip; }
 .tf-over { color: var(--r-ink); font-size: 11px; }
 @media (max-width: 1100px) { .b-flow { grid-template-columns: minmax(0, 1fr); } .b-arrow { display: none; } }
 .b-done-i.track { background: transparent; border: 1px dashed var(--line-strong); color: var(--muted); }
+
+/* the record editor: a large central window, not a side panel */
+.drawer {
+  top: 50%; left: 50%; right: auto; bottom: auto; transform: translate(-50%, -50%);
+  width: min(1180px, calc(100vw - 48px)); height: min(92vh, 1040px); border-radius: 18px; overflow: hidden;
+  animation: pop .18s ease;
+}
+.drawer.wide { width: min(1240px, calc(100vw - 48px)); }
+@keyframes pop { from { opacity: 0; transform: translate(-50%, -48%) scale(.985); } to { opacity: 1; transform: translate(-50%, -50%); } }
+@media (min-width: 1100px) {
+  .drawer .form-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .drawer .form-grid .full { grid-column: 1 / -1; }
+}
+@media (max-width: 700px) { .drawer { width: 100vw; height: 100vh; border-radius: 0; } }
+@media (prefers-reduced-motion: reduce) { .drawer { animation: none; } }
+
+/* back button */
+.backbar { margin: -6px 0 10px; }
+.back-btn { border: 1px solid var(--line); background: var(--surface); color: var(--ink-2); border-radius: 999px; padding: 4px 12px 4px 10px; font: 600 13px var(--font-body); cursor: pointer; box-shadow: var(--shadow-1); }
+.back-btn:hover { border-color: var(--accent); color: var(--accent-2); }
+
+/* batches: partial rejection, registration sub-panel */
+.stage-pill.st-partial { background: var(--a-bg); color: var(--a-ink); }
+.b-done-i.c-A { background: var(--a-bg); color: var(--a-ink); }
+.b-reg { margin-top: 16px; border: 1px dashed var(--line-strong); border-radius: 14px; padding: 10px 12px; background: var(--surface-2); }
+.b-reg summary { display: flex; flex-wrap: wrap; gap: 10px; align-items: baseline; cursor: pointer; }
+.b-reg summary b { font: 700 13px var(--font-display); letter-spacing: .08em; text-transform: uppercase; font-stretch: 108%; }
+.b-reg summary .btn { margin-left: auto; }
+.b-reg-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 8px; margin-top: 10px; }
+.b-reg .b-stage { background: var(--surface); }
+
+/* QA load: compact team rows */
+.ld-team { font-size: 13px; color: var(--muted); } .ld-team b { color: var(--ink); font-variant-numeric: tabular-nums; }
+.ld-rows { display: grid; gap: 2px; }
+.ld-row { display: grid; grid-template-columns: minmax(180px, 250px) minmax(0, 1fr) 110px 64px 84px; gap: 12px; align-items: center; width: 100%; padding: 6px 8px; border: 0; border-radius: 10px; background: transparent; text-align: left; font: inherit; color: inherit; cursor: pointer; }
+.ld-row:hover { background: var(--accent-soft); }
+.ld-who { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.ld-who .nm { min-width: 0; font-weight: 600; font-size: 13px; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ld-who .nm small { display: block; font-weight: 400; color: var(--muted); font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; }
+.av.sm2 { width: 28px; height: 28px; font-size: 10.5px; }
+.ld-bar { position: relative; height: 14px; }
+.ld-track { position: absolute; inset: 3px 0; display: flex; gap: 1px; border-radius: 999px; background: var(--surface-3); overflow: hidden; }
+.ld-track i { display: block; height: 100%; }
+.ld-mark { position: absolute; top: 0; bottom: 0; width: 2px; border-radius: 2px; }
+.ld-mark.hi, .ld-key.hi { background: var(--a); } .ld-mark.ov, .ld-key.ov { background: var(--r); }
+.ld-key { display: inline-block; width: 3px; height: 12px; border-radius: 2px; }
+.ld-num { font: 700 13.5px var(--font-display); font-variant-numeric: tabular-nums; text-align: right; } .ld-num small { font: 400 11.5px var(--font-body); color: var(--muted); }
+.ld-del { font-size: 12px; color: var(--r-ink); } .ld-del b { font-weight: 700; }
+@media (max-width: 760px) { .ld-row { grid-template-columns: minmax(0, 1fr) 64px; } .ld-row .ld-bar { grid-column: 1 / -1; order: 3; } .ld-row .ld-num, .ld-row .ld-del { display: none; } }

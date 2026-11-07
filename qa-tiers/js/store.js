@@ -168,13 +168,13 @@ function fillFromSite(tier, s) {
   const capaIds = new Set([...(s.capa || []), ...(s.acapa || [])].map(idOf));
   let n = 0;
   // fields the site data gained since the board was loaded (batch steps): filled where empty, never overwritten
-  const ADD = { rel: ["lotType", "fabStart", "mfgEnd", "packStart", "mfg", "bmr", "bpr", "wipStep", "wipStatus", "wipResp", "tf", "qty"] };
+  const ADD = { rel: ["lotType", "fabStart", "mfgEnd", "packStart", "mfg", "bmr", "bpr", "wipStep", "wipStatus", "wipResp", "tf", "qty", "relQty", "rejQty", "rejRef"] };
   for (const [reg, keys] of Object.entries(ADD)) {
     const byId = new Map((site[reg] || []).map((r) => [idOf(r), r]));
     for (const r of s[reg] || []) {
       const src = byId.get(idOf(r));
       if (!src) continue;
-      for (const k of keys) if ((r[k] == null || r[k] === "") && src[k] != null && src[k] !== "" && !(s.removed || []).includes(`${reg}/${idOf(r)}/${k}`)) { r[k] = src[k]; n++; }
+      for (const k of keys) if ((r[k] == null || r[k] === "") && src[k] != null && src[k] !== "" && !(r._cleared || []).includes(k)) { r[k] = src[k]; n++; }
     }
   }
   for (const reg of regs) {

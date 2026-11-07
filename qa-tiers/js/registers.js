@@ -31,7 +31,7 @@ const FX = {
     { key: "check", label: "Data Check", cell: (c) => checkCell(c.check) },
   ],
   rel: [
-    { key: "stage", label: "Stage", cell: (c) => `<span class="stage-pill st-${c.stage}">${esc(E.BATCH_STAGE_LABEL[c.stage] || "")}</span>${c.tfOver ? ' <b class="tf-over" title="WIP time frame exceeded">TF</b>' : ""}` },
+    { key: "stage", label: "Stage", cell: (c, r) => `<span class="stage-pill st-${c.stage}">${esc(E.BATCH_STAGE_LABEL[c.stage] || "")}</span>${c.partial ? ` <span class="stage-pill st-partial" title="${esc(`Partial rejection${c.rejRefs?.length ? ` — ${c.rejRefs.join(", ")}` : ""}`)}">partial rejection</span>` : ""}${r?.wipStep && !["released", "rejected", "registration"].includes(c.stage) ? ` <small class="muted">next: ${esc(r.wipStep)}</small>` : ""}${c.tfOver ? ' <b class="tf-over" title="WIP time frame exceeded">TF</b>' : ""}` },
     { key: "target", label: "Target Release", cell: (c) => fmtDate(c.target) },
     { key: "lead", label: "Lead Time (d)", num: true, cell: (c) => c.lead },
     { key: "live", label: "Live Status", cell: (c) => pill(c.live) },
@@ -199,7 +199,7 @@ export function inputHTML(tier, field, value, { name = field.key, cls = "", reg 
     </div>`;
   }
   if (field.type === "long") return `<textarea name="${name}" class="${cls}" rows="2">${esc(v)}</textarea>`;
-  if (field.type === "date") return `<div class="inline"><input type="date" name="${name}" class="${cls}" value="${esc(v)}"><button type="button" class="btn sm" data-today="${name}" title="Insert today's date">Today</button></div>`;
+  if (field.type === "date") return `<div class="inline"><input type="date" name="${name}" class="${cls}" value="${esc(v)}"><button type="button" class="btn sm" data-today="${name}" title="Insert today's date">Today</button><button type="button" class="btn sm ghost" data-clear="${name}" title="Clear the date" aria-label="Clear the date">✕</button></div>`;
   if (field.type === "int" || field.type === "num") return `<input type="number" inputmode="decimal" min="0" step="${field.type === "int" ? 1 : 0.5}" name="${name}" class="${cls}" value="${esc(v)}">`;
   if (field.type === "pct") return `<div class="suffix"><input type="number" min="0" max="100" step="5" name="${name}" class="${cls}" value="${v === "" ? "" : Math.round(v * 100)}"><span>%</span></div>`;
   return `<input type="text" name="${name}" class="${cls}" value="${esc(v)}" autocomplete="off">`;
@@ -271,6 +271,8 @@ export function wireInputs(root, tier, fields, onChange) {
     });
   }
   root.addEventListener("click", (e) => {
+    const x = e.target.closest("[data-clear]");
+    if (x) { const inp = root.querySelector(`[name="${x.dataset.clear}"]`); inp.value = ""; inp.dispatchEvent(new Event("change", { bubbles: true })); inp.dispatchEvent(new Event("input", { bubbles: true })); return; }
     const b = e.target.closest("[data-today]");
     if (!b) return;
     const inp = root.querySelector(`[name="${b.dataset.today}"]`);
@@ -372,11 +374,10 @@ export function openEditor({ tier, reg, index = null, prefill = null, onSaved, p
       toast(`${draft.id} already exists — one record, one row`);
       return;
     }
-    // a figure typed by hand is kept (not recalculated)
-    for (const f of sc.fields.filter((x) => x.manualFlag)) {
-      if (String(draft[f.key] ?? "") !== String(rec[f.key] ?? "")) draft[f.manualFlag] = true;
-      else if (rec[f.manualFlag]) draft[f.manualFlag] = rec[f.manualFlag];
-    }
+    // a field the user emptied stays empty: the site-data repair never refills it
+    const cleared = sc.fields.filter((f) => has(rec[f.key]) && !has(draft[f.key])).map((f) => f.key);
+    const kept = (rec._cleared || []).filter((k) => !has(draft[k]));
+    if (cleared.length || kept.length) draft._cleared = [...new Set([...kept, ...cleared])];
     // a figure typed by hand is kept (not recalculated)
     for (const f of sc.fields.filter((x) => x.manualFlag)) {
       if (String(draft[f.key] ?? "") !== String(rec[f.key] ?? "")) draft[f.manualFlag] = true;
@@ -486,24 +487,36 @@ function breakdownHTML(c, setup) {
     <p class="muted" style="font-size:12px;margin:8px 0 0">Each record's standard effort (Setup › QA activities) is spread evenly from its start to its closure — or to its due date / the as-of date while open — and only the part falling in this month counts. Delayed tasks = open items past their due date.</p>`;
 }
 
-/** Team workload chart above the QA Load register. */
+/** Team workload above the QA Load register: one compact row per person — workload against capacity, by source. */
 function loadPanel(comp, setup) {
-  // a fixed colour per source on every chart (8 validated slots); the smallest sources share "Other"
-  const SLOT = { act: "f-s1", dev: "f-s2", capa: "f-s3", cc: "f-s4", rel: "f-s5", apqr: "f-s6", tasks: "f-s7", t1ac: "f-s8" };
-  const OTHER = ["insp", "doc", "trn", "esc"];
-  const keys = [...Object.keys(SLOT), "other"];
-  const sources = keys.map((k) => (k === "other" ? `Other (${OTHER.map((o) => E.LOAD_SOURCES[o].toLowerCase()).join(", ")})` : E.LOAD_SOURCES[k]));
-  const cls = keys.map((k) => SLOT[k] || "f-other");
-  const keyOf = Object.fromEntries(Object.entries(E.LOAD_SOURCES).map(([k, v]) => [v, SLOT[k] ? v : sources[sources.length - 1]]));
+  const SLOT = { act: "s1", dev: "s2", capa: "s3", cc: "s4", rel: "s5", apqr: "s6", tasks: "s7", t1ac: "s8" };
+  const nameOf = (src) => { const k = Object.keys(E.LOAD_SOURCES).find((x) => E.LOAD_SOURCES[x] === src); return SLOT[k] ? src : "Other"; };
+  const slotOf = (name) => { const k = Object.keys(E.LOAD_SOURCES).find((x) => E.LOAD_SOURCES[x] === name); return SLOT[k] || "other"; };
   const rows = store.t2.load.map((r, i) => {
-    const by = {};
-    for (const it of comp[i].items) by[keyOf[it.source]] = (by[keyOf[it.source]] || 0) + it.days;
-    return { label: r.member, parts: sources.map((src, k) => ({ name: src, value: Math.round((by[src] || 0) * 10) / 10, cls: cls[k] })) };
-  });
-  const used = sources.map((src, k) => ({ src, k })).filter(({ src }) => rows.some((r) => r.parts.find((p) => p.name === src).value));
-  return `<div class="card card-pad" style="margin-bottom:14px"><div class="card-head"><h2>Planned workload by source <span class="sub">person-days in ${esc(setup.month.slice(0, 7))} · click a member below for the detail</span></h2><a class="btn sm" href="#/t2/setup">Effort catalogue ›</a></div>
-    ${stackedH(rows, { width: 720, labelW: 150 })}
-    <div class="chart-legend">${used.map(({ src, k }) => `<span><i class="bg-${cls[k].slice(2)}"></i>${esc(src)}</span>`).join("")}</div></div>`;
+    const c = comp[i], by = {};
+    for (const it of c.items) by[nameOf(it.source)] = (by[nameOf(it.source)] || 0) + it.days;
+    return { i, r, c, by };
+  }).filter((x) => x.r.member).sort((a, b) => (+b.c.util || 0) - (+a.c.util || 0) || a.r.member.localeCompare(b.r.member));
+  const used = [...new Set(rows.flatMap((x) => Object.keys(x.by).filter((k) => x.by[k] > 0)))].sort((a, b) => (a === "Other") - (b === "Other"));
+  const maxUtil = Math.max(1.2, ...rows.map((x) => +x.c.util || 0));
+  const scale = (v) => `${Math.min(100, (v / maxUtil) * 100)}%`;
+  const rag = (u) => (u === "" ? "N" : u > setup.overLoad ? "R" : u >= setup.highLoad ? "A" : "G");
+  const ini = (n) => String(n).split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join("");
+  const team = rows.reduce((a, x) => ({ w: a.w + (+x.c.workload || 0), av: a.av + (+x.c.available || 0) }), { w: 0, av: 0 });
+  return `<div class="card card-pad ld-panel" style="margin-bottom:14px">
+    <div class="card-head"><h2>Team workload <span class="sub">${esc(setup.month.slice(0, 7))} · planned person-days against each person's available days · thresholds ${pct(setup.highLoad)} high · ${pct(setup.overLoad)} overloaded</span></h2>
+      <div class="row"><span class="ld-team">Team <b>${fmtNum(Math.round(team.w * 10) / 10)}</b> / ${fmtNum(team.av)} pd · <b>${pct(team.av ? team.w / team.av : "")}</b></span><a class="btn sm" href="#/t2/setup">Effort catalogue ›</a></div></div>
+    <div class="ld-rows">${rows.map(({ i, r, c, by }) => {
+      const u = c.util === "" ? 0 : +c.util, k = rag(c.util);
+      return `<button type="button" class="ld-row" data-loadedit="${i}" title="${esc(`${r.member} — ${fmtNum(c.workload)} pd planned of ${fmtNum(c.available)} available\n${Object.entries(by).map(([n, v]) => `${n}: ${fmtNum(Math.round(v * 10) / 10)} pd`).join("\n") || "No planned work this month"}`)}">
+        <span class="ld-who"><span class="av sm2">${esc(ini(r.member))}</span><span class="nm">${esc(r.member)}<small>${esc(r.role || "")}</small></span></span>
+        <span class="ld-bar"><span class="ld-track">${used.map((n) => (by[n] ? `<i class="bg-${slotOf(n)}" style="width:${c.available ? (by[n] / c.available / maxUtil) * 100 : 0}%"></i>` : "")).join("")}</span><span class="ld-mark hi" style="left:${scale(setup.highLoad)}"></span><span class="ld-mark ov" style="left:${scale(setup.overLoad)}"></span></span>
+        <span class="ld-num">${fmtNum(Math.round((+c.workload || 0) * 10) / 10)}<small> / ${fmtNum(c.available)} pd</small></span>
+        <span class="pill ${k}">${c.util === "" ? "—" : pct(u)}</span>
+        <span class="ld-del">${c.delayed ? `<b>${c.delayed}</b> delayed` : ""}</span></button>`;
+    }).join("")}</div>
+    <div class="chart-legend">${used.map((n) => `<span><i class="bg-${slotOf(n)}"></i>${esc(n === "Other" ? "Other (inspections, documentation, training, escalations…)" : n)}</span>`).join("")}<span><i class="ld-key hi"></i>${pct(setup.highLoad)} high load</span><span><i class="ld-key ov"></i>${pct(setup.overLoad)} overloaded</span></div>
+  </div>`;
 }
 
 /* ── Register page ──────────────────────────────────────── */
@@ -562,7 +575,7 @@ export function renderRegister(root, { tier, reg, query = {} }) {
     if (vs.quick === "open") list = list.filter((x) => x.c.open);
     if (vs.quick === "overdue") list = list.filter((x) => x.c.live === "Overdue");
     if (vs.quick === "today" && dateKey) list = list.filter((x) => x.r[dateKey] === ref);
-    if (vs.stage && reg === "rel") list = list.filter((x) => x.c.stage === vs.stage);
+    if (vs.stage && reg === "rel") list = list.filter((x) => (vs.stage === "partial" ? x.c.partial : x.c.stage === vs.stage));
     if (vs.quick === "month" && dateKey) list = list.filter((x) => has(x.r[dateKey]) && x.r[dateKey] >= mS && x.r[dateKey] <= mE);
     if (vs.quick === "soon") list = list.filter((x) => x.c.open && has(x.r.due) && E.diffDays(x.r.due, ref) >= 0 && E.diffDays(x.r.due, ref) <= 7);
     const moreN = Object.values(vs.by).filter(Boolean).length + (vs.from ? 1 : 0) + (vs.to ? 1 : 0);
@@ -595,7 +608,7 @@ export function renderRegister(root, { tier, reg, query = {} }) {
       return `<td>${esc(v)}</td>`;
     };
     const bulkOn = reg !== "load" && bulkFields.length;
-    const body = shown.map(({ r, c, i }) => `<tr data-i="${i}" class="${c.check && c.check !== "OK" ? "flag" : ""} ${vs.sel.has(i) ? "selrow" : ""}">${bulkOn ? `<td class="selcell" data-noedit><input type="checkbox" data-sel="${i}" ${vs.sel.has(i) ? "checked" : ""} aria-label="Select"></td>` : ""}${cols.map((f) => cell(f, r[f.key])).join("")}${fx.map((x) => `<td class="fx ${x.num ? "num" : ""}">${x.cell(c) ?? ""}</td>`).join("")}</tr>`).join("");
+    const body = shown.map(({ r, c, i }) => `<tr data-i="${i}" class="${c.check && c.check !== "OK" ? "flag" : ""} ${vs.sel.has(i) ? "selrow" : ""}">${bulkOn ? `<td class="selcell" data-noedit><input type="checkbox" data-sel="${i}" ${vs.sel.has(i) ? "checked" : ""} aria-label="Select"></td>` : ""}${cols.map((f) => cell(f, r[f.key])).join("")}${fx.map((x) => `<td class="fx ${x.num ? "num" : ""}">${x.cell(c, r) ?? ""}</td>`).join("")}</tr>`).join("");
 
     const loadTotal = (k) => rows.reduce((a, x) => a + (+x.c[k] || 0), 0);
     const teamUtil = loadTotal("available") > 0 ? loadTotal("workload") / loadTotal("available") : "";
@@ -636,7 +649,7 @@ export function renderRegister(root, { tier, reg, query = {} }) {
         ${officers.length ? `<select data-officer aria-label="Filter by officer"><option value="">All officers</option>${officers.map((o) => `<option ${o === vs.officer ? "selected" : ""}>${esc(o)}</option>`).join("")}</select>` : ""}
         <label class="row" style="gap:6px;font-size:13px"><input type="checkbox" data-flagged ${vs.flagged ? "checked" : ""}> Flagged only</label>
         ${reg === "load" ? "" : `<div class="seg-ctl" role="group" aria-label="Quick filter">${quick.map(([v, l]) => `<button type="button" data-quick="${v}" aria-pressed="${vs.quick === v}">${l}</button>`).join("")}</div>`}
-        ${vs.stage && reg === "rel" ? `<button type="button" class="chip-btn on" data-clearstage title="Show every stage">Stage: ${esc(E.BATCH_STAGE_LABEL[vs.stage] || vs.stage)} ✕</button>` : ""}<span class="spacer"></span><span class="muted" style="font-size:12.5px">${list.length} of ${total} shown · ${vs.view === "charts" ? "click a bar to filter" : "click a row to edit · ƒx columns are automatic"}</span>
+        ${vs.stage && reg === "rel" ? `<button type="button" class="chip-btn on" data-clearstage title="Show every stage">Stage: ${esc(vs.stage === "partial" ? "Released with a partial rejection" : E.BATCH_STAGE_LABEL[vs.stage] || vs.stage)} ✕</button>` : ""}<span class="spacer"></span><span class="muted" style="font-size:12.5px">${list.length} of ${total} shown · ${vs.view === "charts" ? "click a bar to filter" : "click a row to edit · ƒx columns are automatic"}</span>
       </div>
       ${listFields.length || dateKey ? `<details class="fbar card" data-moref ${moreN ? "open" : ""} style="margin-bottom:12px"><summary><span class="fbar-t">⚲ More filters</span>${moreN ? `<span class="badge">${moreN}</span><span class="spacer"></span><button class="btn sm ghost" type="button" data-moreclear>Clear</button>` : `<span class="muted" style="font-size:12.5px">every drop-down field and the date range</span>`}</summary>
         <div class="fgrid">
@@ -680,6 +693,7 @@ export function renderRegister(root, { tier, reg, query = {} }) {
       draw();
     });
     $$("[data-view]", root).forEach((b) => b.onclick = () => { vs.view = b.dataset.view; draw(); });
+    $$("[data-loadedit]", root).forEach((b) => b.onclick = () => openEditor({ tier, reg, index: +b.dataset.loadedit, onSaved: draw }));
     const charts = $("[data-regcharts]", root);
     if (charts) {
       decorateCharts(root);

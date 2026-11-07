@@ -147,6 +147,13 @@ export function batchStage(r) {
   if (/non conform|capa|waiting/.test(w)) return "wip";
   if (r.status === "On Hold") return "hold";
   if (has(r.mfg)) return !has(r.bmr) || !has(r.bpr) ? "docs" : !has(r.coa) ? "coa" : "decision";
+  // the WIP master says what comes next: it places the lot
+  const step = String(r.wipStep || "").toLowerCase();
+  if (step) {
+    if (/fail|echec|non conform|reprocess/.test(step)) return "wip";
+    if (/packag|condition/.test(step)) return has(r.packStart) ? "pack" : "bulk";
+    return "mfg";
+  }
   if (has(r.packStart)) return "pack";
   if (has(r.mfgEnd) || /packag/i.test(r.wipStep || "")) return "bulk";
   if (has(r.fabStart) || has(r.wipStep)) return "mfg";
@@ -417,7 +424,16 @@ export function t2Computed(state) {
   const capaOf = new Map();
   [...(state.capa || []), ...(state.acapa || [])].forEach((r) => { if (r.link) capaOf.set(r.link, [...(capaOf.get(r.link) || []), r.id]); });
   out.find.forEach((c, i) => { c.capa = capaOf.get(state.find[i].id) || null; });
-  out.rel = state.rel.map((r) => t2Release(r, s));
+  // a released batch with a rejection report (or a rejected quantity) was released in part
+  const rejOf = new Map();
+  for (const j of state.rej || []) if (has(j.batch)) for (const b of String(j.batch).split(/[,;/ ]+/).filter(Boolean)) rejOf.set(b, [...(rejOf.get(b) || []), j.id]);
+  out.rel = state.rel.map((r) => {
+    const c = t2Release(r, s);
+    const refs = [...new Set([...(has(r.rejRef) ? [r.rejRef] : []), ...(rejOf.get(String(r.id)) || [])])];
+    c.partial = r.status === "Released" && (has(r.rejQty) || refs.length > 0);
+    c.rejRefs = refs;
+    return c;
+  });
   out.trn = state.trn.map((r) => t2Training(r, s));
   const t1 = tier1Source();
   out.load = state.load.map((r) => t2Load(r, state, t1));

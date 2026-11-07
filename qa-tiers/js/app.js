@@ -194,7 +194,21 @@ function fromHash() {
   return { path: raw.replace(/-/g, "/") || "home", query: {} };
 }
 
+/** The pages visited, for the Back button (path and query, which the address bar does not keep). */
+const navStack = [];
+let skipPop = false;
+function goBack() {
+  const prev = navStack.pop();
+  if (!prev) { navigate("#/home"); return; }
+  skipPop = true;
+  try { history.back(); } catch { skipPop = false; }
+  setTimeout(() => { skipPop = false; }, 400);
+  current = prev; route({ back: true });
+}
+
 function navigate(href) {
+  if (current?.path) navStack.push({ path: current.path, query: { ...current.query } });
+  if (navStack.length > 50) navStack.shift();
   const [p, qs = ""] = href.replace(/^#\/?/, "").split("?");
   current = { path: p || "home", query: Object.fromEntries(new URLSearchParams(qs)) };
   const name = `#${current.path.replace(/\//g, "-")}`;
@@ -206,7 +220,7 @@ function parse() {
   return { parts: current.path.split("/"), query: current.query };
 }
 
-function route({ soft = false } = {}) {
+function route({ soft = false, back = false } = {}) {
   const y = scrollY;
   if (!soft) {
     closeDrawer();
@@ -215,6 +229,13 @@ function route({ soft = false } = {}) {
   }
   const main = $("#main");
   main.innerHTML = "";
+  if (navStack.length || current.path !== "home") {
+    const bar = document.createElement("div");
+    bar.className = "backbar";
+    bar.innerHTML = `<button type="button" class="back-btn" data-back title="Return to the previous page">‹ Back</button>`;
+    bar.querySelector("[data-back]").onclick = goBack;
+    main.append(bar);
+  }
   const view = document.createElement("div");
   main.append(view);
   const { parts } = parse();
@@ -432,7 +453,9 @@ renderNav();
 initTooltips();
 current = fromHash();
 const onHash = () => {
+  if (skipPop) { skipPop = false; return; }
   const next = fromHash();
+  if (navStack.length && navStack[navStack.length - 1].path === next.path) navStack.pop(); // the browser's own Back
   if (next.path === current.path && !Object.keys(next.query).length) return;
   current = next; route();
 };
