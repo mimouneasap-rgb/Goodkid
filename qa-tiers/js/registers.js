@@ -234,7 +234,7 @@ export function wireInputs(root, tier, fields, onChange) {
   if (refFields.length) { syncRefs(); root.addEventListener("change", syncRefs); }
   // people pickers: the hidden value, the count, and the number field it fills
   root.querySelectorAll("[data-people]").forEach((pp) => {
-    const team = tier === "t2" ? E.planGroup(store.t2) : [];
+    const team = () => (tier === "t2" ? E.planGroupOn(store.t2, root.querySelector('[name="date"]')?.value || "") : []);
     const sync = () => {
       const names = [...pp.querySelectorAll("input[type=checkbox]:checked")].map((c) => c.value);
       pp.querySelector("input[type=hidden]").value = names.join(", ");
@@ -244,7 +244,7 @@ export function wireInputs(root, tier, fields, onChange) {
       if (target) target.value = names.length || "";
     };
     pp.addEventListener("change", (e) => { if (e.target.matches("input[type=checkbox]")) sync(); });
-    if (pp.querySelector("[data-ppall]")) pp.querySelector("[data-ppall]").onclick = () => { pp.querySelectorAll("input[type=checkbox]").forEach((c) => { if (team.includes(c.value)) c.checked = true; }); sync(); };
+    if (pp.querySelector("[data-ppall]")) pp.querySelector("[data-ppall]").onclick = () => { pp.querySelectorAll("input[type=checkbox]").forEach((c) => { if (team().includes(c.value)) c.checked = true; }); sync(); };
     pp.querySelector("[data-ppnone]").onclick = () => { pp.querySelectorAll("input[type=checkbox]").forEach((c) => { c.checked = false; }); sync(); };
     const add = () => {
       const inp = pp.querySelector("[data-ppadd]"), n = inp.value.trim();
@@ -370,6 +370,16 @@ export function openEditor({ tier, reg, index = null, prefill = null, onSaved, p
       $(`[data-f="id"]`, el).classList.add("err");
       toast(`${draft.id} already exists — one record, one row`);
       return;
+    }
+    // a figure typed by hand is kept (not recalculated)
+    for (const f of sc.fields.filter((x) => x.manualFlag)) {
+      if (String(draft[f.key] ?? "") !== String(rec[f.key] ?? "")) draft[f.manualFlag] = true;
+      else if (rec[f.manualFlag]) draft[f.manualFlag] = rec[f.manualFlag];
+    }
+    // a figure typed by hand is kept (not recalculated)
+    for (const f of sc.fields.filter((x) => x.manualFlag)) {
+      if (String(draft[f.key] ?? "") !== String(rec[f.key] ?? "")) draft[f.manualFlag] = true;
+      else if (rec[f.manualFlag]) draft[f.manualFlag] = rec[f.manualFlag];
     }
     const i = store.upsert(tier, reg, index, draft, label(draft));
     close();

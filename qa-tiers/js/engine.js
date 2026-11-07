@@ -160,15 +160,36 @@ export const splitNames = (v) => String(v || "").split(",").map((x) => x.trim())
 export const TR_MODES = ["Trainer-led", "Read & understood", "Trainer-led + read & understood"];
 export const trnSelf = (r) => /read & understood/i.test(r.mode || "");
 export const trnLed = (r) => !r.mode || /trainer-led/i.test(r.mode);
-/** "To be trained" and "trained" of a training: on the annual plan, the mandatory group only. */
-export function trnFigures(r, group) {
-  if (trnCat(r) === "Planned" && trnQA(r) && group?.length && r.status !== "Cancelled") {
-    const names = namesIn(r);
-    return { planned: group.length, trained: names.length ? names.filter((n) => group.includes(n)).length : Math.min(num(r.trained), group.length) };
+/** A new hire is out of the annual plan until induction phase 2 is achieved (SOPGS0024):
+ * excused from the topics dated before that day. */
+export function inInduction(state, name, date) {
+  const m = (state.load || []).find((r) => r.member === name);
+  if (!m || m.newHire !== "Yes") return false;
+  return !has(m.ph2) || (has(date) && date < m.ph2);
+}
+/** The plan group on a date: the mandatory job titles, minus the new hires still in induction. */
+export const planGroupOn = (state, date) => planGroup(state).filter((n) => !inInduction(state, n, date));
+/** The people a plan topic must train: the names ticked on it, or the plan group on its date. */
+export function trnRequired(r, state) {
+  const named = splitNames(r.toTrain);
+  return named.length ? named : planGroupOn(state, r.date);
+}
+/** "To be trained" and "trained" of a training. On the annual plan: the people it must train
+ * (or a smaller number typed by hand), and those of them who attended. */
+export function trnFigures(r, state) {
+  if (trnCat(r) === "Planned" && trnQA(r) && r.status !== "Cancelled") {
+    const named = splitNames(r.toTrain);
+    const base = trnRequired(r, state);
+    if (base.length) {
+      const att = namesIn(r);
+      const planned = !named.length && r.plannedManual && num(r.planned) > 0 ? num(r.planned) : base.length;
+      const trained = att.length ? att.filter((n) => base.includes(n)).length : num(r.trained);
+      return { planned, trained: Math.min(trained, planned) };
+    }
   }
   return { planned: num(r.planned), trained: num(r.trained) };
 }
-/** Keep the stored figures of the plan topics on the mandatory group (boards saved before the rule). */
+/** Keep the stored figures of the plan topics on the people they must train. */
 export function normalizeTraining(state) {
   const group = planGroup(state);
   let n = 0;
@@ -176,7 +197,7 @@ export function normalizeTraining(state) {
     // delivery of the records saved before the field: led by whoever is named as trainer or provider
     if (!has(r.mode) && (has(r.trainer) || has(r.provider))) { r.mode = "Trainer-led"; n++; }
     if (!group.length || trnCat(r) !== "Planned" || !trnQA(r) || r.status === "Cancelled") continue;
-    const f = trnFigures(r, group);
+    const f = trnFigures(r, state);
     if (num(r.planned) !== f.planned || (namesIn(r).length && num(r.trained) !== f.trained)) {
       r.planned = f.planned;
       if (namesIn(r).length) r.trained = f.trained;
@@ -391,7 +412,7 @@ export function t2Kpis(state, comp = t2Computed(state)) {
     overdue("doc"),
     ratio(sum(comp.load, (c) => c.workload), loadAvail),
     overdue("apqr"),
-    (() => { const g = planGroup(state); return ratio(sum(trnRows, (r) => trnFigures(r, g).trained), sum(trnRows, (r) => trnFigures(r, g).planned)); })(),
+    ratio(sum(trnRows, (r) => trnFigures(r, state).trained), sum(trnRows, (r) => trnFigures(r, state).planned)),
   ];
   // a count over an empty register is "no data" until the first record is entered
   [["dev", 0], ["cc", 2], ["doc", 5], ["apqr", 7]].forEach(([reg, i]) => { if (!state[reg].length) actuals[i] = ""; });

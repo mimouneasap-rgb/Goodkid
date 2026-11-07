@@ -1082,3 +1082,23 @@ table.matrix th.mx-name .nm { white-space: normal; text-overflow: clip; }
 .mode-mix b { font: 700 14px var(--font-display); font-variant-numeric: tabular-nums; }
 .pp { white-space: nowrap; }
 .people-pick .pp-list { max-height: 220px; overflow-y: auto; }
+
+/* induction of new hires */
+.ind-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 520px), 1fr)); gap: 14px; margin-top: 14px; }
+.ind-card { padding: 16px 18px; display: grid; gap: 12px; border-top: 4px solid var(--n); }
+.ind-card.G { border-top-color: var(--g); } .ind-card.A { border-top-color: var(--a); } .ind-card.R { border-top-color: var(--r); } .ind-card.info { border-top-color: var(--accent); }
+.ind-card header { display: flex; gap: 12px; align-items: center; } .ind-card header > div { flex: 1; min-width: 0; }
+.ind-card h3 { font: 700 16px var(--font-display); font-stretch: 106%; }
+.ind-steps { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.ind-steps li { display: flex; gap: 8px; align-items: flex-start; padding: 8px; border-radius: 10px; background: var(--surface-2); font-size: 12.5px; line-height: 1.3; }
+.ind-steps li b { display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; flex: none; background: var(--line-strong); color: #fff; font-size: 11px; }
+.ind-steps li.on { background: var(--g-bg); } .ind-steps li.on b { background: var(--g); }
+.ind-steps small { display: block; color: var(--muted); font-size: 11.5px; margin-top: 2px; }
+.ind-facts { display: flex; gap: 16px; font-size: 13px; color: var(--ink-2); } .ind-facts b { font: 700 16px var(--font-display); }
+.ind-list { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--line); }
+.ind-list li { display: grid; grid-template-columns: 74px 120px minmax(0, 1fr); gap: 8px; padding: 6px 2px; border-bottom: 1px solid var(--line); font-size: 12.5px; cursor: pointer; }
+.ind-list li:hover { background: var(--accent-soft); } .ind-list li.muted { display: block; cursor: default; }
+.ind-note { margin: 0; font-size: 13px; color: var(--ink-2); background: var(--surface-2); padding: 8px 10px; border-radius: 8px; }
+.ind-card footer { display: flex; flex-wrap: wrap; gap: 6px; }
+.ind-tag { color: var(--a-ink); font-weight: 700; }
+.ind-list li { grid-template-columns: 78px 140px minmax(0, 1fr); }
