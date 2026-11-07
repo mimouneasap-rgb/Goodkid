@@ -40,7 +40,7 @@ export function monthlyReport(s, year) {
     const sum = (arr, f) => arr.reduce((a, x) => a + (+f(x) || 0), 0);
     return {
       ym, label: `${MON[k]} ${year}`, past,
-      P: plan.length, E: past ? plan.filter((x) => x.r.status === "Completed").length : null,
+      P: plan.length, E: past ? plan.filter((x) => E.trnDone(x.r)).length : null,
       toTrain: sum(plan, (x) => x.r.planned), trained: past ? sum(plan, (x) => x.r.trained) : null,
       qc: sum(un.filter((x) => x.bucket === "Quality Circle"), (x) => x.r.trained),
       sop: sum(un.filter((x) => x.bucket === "SOP Training"), (x) => x.r.trained),
@@ -106,7 +106,7 @@ export function renderTraining(root) {
             <figcaption>Annual plan<br><b>target ${esc(k.targetText)}</b></figcaption>
           </figure>
           <dl class="trn-hero-stats">
-            ${stat("Plan topics executed", `${due.filter((x) => x.r.status === "Completed").length}`, ` / ${due.length} due`)}
+            ${stat("Plan topics executed", `${due.filter((x) => E.trnDone(x.r)).length}`, ` / ${due.length} due`)}
             ${stat("Plan topics overdue", String(overdueTopics.length), "", overdueTopics.length ? "bad" : "good")}
             ${stat("Unplanned", String(unY.length), ` · ${sumT(unY)} trained`)}
             ${stat("External courses", String(extAll.length), ` · ${sumT(extAll)} seats`)}
@@ -189,7 +189,7 @@ function planView(body, s, Y, rows) {
   const plan = rows.filter((x) => x.cat === "Planned" && String(x.r.date || "").startsWith(`${Y}`)).sort((a, b) => String(a.r.date).localeCompare(String(b.r.date)) || a.i - b.i);
   const months = MON.map((m, k) => ({ ym: `${Y}-${String(k + 1).padStart(2, "0")}`, label: `${fmtMonth(`${Y}-${String(k + 1).padStart(2, "0")}-01`)}` }))
     .map((m) => ({ ...m, items: plan.filter((x) => x.r.date.startsWith(m.ym)) })).filter((m) => m.items.length);
-  const state = (x) => (x.r.status === "Cancelled" ? ["Cancelled", "N"] : x.r.status === "Completed" ? ["Completed", "G"] : x.c.live === "Overdue" ? ["Overdue", "R"] : x.r.status === "Rescheduled" || x.r.resched === "Yes" ? ["Rescheduled", "A"] : x.r.status === "In Progress" ? ["In progress", "A"] : ["Planned", "info"]);
+  const state = (x) => (x.r.status === "Cancelled" ? ["Cancelled", "N"] : E.trnDone(x.r) ? ["Completed", "G"] : x.c.live === "Overdue" ? ["Overdue", "R"] : x.r.status === "Rescheduled" || x.r.resched === "Yes" ? ["Rescheduled", "A"] : x.r.status === "In Progress" ? ["In progress", "A"] : ["Planned", "info"]);
   body.innerHTML = `
     <div class="plan-strip card card-pad">${MON.map((m, k) => {
       const ym = `${Y}-${String(k + 1).padStart(2, "0")}`, items = plan.filter((x) => x.r.date.startsWith(ym));
@@ -198,7 +198,7 @@ function planView(body, s, Y, rows) {
     <div class="legend" style="margin-top:10px"><span><i class="bg-G"></i>Completed</span><span><i class="bg-A"></i>In progress / rescheduled</span><span><i class="bg-R"></i>Overdue</span><span><i style="background:var(--accent)"></i>Planned</span><span><i class="bg-N"></i>Cancelled</span></div>
     <div class="row" style="margin:14px 0 10px"><span class="muted" style="font-size:13px">${plan.length} topics · click a topic to record attendance, a new date (rescheduled) or the completion date.</span><span class="spacer"></span>
       <a class="btn sm" href="#/t2/reg/trn?new=1&prefill=${encodeURIComponent(JSON.stringify({ cat: "Planned", type: "SOP (annual plan)", dept: "QA", status: "Planned", resched: "No", planned: (s.load || []).length - 1 }))}">＋ Add a plan topic</a></div>
-    <div class="stack">${months.map((m) => `<div class="card plan-month"><div class="pm-head"><b>${esc(m.label)}</b><span class="muted">${m.items.length} topic${m.items.length > 1 ? "s" : ""} · ${m.items.filter((x) => x.r.status === "Completed").length} completed</span></div>
+    <div class="stack">${months.map((m) => `<div class="card plan-month"><div class="pm-head"><b>${esc(m.label)}</b><span class="muted">${m.items.length} topic${m.items.length > 1 ? "s" : ""} · ${m.items.filter((x) => E.trnDone(x.r)).length} completed</span></div>
       ${m.items.map((x) => { const [lbl, rag] = state(x); const p = +x.r.planned || 0, t = +x.r.trained || 0; return `<button type="button" class="pm-row" data-open="${x.i}">
         <span class="mono">${esc(x.r.sop || "—")}</span>
         <span class="pm-title">${esc(x.r.topic)}<small>${esc(x.r.type || "")}${x.r.trainer ? ` · ${esc(x.r.trainer)}` : ""}${x.r.done ? ` · held ${fmtDate(x.r.done)}` : ""}</small></span>

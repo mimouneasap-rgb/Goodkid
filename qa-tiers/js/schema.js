@@ -175,7 +175,7 @@ export const T2_REGISTERS = {
       f("audience", "Attendee group", "text", { help: "Job descriptions of the attendee group (from the plan)" }),
       f("date", "Planned date", "date", { help: "Annual plan: end of the planned month · unplanned: training date" }),
       f("resched", "Rescheduled", "list", { list: "YesNo", help: "Annual plan only — tick it when the topic moves to a later month (and change the planned date)" }),
-      f("done", "Completion date", "date", { help: "Date of the session (the last one when held in several sessions)" }),
+      f("done", "Completion date", "date", { setsStatus: "Completed", help: "Date of the session (the last one when held in several sessions) — entering it sets the status to Completed" }),
       f("trainer", "Trainer", "list", { list: "People" }),
       f("provider", "External provider", "text", { help: "External training only" }),
       f("year", "Year", "int", { help: "External training without an exact date" }),

@@ -257,6 +257,18 @@ export function wireInputs(root, tier, fields, onChange) {
     pp.querySelector("[data-ppaddbtn]").onclick = add;
     pp.querySelector("[data-ppadd]").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); add(); } });
   });
+  // a date that closes the record (e.g. a training's completion date) sets the status with it
+  for (const f of (fields || []).filter((x) => x.setsStatus)) {
+    root.addEventListener("change", (e) => {
+      if (e.target.name !== f.key || !e.target.value) return;
+      const st = root.querySelector('[name="status"]');
+      if (st && !["Completed", "Cancelled", f.setsStatus].includes(st.value)) {
+        st.value = f.setsStatus;
+        st.dispatchEvent(new Event("change", { bubbles: true }));
+        st.classList.add("flash"); setTimeout(() => st.classList.remove("flash"), 1200);
+      }
+    });
+  }
   root.addEventListener("click", (e) => {
     const b = e.target.closest("[data-today]");
     if (!b) return;

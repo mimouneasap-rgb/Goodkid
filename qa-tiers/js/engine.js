@@ -144,12 +144,17 @@ export function trnBucket(r) {
   return r.type === "Revised SOP" || r.type === "New SOP" ? "SOP Training" : "Others";
 }
 
+/** A training is done when its status says so, or when a completion date has been entered (not cancelled). */
+export const trnDone = (r) => r.status === "Completed" || (r.status !== "Cancelled" && has(r.done));
+
 export function t2Training(r, setup) {
   const completion = num(r.planned) > 0 ? Math.min(1, num(r.trained) / num(r.planned)) : "";
-  const closed = r.status === "Completed" || r.status === "Cancelled";
-  const live = !has(r.id) ? "" : !closed && has(r.date) && r.date < setup.statusDate ? "Overdue" : r.status || "";
+  const done = trnDone(r);
+  const closed = done || r.status === "Cancelled";
+  const live = !has(r.id) ? "" : done ? "Completed" : !closed && has(r.date) && r.date < setup.statusDate ? "Overdue" : r.status || "";
   let check = "OK";
   if (!has(r.status)) check = "Status missing";
+  else if (has(r.done) && r.status !== "Completed" && r.status !== "Cancelled") check = "Completion date entered — set the status to Completed";
   else if (has(r.trained) && has(r.planned) && +r.trained > +r.planned) check = "Trained exceeds planned";
   else if (r.status === "Completed" && !has(r.trained)) check = "Participants trained missing";
   return { completion, live, check, open: !closed };
@@ -239,7 +244,7 @@ export function workloadItems(state, member, t1 = null) {
       if (!member || r[m.who] !== member || (m.skip || []).includes(r.status)) continue;
       const start = m.start ? m.start(r) : r.opened;
       if (!has(start)) continue;
-      const done = doneList.includes(r.status);
+      const done = doneList.includes(r.status) || (reg === "trn" && trnDone(r));
       const due = m.due ? m.due(r, s) : r.due;
       const closeDate = m.end ? m.end(r) : r.closed;
       const endIso = done ? closeDate || due || start : [due || start, now].sort().pop();
@@ -423,7 +428,7 @@ export function t2Summary(state, comp = t2Computed(state)) {
     apqr: { total: state.apqr.length, new: count(state.apqr, (r) => inMonth(r.opened)), lines: [["Not started", st("apqr", "Not Started")], ["In progress", st("apqr", "In Progress", "In Review")], ["Closed", st("apqr", "Closed")], ["Completion", avg(comp.apqr.map((c) => c.effPct))]] },
     trn: (() => {
       const due = state.trn.filter((r) => trnCat(r) === "Planned" && trnQA(r) && has(r.date) && r.date <= s.statusDate && r.status !== "Cancelled");
-      return { total: state.trn.length, new: count(state.trn, (r) => inMonth(r.done || r.date)), lines: [["Plan topics done", `${count(due, (r) => r.status === "Completed")} / ${due.length}`], ["Unplanned", count(state.trn, (r) => trnCat(r) === "Unplanned")], ["External", count(state.trn, (r) => trnCat(r) === "External")], ["Overdue", od("trn")]] };
+      return { total: state.trn.length, new: count(state.trn, (r) => inMonth(r.done || r.date)), lines: [["Plan topics done", `${count(due, trnDone)} / ${due.length}`], ["Unplanned", count(state.trn, (r) => trnCat(r) === "Unplanned")], ["External", count(state.trn, (r) => trnCat(r) === "External")], ["Overdue", od("trn")]] };
     })(),
     esc: { total: state.esc.length, new: count(state.esc, (r) => inMonth(r.opened)), lines: [["Open", st("esc", "Open")], ["In progress", st("esc", "In Progress")], ["Resolved", st("esc", "Resolved")], ["Overdue", od("esc")]] },
   };
