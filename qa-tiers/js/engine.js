@@ -119,17 +119,51 @@ export function t2Row(reg, r, statusDate) {
   return out;
 }
 
+/** Where a batch stands, from its steps — in pipeline order. [key, label, colour, phase] */
+export const BATCH_STAGES = [
+  ["planned", "Not started", "N", "Production"],
+  ["mfg", "In manufacturing", "s1", "Production"],
+  ["bulk", "Bulk — awaiting packaging", "s7", "Production"],
+  ["pack", "In packaging", "s5", "Production"],
+  ["wip", "WIP — waiting decision", "A", "Quality decision"],
+  ["hold", "On hold", "R", "Quality decision"],
+  ["rejecting", "Rejection in progress", "R", "Quality decision"],
+  ["docs", "Waiting BMR / BPR at QA", "s2", "Release"],
+  ["coa", "Waiting CoA (QC)", "s6", "Release"],
+  ["decision", "Waiting QA release decision", "s3", "Release"],
+  ["released", "Released", "G", "Done"],
+  ["rejected", "Rejected", "N", "Done"],
+  ["registration", "Registration lot — not for release", "N", "Done"],
+];
+export const BATCH_STAGE_LABEL = Object.fromEntries(BATCH_STAGES.map(([k, l]) => [k, l]));
+export function batchStage(r) {
+  if (r.status === "Released") return "released";
+  if (r.status === "Rejected") return "rejected";
+  if (r.status === "Not for release") return "registration";
+  const w = String(r.wipStatus || "").toLowerCase();
+  if (/reject/.test(w)) return "rejecting";
+  if (/non conform|capa|waiting/.test(w)) return "wip";
+  if (r.status === "On Hold") return "hold";
+  if (has(r.mfg)) return !has(r.bmr) || !has(r.bpr) ? "docs" : !has(r.coa) ? "coa" : "decision";
+  if (has(r.packStart)) return "pack";
+  if (has(r.mfgEnd) || /packag/i.test(r.wipStep || "")) return "bulk";
+  if (has(r.fabStart) || has(r.wipStep)) return "mfg";
+  return "planned";
+}
+
 export function t2Release(r, setup) {
   const target = has(r.mfg) ? addDays(r.mfg, num(setup.brTarget)) : "";
   const lead = has(r.mfg) ? diffDays(has(r.decision) ? r.decision : setup.statusDate, r.mfg) : "";
-  const final = r.status === "Released" || r.status === "Rejected";
+  const final = r.status === "Released" || r.status === "Rejected" || r.status === "Not for release";
   const live = !has(r.id) ? "" : final ? r.status : target && setup.statusDate > target ? "Overdue" : r.status || "";
   const late = r.status === "Released" && has(r.decision) && target ? (r.decision > target ? "Yes" : "No") : "";
   let check = "OK";
   if (!has(r.status)) check = "Status missing";
-  else if (final && !has(r.decision)) check = "Decision date missing";
+  else if (final && r.status !== "Not for release" && !has(r.decision)) check = "Decision date missing";
   else if (has(r.decision) && !final) check = "Date entered, status still open";
-  return { target, lead, live, late, check, open: !final, toDue: !final && target ? diffDays(target, setup.statusDate) : "" };
+  const stage = batchStage(r);
+  const tfOver = !final && has(r.tf) && r.tf < setup.statusDate;
+  return { target, lead, live, late, check, open: !final, toDue: !final && target ? diffDays(target, setup.statusDate) : "", stage, tfOver };
 }
 
 /** Category of a training: Planned (annual plan) · Unplanned · External. */

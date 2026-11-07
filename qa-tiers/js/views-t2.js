@@ -163,6 +163,8 @@ export function renderBoard(root, { filters = null } = {}) {
     </div>
   </div>
 
+  ${batchPipeline(s, comp)}
+
   ${newPanel(s)}
 
   <div class="grid split-wide" style="margin-top:16px">
@@ -225,6 +227,37 @@ export function renderBoard(root, { filters = null } = {}) {
     const b = e.target.closest("[data-day]");
     if (b) dayEditor(b.dataset.day, () => renderBoard(root));
   });
+}
+
+/** Dashboard panel: every batch where it stands — production, quality decision, release, done. */
+function batchPipeline(s, comp) {
+  const rows = (s.rel || []).map((r, i) => ({ r, c: comp.rel[i] })).filter((x) => x.r.id);
+  if (!rows.length) return "";
+  const mS = E.monthStart(s.setup.month), mE = E.monthEnd(s.setup.month);
+  const by = (k) => rows.filter((x) => x.c.stage === k);
+  const prod = (x) => String(x.r.product || "").replace(/\s*\(.*$/, "").replace(/\s+(F\/C|FC)?\s*Tablets?|\s+Capsules?/i, "").trim();
+  const chip = (x) => {
+    const warn = x.c.tfOver ? "WIP time frame exceeded" : x.c.live === "Overdue" ? "Release lead time exceeded" : "";
+    const sub = x.c.stage === "mfg" || x.c.stage === "wip" ? x.r.wipStep : x.c.stage === "released" ? (x.r.decision ? fmtDate(x.r.decision) : "") : x.r.lotType === "Registration" ? "registration" : "";
+    return `<a class="b-chip ${warn ? "warn" : ""}" href="#/t2/reg/rel?id=${encodeURIComponent(x.r.id)}" title="${esc(`${x.r.id} · ${x.r.product || ""}${x.r.wipStatus ? `\nWIP: ${x.r.wipStatus}` : ""}${x.r.wipResp ? ` · ${x.r.wipResp}` : ""}${x.r.tf ? `\nTime frame ${fmtDate(x.r.tf)}` : ""}${warn ? `\n⚠ ${warn}` : ""}`)}"><b>${esc(x.r.id)}</b><span>${esc(prod(x))}${sub ? ` · ${esc(sub)}` : ""}</span></a>`;
+  };
+  const relMonth = rows.filter((x) => x.c.stage === "released" && has(x.r.decision) && x.r.decision >= mS && x.r.decision <= mE);
+  const pending = rows.filter((x) => !["released", "rejected", "registration"].includes(x.c.stage));
+  const warns = pending.filter((x) => x.c.tfOver || x.c.live === "Overdue").length;
+  const phases = ["Production", "Quality decision", "Release"];
+  const tile = ([k, label, color]) => {
+    const list = by(k);
+    if (!list.length && ["planned", "hold"].includes(k)) return "";
+    return `<div class="b-stage c-${color} ${list.length ? "" : "empty"}"><a class="b-head" href="#/t2/reg/rel?stage=${k}"><b>${list.length}</b><span>${esc(label)}</span></a>
+      <div class="b-chips">${list.slice(0, 6).map(chip).join("")}${list.length > 6 ? `<a class="b-more" href="#/t2/reg/rel?stage=${k}">+${list.length - 6} more</a>` : ""}</div></div>`;
+  };
+  return `<section class="card card-pad b-panel" style="margin-top:16px">
+    <div class="card-head"><h2>Batch pipeline <span class="sub">every lot of the release register, from its steps (lot tracker · WIP master · batch record) — as of ${fmtDate(s.setup.statusDate)}</span></h2>
+      <div class="nw-total"><span><b>${pending.length}</b> pending</span><span><b>${warns}</b> past a time frame</span><span><b>${relMonth.length}</b> released in ${esc(fmtMonth(s.setup.month).split(" ")[0])}</span></div></div>
+    <div class="b-flow">${phases.map((ph) => `<div class="b-phase"><div class="b-ph-t">${esc(ph)}</div><div class="b-ph-s">${E.BATCH_STAGES.filter((x) => x[3] === ph).map(tile).join("")}</div></div>`).join('<span class="b-arrow" aria-hidden="true">›</span>')}</div>
+    <div class="b-done">${[["released", `Released · ${by("released").length}`, "G"], ["rejected", `Rejected · ${by("rejected").length}`, "N"], ["registration", `Registration lots, not for release · ${by("registration").length}`, "N"]].map(([k, l, c]) => `<a class="b-done-i c-${c}" href="#/t2/reg/rel?stage=${k}">${esc(l)}</a>`).join("")}
+      <span class="muted">⚠ red outline = WIP time frame or release lead time exceeded · a lot without a CoA date waits for QC · click a stage to open the register on it</span></div>
+  </section>`;
 }
 
 /** Dashboard panel: what was raised today and this month, register by register. */

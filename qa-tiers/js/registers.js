@@ -31,6 +31,7 @@ const FX = {
     { key: "check", label: "Data Check", cell: (c) => checkCell(c.check) },
   ],
   rel: [
+    { key: "stage", label: "Stage", cell: (c) => `<span class="stage-pill st-${c.stage}">${esc(E.BATCH_STAGE_LABEL[c.stage] || "")}</span>${c.tfOver ? ' <b class="tf-over" title="WIP time frame exceeded">TF</b>' : ""}` },
     { key: "target", label: "Target Release", cell: (c) => fmtDate(c.target) },
     { key: "lead", label: "Lead Time (d)", num: true, cell: (c) => c.lead },
     { key: "live", label: "Live Status", cell: (c) => pill(c.live) },
@@ -522,6 +523,7 @@ export function renderRegister(root, { tier, reg, query = {} }) {
   vs.sel ??= new Set();
   if (query.flag) vs.flagged = true;
   if (query.quick != null) vs.quick = query.quick; // e.g. from the dashboard's "new today" panel
+  if (query.stage != null) vs.stage = query.stage; // from the dashboard's batch pipeline
   const fx = fxSpec(tier, reg);
   const fieldsByKey = Object.fromEntries(sc.fields.map((f) => [f.key, f]));
   const dateKey = sc.dateKey || (fieldsByKey.opened ? "opened" : fieldsByKey.date ? "date" : fieldsByKey.mfg ? "mfg" : null);
@@ -559,6 +561,7 @@ export function renderRegister(root, { tier, reg, query = {} }) {
     if (vs.quick === "open") list = list.filter((x) => x.c.open);
     if (vs.quick === "overdue") list = list.filter((x) => x.c.live === "Overdue");
     if (vs.quick === "today" && dateKey) list = list.filter((x) => x.r[dateKey] === ref);
+    if (vs.stage && reg === "rel") list = list.filter((x) => x.c.stage === vs.stage);
     if (vs.quick === "month" && dateKey) list = list.filter((x) => has(x.r[dateKey]) && x.r[dateKey] >= mS && x.r[dateKey] <= mE);
     if (vs.quick === "soon") list = list.filter((x) => x.c.open && has(x.r.due) && E.diffDays(x.r.due, ref) >= 0 && E.diffDays(x.r.due, ref) <= 7);
     const moreN = Object.values(vs.by).filter(Boolean).length + (vs.from ? 1 : 0) + (vs.to ? 1 : 0);
@@ -632,7 +635,7 @@ export function renderRegister(root, { tier, reg, query = {} }) {
         ${officers.length ? `<select data-officer aria-label="Filter by officer"><option value="">All officers</option>${officers.map((o) => `<option ${o === vs.officer ? "selected" : ""}>${esc(o)}</option>`).join("")}</select>` : ""}
         <label class="row" style="gap:6px;font-size:13px"><input type="checkbox" data-flagged ${vs.flagged ? "checked" : ""}> Flagged only</label>
         ${reg === "load" ? "" : `<div class="seg-ctl" role="group" aria-label="Quick filter">${quick.map(([v, l]) => `<button type="button" data-quick="${v}" aria-pressed="${vs.quick === v}">${l}</button>`).join("")}</div>`}
-        <span class="spacer"></span><span class="muted" style="font-size:12.5px">${list.length} of ${total} shown · ${vs.view === "charts" ? "click a bar to filter" : "click a row to edit · ƒx columns are automatic"}</span>
+        ${vs.stage && reg === "rel" ? `<button type="button" class="chip-btn on" data-clearstage title="Show every stage">Stage: ${esc(E.BATCH_STAGE_LABEL[vs.stage] || vs.stage)} ✕</button>` : ""}<span class="spacer"></span><span class="muted" style="font-size:12.5px">${list.length} of ${total} shown · ${vs.view === "charts" ? "click a bar to filter" : "click a row to edit · ƒx columns are automatic"}</span>
       </div>
       ${listFields.length || dateKey ? `<details class="fbar card" data-moref ${moreN ? "open" : ""} style="margin-bottom:12px"><summary><span class="fbar-t">⚲ More filters</span>${moreN ? `<span class="badge">${moreN}</span><span class="spacer"></span><button class="btn sm ghost" type="button" data-moreclear>Clear</button>` : `<span class="muted" style="font-size:12.5px">every drop-down field and the date range</span>`}</summary>
         <div class="fgrid">
@@ -652,6 +655,7 @@ export function renderRegister(root, { tier, reg, query = {} }) {
     $("[data-officer]", root)?.addEventListener("change", (e) => { vs.officer = e.target.value; draw(); });
     $("[data-flagged]", root).onchange = (e) => { vs.flagged = e.target.checked; draw(); };
     $$("[data-quick]", root).forEach((b) => b.onclick = () => { vs.quick = b.dataset.quick; draw(); });
+    $("[data-clearstage]", root)?.addEventListener("click", () => { vs.stage = ""; draw(); });
     $("[data-moref]", root)?.addEventListener("change", (e) => {
       const t = e.target;
       if (t.dataset.by) vs.by[t.dataset.by] = t.value;

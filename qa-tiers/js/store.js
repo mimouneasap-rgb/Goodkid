@@ -56,6 +56,10 @@ function seedLists(tier, s) {
     s.lists.TrStatus = uniq(["Planned", "Rescheduled", "In Progress", "Completed", "Cancelled", ...(s.lists.TrStatus || [])]);
     s.lists.TrAudience ??= ["QA", "Other departments"];
     s.lists.TrPlanRoles ??= [...PLAN_ROLES];
+    s.lists.BRStatus = uniq([...(s.lists.BRStatus || ["Waiting", "Under Review", "On Hold", "Released", "Rejected"]), "Not for release"]);
+    s.lists.LotType ??= ["Commercial", "Registration"];
+    s.lists.WipStatus ??= ["Conform", "Non conform", "Under CAPA — waiting decision", "Under rejection"];
+    s.lists.WipSteps ??= ["Dispensing", "Granulation", "Blending", "Compression", "Coating", "Encapsulation", "Packaging"];
     s.lists.TrMode ??= ["Trainer-led", "Read & understood", "Trainer-led + read & understood"];
     normalizeTraining(s);
     if (s.kpis?.[8] && /sessions due to date/.test(s.kpis[8].def || "")) s.kpis[8] = { ...s.kpis[8], def: "Annual plan: employees trained ÷ to be trained (topics due to date)" };
@@ -163,6 +167,16 @@ function fillFromSite(tier, s) {
   const regs = Object.keys(site).filter((k) => Array.isArray(site[k]) && Array.isArray(s[k]) && site[k].some((r) => r && typeof r === "object" && idOf(r) != null));
   const capaIds = new Set([...(s.capa || []), ...(s.acapa || [])].map(idOf));
   let n = 0;
+  // fields the site data gained since the board was loaded (batch steps): filled where empty, never overwritten
+  const ADD = { rel: ["lotType", "fabStart", "mfgEnd", "packStart", "mfg", "bmr", "bpr", "wipStep", "wipStatus", "wipResp", "tf", "qty"] };
+  for (const [reg, keys] of Object.entries(ADD)) {
+    const byId = new Map((site[reg] || []).map((r) => [idOf(r), r]));
+    for (const r of s[reg] || []) {
+      const src = byId.get(idOf(r));
+      if (!src) continue;
+      for (const k of keys) if ((r[k] == null || r[k] === "") && src[k] != null && src[k] !== "" && !(s.removed || []).includes(`${reg}/${idOf(r)}/${k}`)) { r[k] = src[k]; n++; }
+    }
+  }
   for (const reg of regs) {
     const have = reg === "capa" || reg === "acapa" ? capaIds : new Set(s[reg].map(idOf));
     let o = s[reg].length ? Math.max(...s[reg].map((r) => r._o ?? 0)) + 1 : 0;
