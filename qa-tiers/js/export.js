@@ -7,6 +7,7 @@
 
 import { store } from "./store.js";
 import { toast, today, esc, toCSV } from "./ui.js";
+import { MAIN_TIER, EDITION } from "./edition.js";
 
 /** Save a Blob as a file: the Artifact `downloads` capability, else a browser download. */
 export async function saveFile(filename, blob) {
@@ -179,9 +180,9 @@ ${footer ? `<text x="0" y="${h + top + 16}" style="font:10px ${font};fill:${mute
 export const slug = (s) => String(s || "chart").toLowerCase().normalize("NFKD").replace(/[^\w]+/g, "-").replace(/^-|-$/g, "").slice(0, 60);
 
 export function exportFooter(extra = "") {
-  const s = store.t2?.setup || {};
+  const s = store[MAIN_TIER]?.setup || {};
   const view = store.viewing ? ` · ${store.viewing.label}` : "";
-  return `QA Tier Boards · ${s.site || ""} · data as of ${s.statusDate || today()}${view}${extra ? ` · ${extra}` : ""} · exported ${today()}`;
+  return `${EDITION.name} · ${s.site || ""} · data as of ${s.statusDate || s.selDate || today()}${view}${extra ? ` · ${extra}` : ""} · exported ${today()}`;
 }
 
 /** PNG options, remembered per viewer. */

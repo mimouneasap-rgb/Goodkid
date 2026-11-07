@@ -300,6 +300,28 @@ export const T2_REGISTERS = {
     table: ["id", "audit", "desc", "cls", "owner", "status", "due"],
     sortDesc: true,
   },
+  t1e: {
+    no: "10·A", title: "Escalations from Tier 1", icon: "⇧", short: "From Tier 1",
+    lead: "Every problem the 08:30 huddle could not solve and handed to the 10:30 stand-up: what, which SQDCP letter, who raised it, who owns it now at Tier 2 and by when.",
+    source: "The Tier 1 huddle (escalated actions, red letters)", who: "Tier 1 huddle owner → Tier 2 owner", when: "Same day, before 10:30",
+    lifecycle: ["Open", "In Progress", "Resolved"], kpi: null, idHint: "T1E-2611-01",
+    fields: [
+      f("id", "Escalation No.", "text", { req: true, help: "e.g. T1E-2611-01, or the Tier 1 action number" }),
+      f("opened", "Escalated On", "date", { req: true, help: "Day of the huddle" }),
+      f("pillar", "SQDCP Letter", "list", { list: "Pillars", help: "S Safety · Q Quality · D Delivery · C Compliance · P People" }),
+      f("raisedBy", "Raised by (Tier 1)", "list", { list: "People", help: "Officer or huddle owner who escalated it" }),
+      f("area", "Area", "list", { list: "Areas" }),
+      f("desc", "Problem", "long", { req: true, help: "Fact · location · evidence" }),
+      f("support", "Support needed from Tier 2", "long"),
+      f("owner", "Tier 2 Owner", "list", { list: "People", req: true }),
+      f("due", "Due Date", "date"),
+      f("status", "Status", "list", { list: "T1EStatus", req: true, help: "Open · In Progress · Resolved · Escalated to Tier 3 (then log it in register 10)" }),
+      f("closed", "Resolved / Escalated On", "date", { help: "Only when Resolved or Escalated to Tier 3" }),
+      f("comments", "Tier 2 decision / feedback to Tier 1", "long", { help: "What the huddle is told the next morning" }),
+    ],
+    table: ["id", "opened", "pillar", "desc", "owner", "status", "due"],
+    sortDesc: true,
+  },
   rej: {
     no: "13", title: "Rejections", icon: "⊘", short: "Rejections",
     lead: "The reject index: every rejection report — raw material, packaging, bulk, validation or finished-product batch — from the initial rejection to the final signed closure.",
@@ -328,11 +350,14 @@ export const T2_REGISTERS = {
 };
 
 /** Order of the registers on the Tier 2 navigation. */
-export const T2_ORDER = ["dev", "capa", "cc", "act", "insp", "rel", "doc", "load", "tasks", "apqr", "trn", "esc", "aud", "find", "rej"];
+export const T2_ORDER = ["dev", "capa", "cc", "act", "insp", "rel", "doc", "load", "tasks", "apqr", "trn", "esc", "t1e", "aud", "find", "rej"];
 
 /** Tier 2 Daily Log (calendar) inputs. */
 export const T2_DAILY_FIELDS = [
   f("held", "Tier 2 Held", "list", { list: "YesNo", help: "Was the 10:30 stand-up held?" }),
+  f("t1held", "Tier 1 huddle held", "list", { list: "YesNo", tierOnly: true, help: "Reported by the Tier 1 owner at the start of the stand-up" }),
+  f("t1red", "Tier 1 red letters", "text", { tierOnly: true, help: "SQDCP letters red at the 08:30 huddle, e.g. ‘S, D’ — empty when all green" }),
+  f("t1safety", "Tier 1 safety & containment", "text", { tierOnly: true, help: "Exposure, spill, near-miss or containment event reported by the huddle" }),
   f("attendees", "Attendees", "int", { help: "Number of people at the board" }),
   f("ovDev", "Override · Deviation", "list", { list: "DayStatus", help: "Only if the team disagrees with the automatic status — write why in Remarks" }),
   f("ovCapa", "Override · CAPA", "list", { list: "DayStatus" }),
@@ -487,7 +512,7 @@ export const T1_ORDER = ["dl", "br", "fn", "ac", "hd", "tr"];
 export const LOCKED_LISTS = new Set([
   "DevClass", "DevStatus", "CAPAStatus", "CCCat", "CCStatus", "YesNoTBD", "YesNo", "Severity", "InspStatus",
   "BRStatus", "DocStatus", "APQRStatus", "TrStatus", "EscStatus", "DayStatus", "ManualKPI",
-  "Att", "FnStatus", "AcStatus", "FnTypes", "Weekdays", "TaskStatus", "ActStatus", "ActParent", "AudStatus", "FindStatus", "AudKind", "RejStatus",
+  "Att", "FnStatus", "AcStatus", "FnTypes", "Weekdays", "TaskStatus", "ActStatus", "ActParent", "AudStatus", "FindStatus", "AudKind", "RejStatus", "T1EStatus", "Pillars",
 ]);
 
 /** Human names for the drop-down lists. */
@@ -501,7 +526,7 @@ export const LIST_LABELS = {
   EscStatus: "Escalation status", DayStatus: "Day status", ManualKPI: "Manual KPI status",
   People: "People & functions", Departments: "Departments", Products: "Products", Tier3: "Tier 3 escalation contacts",
   FnTypes: "Finding types", ErrCats: "Error categories", Shifts: "Shifts", Att: "Attendance", RecType: "Record type",
-  FnStatus: "Finding status", ActStatus: "eQMS action status", ActParent: "eQMS action parent", Roles: "Positions / roles", TaskStatus: "Task status", AcSource: "Action source", Priority: "Priority", AcStatus: "Action status", Owners: "Action owners", AudKind: "Audit record", AudType: "Audit type", AudRisk: "Audit risk", AudStatus: "Audit status", FindType: "Finding type (audits)", FindStatus: "Audit finding status", RejStatus: "Rejection status", RejType: "Rejection type",
+  FnStatus: "Finding status", ActStatus: "eQMS action status", ActParent: "eQMS action parent", Roles: "Positions / roles", TaskStatus: "Task status", AcSource: "Action source", Priority: "Priority", AcStatus: "Action status", Owners: "Action owners", AudKind: "Audit record", AudType: "Audit type", AudRisk: "Audit risk", AudStatus: "Audit status", FindType: "Finding type (audits)", FindStatus: "Audit finding status", T1EStatus: "Tier 1 escalation status", Pillars: "SQDCP letters", RejStatus: "Rejection status", RejType: "Rejection type",
 };
 
 export const SKILL_LEVELS = [

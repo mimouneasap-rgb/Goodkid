@@ -14,6 +14,7 @@ import * as T2 from "./views-t2.js";
 import { renderPNG, saveFile, loadScript } from "./export.js";
 import { applyFilters, filterControls, readControls, wireControls, describe, activeCount } from "./filters.js";
 import { esc, fmtDate, fmtLong, fmtMonth, fmtKpi, pct, fmtNum, today, toast, fresh, $, $$ } from "./ui.js";
+import { EDITION, hasTier, ONE_TIER, MAIN_TIER } from "./edition.js";
 
 const DOCX_URL = "https://cdn.jsdelivr.net/npm/docx@8.5.0/build/index.umd.js";
 const loadDocx = () => loadScript(DOCX_URL, "docx");
@@ -26,13 +27,15 @@ export const TYPES = {
     label: "Daily report", short: "Daily", icon: "☀",
     lead: "One or two pages after the 10:30 stand-up: today's SQDCP letters and Tier 1 tiles, the Q-calendar of the day, the Top 3 priorities, what was raised today, what is due and what is overdue.",
     sections: [
-      ["t1day", "Tier 1 huddle — today", "SQDCP letters of the day, attendance, today's tiles, Tier 1 escalations"],
-      ["t2day", "Tier 2 stand-up — today", "Q-calendar status per process, meeting, Top 3 priorities, remarks"],
-      ["new", "Raised today", "Every record opened on the day, register by register"],
-      ["due", "Due today & tomorrow", "Open items that fall due in the next two days"],
-      ["overdue", "Overdue items", "Every overdue item, oldest first"],
-      ["esc", "Escalations", "Open Tier 1 → Tier 2 and Tier 2 → Tier 3 escalations"],
-      ["charts", "Pictures", "Q-calendar and SQDCP letters as images"],
+      ["t1day", "Tier 1 huddle — today", "SQDCP letters of the day, attendance, today's tiles, the huddle log", "t1"],
+      ["t1actions", "Open actions & findings", "Tier 1 actions due or overdue, findings raised today", "t1"],
+      ["t1esc", "Escalated to Tier 2", "Open huddle actions handed to the 10:30 stand-up", "t1"],
+      ["t2day", "Tier 2 stand-up — today", "Q-calendar status per process, meeting, Top 3 priorities, remarks", "t2"],
+      ["new", "Raised today", "Every record opened on the day, register by register", "t2"],
+      ["due", "Due today & tomorrow", "Open items that fall due in the next two days", "t2"],
+      ["overdue", "Overdue items", "Every overdue item, oldest first", "t2"],
+      ["esc", "Escalations", "Escalations received from Tier 1 and raised to Tier 3", "t2"],
+      ["charts", "Pictures", "The boards as images (Q-calendar · SQDCP letters)"],
       ["notes", "Commentary", "Key messages, decisions, support needed, focus"],
       ["signoff", "Sign-off", "Prepared / reviewed / approved"],
     ],
@@ -41,14 +44,18 @@ export const TYPES = {
     label: "Weekly review", short: "Weekly", icon: "▦",
     lead: "The week in numbers for the weekly QA review: raised vs closed against last week, KPIs, the Q-calendar and SQDCP week, overdue items, what is due next week, QA load and escalations.",
     sections: [
-      ["glance", "The week in numbers", "Raised and closed per register vs the previous week, open and overdue"],
-      ["kpis", "Tier 2 KPIs", "Actual vs target, RAG and trend"],
-      ["qweek", "Q-calendar & SQDCP week", "Day-by-day status of the week, both tiers"],
-      ["overdue", "Overdue items", "Every overdue item, oldest first"],
-      ["next7", "Due next 7 days", "Open items falling due in the coming week"],
-      ["load", "QA load", "Calculated utilisation and delayed tasks per person"],
-      ["esc", "Escalations", "Open escalations, both tiers"],
-      ["charts", "Charts", "Raised vs closed, ageing, overdue by person, workload by process"],
+      ["t1week", "SQDCP week & KPIs", "Letters of each day of the week, the 20 KPIs month to date", "t1"],
+      ["t1team", "Team performance", "Each officer, month to date", "t1"],
+      ["t1actions", "Open actions & findings", "Tier 1 actions due or overdue, findings raised this week", "t1"],
+      ["t1esc", "Escalated to Tier 2", "Open huddle actions handed to the 10:30 stand-up", "t1"],
+      ["glance", "The week in numbers", "Raised and closed per register vs the previous week, open and overdue", "t2"],
+      ["kpis", "Tier 2 KPIs", "Actual vs target, RAG and trend", "t2"],
+      ["qweek", "Q-calendar week", "Day-by-day status of the week", "t2"],
+      ["overdue", "Overdue items", "Every overdue item, oldest first", "t2"],
+      ["next7", "Due next 7 days", "Open items falling due in the coming week", "t2"],
+      ["load", "QA load", "Calculated utilisation and delayed tasks per person", "t2"],
+      ["esc", "Escalations", "Escalations received from Tier 1 and raised to Tier 3", "t2"],
+      ["charts", "Charts", "The boards as images (analytics charts · SQDCP letters)"],
       ["notes", "Commentary", "Key messages, decisions, support needed, focus"],
       ["signoff", "Sign-off", "Prepared / reviewed / approved"],
     ],
@@ -57,27 +64,42 @@ export const TYPES = {
     label: "Monthly management pack", short: "Monthly", icon: "▣",
     lead: "The full Tier 3 pack for the month: cover, document control, contents, executive summary, the month in numbers vs last month, KPIs, every chart, each register's open items, QA load, the Tier 1 board, data quality, commentary, sign-off and definitions.",
     sections: [
-      ["summary", "Executive summary", "Quality Pulse, board health, what is off target, overdue items, remarks"],
-      ["month", "The month in numbers", "Raised and closed per register vs the previous month"],
-      ["kpis", "Tier 2 KPIs", "Actual vs target, RAG and trend for the 9 KPIs"],
-      ["charts", "Charts", "Q-calendar, the analytics charts, SQDCP letters and daily activity as images"],
-      ["dev", "Quality events (deviations)", "Status mix and every open event"],
-      ["capa", "CAPA", "Status mix, overdue and open CAPA"],
-      ["cc", "Change control", "Status mix, overdue and open changes"],
-      ["act", "eQMS actions", "Overdue actions by owner and the overdue list"],
-      ["audits", "Audits & findings", "Audit programme status, findings by classification, open and overdue findings"],
-      ["rel", "Batch release", "Release clock and batches not yet released"],
-      ["rej", "Rejections", "Reject index: open, pending signature, quantity rejected by type"],
-      ["apqr", "APQR", "Programme status and overdue reviews"],
-      ["load", "QA load", "Capacity, calculated workload and delays per person"],
-      ["t1", "Tier 1 huddle board", "SQDCP day counts, 20 KPIs and team performance"],
+      ["t1summary", "Tier 1 summary", "Board health, red-letter days, KPIs off target, actions and findings", "t1"],
+      ["summary", "Executive summary", "Quality Pulse, what is off target, overdue items, remarks", "t2"],
+      ["month", "The month in numbers", "Raised and closed per register vs the previous month", "t2"],
+      ["kpis", "Tier 2 KPIs", "Actual vs target, RAG and trend for the 9 KPIs", "t2"],
+      ["charts", "Charts", "The boards as images (Q-calendar · analytics charts · SQDCP letters · daily activity)"],
+      ["dev", "Quality events (deviations)", "Status mix and every open event", "t2"],
+      ["capa", "CAPA", "Status mix, overdue and open CAPA", "t2"],
+      ["cc", "Change control", "Status mix, overdue and open changes", "t2"],
+      ["act", "eQMS actions", "Overdue actions by owner and the overdue list", "t2"],
+      ["audits", "Audits & findings", "Audit programme status, findings by classification, open and overdue findings", "t2"],
+      ["rel", "Batch release", "Release clock and batches not yet released", "t2"],
+      ["rej", "Rejections", "Reject index: open, pending signature, quantity rejected by type", "t2"],
+      ["apqr", "APQR", "Programme status and overdue reviews", "t2"],
+      ["load", "QA load", "Capacity, calculated workload and delays per person", "t2"],
+      ["t1", "Tier 1 huddle board", "SQDCP day counts, 20 KPIs and team performance", "t1"],
+      ["t1actions", "Open actions & findings", "Tier 1 actions open at month-end, findings raised in the month", "t1"],
       ["quality", "Data quality", "Data-check flags per register"],
       ["notes", "Commentary", "Key messages, decisions, support needed, next month's focus"],
       ["signoff", "Sign-off", "Prepared / reviewed / approved"],
-      ["appendix", "Definitions & sources", "KPI definitions, targets and data sources"],
+      ["appendix", "Definitions & sources", "Tier 2 KPI definitions, targets and data sources", "t2"],
+      ["t1defs", "Tier 1 KPI definitions", "The 20 KPIs: definition, target, amber limit", "t1"],
     ],
   },
 };
+
+/** The sections a report offers in this app (a single-tier app reports its own tier only). */
+export const sectionsOf = (T) => T.sections.filter((x) => !x[3] || hasTier(x[3]));
+const TIER_WORD = ONE_TIER === "t1" ? "Tier 1 " : ONE_TIER === "t2" ? "Tier 2 " : "";
+if (ONE_TIER === "t1") {
+  TYPES.daily.lead = "One page after the 08:30 huddle: today's SQDCP letters and tiles, the huddle log, open actions and findings, and what goes to Tier 2.";
+  TYPES.weekly.lead = "The week of the shop floor: the SQDCP letters of each day, the 20 KPIs, each officer's performance, open actions and findings, escalations to Tier 2.";
+  TYPES.monthly.label = "Monthly report";
+  TYPES.monthly.lead = "The Tier 1 month: board health, red-letter days per pillar, the 20 KPIs, team performance, actions and findings, data quality, commentary, sign-off and the KPI definitions.";
+} else if (ONE_TIER === "t2") {
+  TYPES.daily.lead = "One or two pages after the 10:30 stand-up: the Tier 1 headlines and escalations received, the Q-calendar of the day, the Top 3 priorities, what was raised today, what is due and what is overdue.";
+}
 
 const NOTES = [
   ["messages", "Key messages", "Count first, name the trend, say what changed since the last report."],
@@ -98,16 +120,17 @@ const descOf = (r) => r.desc || r.title || r.topic || r.product || "";
 /** The dates a report covers. */
 export function periodOf(type, p = {}) {
   const st = store.t2.setup;
+  const day = MAIN_TIER === "t2" ? st.statusDate : store.t1.setup.selDate; // a Tier 1 app reports on its board date
   if (type === "daily") {
-    const d = p.date || st.statusDate;
+    const d = p.date || day;
     return { type, from: d, to: d, ref: d, month: E.monthStart(d), prevFrom: E.addDays(d, -1), prevTo: E.addDays(d, -1), key: `daily:${d}`, label: fmtLong(d), file: d };
   }
   if (type === "weekly") {
-    const end = p.date || st.statusDate, from = E.addDays(end, -6);
+    const end = p.date || day, from = E.addDays(end, -6);
     return { type, from, to: end, ref: end, month: E.monthStart(end), prevFrom: E.addDays(from, -7), prevTo: E.addDays(from, -1), key: `weekly:${end}`, label: `${fmtDate(from)} – ${fmtDate(end)}`, file: `week-ending-${end}` };
   }
-  const M = E.monthStart(p.month || st.month), end = E.monthEnd(M);
-  const ref = st.statusDate < M ? M : st.statusDate > end ? end : st.statusDate;
+  const M = E.monthStart(p.month || (MAIN_TIER === "t2" ? st.month : day)), end = E.monthEnd(M);
+  const ref = day < M ? M : day > end ? end : day;
   const pm = E.monthStart(E.addDays(M, -1));
   return { type: "monthly", from: M, to: end, ref, month: M, prevFrom: pm, prevTo: E.monthEnd(pm), key: `monthly:${M.slice(0, 7)}`, label: fmtMonth(M), file: M.slice(0, 7) };
 }
@@ -142,11 +165,15 @@ export function facts(per, F = {}) {
     .sort((a, b) => String(dueOf(a)).localeCompare(String(dueOf(b))));
   const raisedList = items.filter((x) => inR(x.r[DATE_KEY[x.reg]], per.from, per.to));
   const t1days = E.t1Days(ctx);
-  const t1esc = E.t1OpenActions(ctx).escalated;
+  const t1esc = hasTier("t1") ? E.t1OpenActions(ctx).escalated
+    : (s2.t1e || []).filter((r, i) => comp.t1e?.[i]?.open).map((r) => ({ id: r.id, officer: r.raisedBy || r.owner, desc: r.desc, due: r.due }));
+  const c1 = E.t1Computed(s1, per.ref);
+  const flags1 = Object.entries(c1).reduce((a, [reg, c]) => a + (T1_REGISTERS[reg] ? E.flagged(c) : 0), 0);
+  const t1open = E.t1OpenActions(ctx).open;
   const esc3 = s2.esc.map((r, i) => ({ reg: "esc", r, c: comp.esc[i] })).filter((x) => x.c.open);
   const flags = Object.entries(comp).reduce((a, [reg, c]) => a + (T2_REGISTERS[reg] ? E.flagged(c) : 0), 0);
   const util = (() => { const w = comp.load.reduce((a, c) => a + c.workload, 0), av = comp.load.reduce((a, c) => a + c.available, 0); return av ? w / av : ""; })();
-  return { per, F, s2, s1, comp, kpis, other, pulse, cal, ctx, k1, raised, closed, raisedPrev, closedPrev, open, overdueN, overdue, dueToday: dueWithin(0, 1), dueNext: dueWithin(0, 7), raisedList, t1days, t1esc, esc3, flags, util, dueOf, officer };
+  return { per, F, s2, s1, comp, kpis, other, pulse, cal, ctx, k1, raised, closed, raisedPrev, closedPrev, open, overdueN, overdue, dueToday: dueWithin(0, 1), dueNext: dueWithin(0, 7), raisedList, t1days, t1esc, esc3, flags, flags1, t1open, util, dueOf, officer };
 }
 
 /* ── docx building blocks ────────────────────────────────── */
@@ -330,29 +357,35 @@ export async function buildReport(opts, onStep = () => {}) {
   onStep("Reading the boards…");
   const f = facts(per, F);
   const st = f.s2.setup, s1 = f.s1, ref = per.ref;
-  const on = (key) => opts.sections.includes(key);
+  const shown = new Set(sectionsOf(T).map(([key]) => key));
+  const on = (key) => opts.sections.includes(key) && shown.has(key);
   const lim = +opts.limit || 0;
   const fdesc = describe({ ...F, period: "all" });
   const docNo = (opts.docNo || "").trim();
   const body = [];
-  const titles = T.sections.filter(([key]) => on(key)).map(([, l]) => l);
+  const titles = sectionsOf(T).filter(([key]) => on(key)).map(([, l]) => l);
+  const site = (MAIN_TIER === "t1" ? s1.setup.site : st.site) || "";
+  const none = () => k.P(new k.TextRun({ text: "None.", italics: true, color: C.muted }));
+  const inPer = (dt) => has(dt) && dt >= per.from && dt <= per.to;
+  const redDays = f.t1days.filter((x) => inPer(x.date)).reduce((a, x) => a + E.PILLARS.filter((p) => x.codes[p.key] === 3).length, 0);
+  const t1overdue = f.t1open.filter((a) => has(a.due) && a.due < ref);
   let no = 1;
   const sec = (title) => k.H(`${no++} · ${title}`);
 
   // ── title / cover
   if (type === "monthly") {
     body.push(
-      new d.Paragraph({ spacing: { before: 1800, after: 120 }, children: [new d.TextRun({ text: "QA MONTHLY MANAGEMENT PACK", bold: true, size: 22, color: C.accent, characterSpacing: 60 })] }),
+      new d.Paragraph({ spacing: { before: 1800, after: 120 }, children: [new d.TextRun({ text: ONE_TIER === "t1" ? "QA TIER 1 MONTHLY REPORT" : ONE_TIER === "t2" ? "QA TIER 2 MONTHLY MANAGEMENT PACK" : "QA MONTHLY MANAGEMENT PACK", bold: true, size: 22, color: C.accent, characterSpacing: 60 })] }),
       new d.Paragraph({ spacing: { after: 120 }, children: [new d.TextRun({ text: fmtMonth(per.month), bold: true, size: 56, color: C.navy })] }),
-      new d.Paragraph({ spacing: { after: 120 }, children: [new d.TextRun({ text: "Tier 1 huddle board · Tier 2 daily management", size: 28, color: C.ink })] }),
-      new d.Paragraph({ spacing: { after: 480 }, children: [new d.TextRun({ text: st.site || "", size: 24, color: C.muted })] }),
+      new d.Paragraph({ spacing: { after: 120 }, children: [new d.TextRun({ text: ONE_TIER === "t1" ? "Shop-floor QA huddle board · SQDCP" : ONE_TIER === "t2" ? "QA daily management board" : "Tier 1 huddle board · Tier 2 daily management", size: 28, color: C.ink })] }),
+      new d.Paragraph({ spacing: { after: 480 }, children: [new d.TextRun({ text: site, size: 24, color: C.muted })] }),
       k.H("Document control", 2),
       k.T(null, [
         [{ v: "Document no.", bold: true }, docNo || "—"], [{ v: "Version", bold: true }, opts.version || "1.0"], [{ v: "Classification", bold: true }, opts.classification || "Internal"],
         [{ v: "Reporting month", bold: true }, fmtMonth(per.month)], [{ v: "Data as of", bold: true }, fmtLong(ref)],
-        [{ v: "Board owner", bold: true }, `${st.owner || "—"}${st.ownerRole ? ` — ${st.ownerRole}` : ""}`],
+        [{ v: "Board owner", bold: true }, MAIN_TIER === "t1" ? s1.setup.owner || "—" : `${st.owner || "—"}${st.ownerRole ? ` — ${st.ownerRole}` : ""}`],
         ...(fdesc.length ? [[{ v: "Filters", bold: true }, fdesc.join(" · ")]] : []),
-        [{ v: "Generated", bold: true }, `${fmtLong(today())} ${new Date().toTimeString().slice(0, 5)} · QA Tier Boards`],
+        [{ v: "Generated", bold: true }, `${fmtLong(today())} ${new Date().toTimeString().slice(0, 5)} · ${EDITION.name}`],
       ], { widths: [28, 72] }),
       k.H("Contents", 2),
       ...titles.map((t, i) => new d.Paragraph({ spacing: { after: 40 }, children: [new d.TextRun({ text: `${i + 1}   ${t}`, size: 20 })] })),
@@ -360,10 +393,14 @@ export async function buildReport(opts, onStep = () => {}) {
       new d.Paragraph({ children: [new d.PageBreak()] }),
     );
   } else {
-    body.push(k.band(type === "daily" ? `QA Daily Report — ${fmtLong(ref)}` : `QA Weekly Review — ${per.label}`, `${st.site || ""} · Tier 1 ${s1.setup.huddleTime || "08:30"} huddle · Tier 2 ${st.meetingTime || "10:30"} stand-up`),
+    const sub = [site, hasTier("t1") ? `Tier 1 ${s1.setup.huddleTime || "08:30"} huddle` : null, hasTier("t2") ? `Tier 2 ${st.meetingTime || "10:30"} stand-up` : null].filter(Boolean).join(" · ");
+    const health = { v: "Tier 1 health", bold: true }, healthV = f.k1.health.score === "" ? "—" : pct(f.k1.health.score);
+    body.push(k.band(type === "daily" ? `QA ${TIER_WORD}Daily Report — ${fmtLong(ref)}` : `QA ${TIER_WORD}Weekly Review — ${per.label}`, sub),
       new d.Paragraph({ spacing: { after: 80 }, children: [] }),
-      k.T(null, [[{ v: "Quality Pulse", bold: true }, f.pulse.score === "" ? "—" : `${pct(f.pulse.score)} (${f.pulse.g} G · ${f.pulse.a} A · ${f.pulse.r} R)`, { v: "Tier 1 health", bold: true }, f.k1.health.score === "" ? "—" : pct(f.k1.health.score)],
-        [{ v: "Overdue items", bold: true }, f.overdue.length ? { v: String(f.overdue.length), rag: "R" } : { v: "0", rag: "G" }, { v: "Document", bold: true }, `${docNo || "—"} · v${opts.version || "1.0"} · ${opts.classification || "Internal"}`],
+      k.T(null, [ONE_TIER === "t1"
+        ? [health, healthV, { v: type === "daily" ? "Red letters today" : "Red letters (week)", bold: true }, redDays ? { v: String(redDays), rag: "R" } : { v: "0", rag: "G" }]
+        : [{ v: "Quality Pulse", bold: true }, f.pulse.score === "" ? "—" : `${pct(f.pulse.score)} (${f.pulse.g} G · ${f.pulse.a} A · ${f.pulse.r} R)`, ...(hasTier("t1") ? [health, healthV] : [{ v: "From Tier 1", bold: true }, `${f.t1esc.length} open escalation${f.t1esc.length === 1 ? "" : "s"}`])],
+        [{ v: ONE_TIER === "t1" ? "Actions overdue" : "Overdue items", bold: true }, (ONE_TIER === "t1" ? t1overdue.length : f.overdue.length) ? { v: String(ONE_TIER === "t1" ? t1overdue.length : f.overdue.length), rag: "R" } : { v: "0", rag: "G" }, { v: "Document", bold: true }, `${docNo || "—"} · v${opts.version || "1.0"} · ${opts.classification || "Internal"}`],
         ...(fdesc.length ? [[{ v: "Filters", bold: true }, { v: fdesc.join(" · ") }, "", ""]] : [])], { widths: [18, 32, 18, 32] }));
   }
 
@@ -398,6 +435,34 @@ export async function buildReport(opts, onStep = () => {}) {
     if (on("due")) { body.push(sec("Due today & tomorrow")); body.push(...itemsTable(k, f.dueToday, ref, lim)); }
   }
 
+
+  // ── Tier 1 sections
+  const t1ActionsBlocks = () => {
+    const fn = f.s1.fn.filter((x) => inPer(x.opened));
+    return [k.H("Open actions", 2),
+      f.t1open.length ? k.T(["Action", "Officer", "Item", "Priority", "Due"], f.t1open.slice(0, lim || 999).map((a) => [a.id, a.officer || "—", a.desc || "", a.prio || "—", has(a.due) && a.due < ref ? { v: E.dueLabel(a.due, ref), rag: "R" } : E.dueLabel(a.due, ref)]), { widths: [12, 18, 46, 10, 14] }) : none(),
+      k.H(`Findings raised (${fn.length})`, 2),
+      fn.length ? k.T(["Finding", "Date", "Area", "Finding", "Severity", "Owner", "Status"], fn.slice(0, lim || 999).map((x) => [x.id, fmtDate(x.opened), x.area || "—", x.desc || "", x.sev === "High" ? { v: "High", rag: "R" } : x.sev || "—", x.owner || "—", x.status || "—"]), { widths: [10, 10, 14, 34, 10, 12, 10] }) : none()];
+  };
+  const t1EscBlock = () => (f.t1esc.length ? k.T(["Action", "Officer", "Item", "Due"], f.t1esc.map((a) => [a.id, a.officer || "—", a.desc || "", { v: E.dueLabel(a.due, ref), rag: a.due < ref ? "R" : "A" }]), { widths: [14, 18, 50, 18] }) : none());
+  const t1KpiTable = () => k.T(["Pillar", "KPI", "Actual", "Target", "Status"], f.k1.kpis.map((x) => [x.pillar, x.name, fmtKpi(x.actual, x.unit), x.targetText, { v: RAG_WORD[x.rag], rag: x.rag }]), { right: [2] });
+  const t1TeamTable = () => { const team = E.t1Team(s1, ref); return team.length ? k.T(["Officer", "Days", "Line clear.", "Records", "Lead (d)", "Findings", "Open actions", "Overdue", "Status"],
+    team.map((x) => [{ v: x.name, bold: true }, x.days, x.lc, x.records, fmtNum(x.lead), x.findings, x.open, x.late, { v: x.status === "G" ? "On track" : x.status === "A" ? "Watch" : "Action needed", rag: x.status }]), { right: [1, 2, 3, 4, 5, 6, 7] }) : k.P("No officer in the Tier 1 roster yet."); };
+  if (on("t1summary")) {
+    const counts = E.t1PillarCounts(f.t1days);
+    const reds = f.k1.kpis.filter((x) => x.rag === "R");
+    body.push(sec("Tier 1 summary"),
+      k.P([new k.TextRun({ text: "Board health ", bold: true }), new k.TextRun({ text: `${f.k1.health.score === "" ? "—" : pct(f.k1.health.score)} — ${f.k1.health.g} green, ${f.k1.health.a} amber, ${f.k1.health.r} red of 20 KPIs.` })]),
+      k.P([new k.TextRun({ text: "Red-letter days: ", bold: true }), new k.TextRun({ text: E.PILLARS.map((p) => `${p.key} ${counts[p.key].r}`).join(" · ") + "." })]),
+      ...(reds.length ? [k.P([new k.TextRun({ text: "Off target: ", bold: true }), new k.TextRun({ text: reds.map((x) => `${x.name} ${fmtKpi(x.actual, x.unit)} (target ${x.targetText})`).join("; ") + "." })])] : []),
+      k.B(`${f.t1open.length} open action${f.t1open.length === 1 ? "" : "s"}, ${t1overdue.length} overdue · ${f.t1esc.length} escalated to Tier 2.`),
+      k.B(`${f.s1.fn.filter((x) => inPer(x.opened)).length} findings raised in the month · ${f.flags1} record${f.flags1 === 1 ? "" : "s"} flagged by the data check.`));
+  }
+  if (type !== "monthly" && on("t1week") && type === "weekly") body.push(sec(`SQDCP week — ${per.label}`), lettersTable(k, f, f.t1days.filter((x) => inPer(x.date))), k.H("KPIs month to date", 2), t1KpiTable());
+  if (type === "weekly" && on("t1team")) body.push(sec("Team performance (month to date)"), t1TeamTable());
+  if (type !== "monthly" && on("t1actions")) body.push(sec("Open actions & findings"), ...t1ActionsBlocks());
+  if (on("t1esc")) body.push(sec("Escalated to Tier 2"), t1EscBlock());
+
   // ── weekly
   if (type === "weekly") {
     if (on("glance")) body.push(sec(`The week in numbers — ${per.label}`), ...numbersTable(k, f, "last week"));
@@ -408,7 +473,7 @@ export async function buildReport(opts, onStep = () => {}) {
       body.push(sec("Q-calendar & SQDCP week"),
         k.T(["Date", ...E.T2_PROCESSES.map((p) => p.label), "Overall"], days.map((x) => [fmtDate(x.date), ...x.procs.map((p) => (x.weekend ? "W" : { v: p.status || "—", rag: p.code === 3 ? "R" : p.code === 2 ? "A" : p.code === 1 ? "G" : "N" })), x.weekend ? "Weekend" : { v: x.status || "—", rag: x.code === 3 ? "R" : x.code === 2 ? "A" : x.code === 1 ? "G" : "N" }])),
         k.P(days.length < 7 ? "Days of the week outside the reporting month are not shown on the Q-calendar." : ""),
-        k.H("Tier 1 SQDCP letters", 2), lettersTable(k, f, t1w));
+        ...(hasTier("t1") ? [k.H("Tier 1 SQDCP letters", 2), lettersTable(k, f, t1w)] : []));
     }
     if (on("next7")) { /* placed after overdue below */ }
   }
@@ -419,7 +484,7 @@ export async function buildReport(opts, onStep = () => {}) {
   if (type === "weekly" && on("load")) body.push(sec(`QA load — ${fmtMonth(per.month)}`), loadTable(k, f));
   if ((type === "daily" || type === "weekly") && on("esc")) {
     body.push(sec("Escalations"), k.H("Tier 2 → Tier 3 (register 10)", 2), ...itemsTable(k, f.esc3, ref, lim),
-      k.H("Tier 1 → Tier 2 (huddle actions)", 2), f.t1esc.length ? k.T(["Action", "Officer", "Item", "Due"], f.t1esc.map((a) => [a.id, a.officer || "—", a.desc || "", { v: E.dueLabel(a.due, ref), rag: a.due < ref ? "R" : "A" }]), { widths: [14, 18, 50, 18] }) : k.P(new k.TextRun({ text: "None.", italics: true, color: C.muted })));
+      k.H(hasTier("t1") ? "Tier 1 → Tier 2 (huddle actions)" : "Tier 1 → Tier 2 (register 10·A)", 2), t1EscBlock());
   }
 
   // ── monthly
@@ -429,7 +494,7 @@ export async function buildReport(opts, onStep = () => {}) {
       const reds = f.kpis.filter((x) => x.rag === "R");
       body.push(sec("Executive summary"),
         k.P([new k.TextRun({ text: "Quality Pulse ", bold: true }), new k.TextRun({ text: `${f.pulse.score === "" ? "—" : pct(f.pulse.score)} — ${f.pulse.g} KPIs on target, ${f.pulse.a} on watch, ${f.pulse.r} off target${f.pulse.n ? `, ${f.pulse.n} without data` : ""}.` })]),
-        k.P([new k.TextRun({ text: "Tier 1 board health ", bold: true }), new k.TextRun({ text: `${f.k1.health.score === "" ? "—" : pct(f.k1.health.score)} — ${f.k1.health.g} green, ${f.k1.health.a} amber, ${f.k1.health.r} red of 20 KPIs.` })]),
+        ...(hasTier("t1") ? [k.P([new k.TextRun({ text: "Tier 1 board health ", bold: true }), new k.TextRun({ text: `${f.k1.health.score === "" ? "—" : pct(f.k1.health.score)} — ${f.k1.health.g} green, ${f.k1.health.a} amber, ${f.k1.health.r} red of 20 KPIs.` })])] : [k.P([new k.TextRun({ text: "From Tier 1 ", bold: true }), new k.TextRun({ text: `${f.t1esc.length} open escalation${f.t1esc.length === 1 ? "" : "s"} (register 10·A).` })])]),
         ...(reds.length ? [k.P([new k.TextRun({ text: "Off target: ", bold: true }), new k.TextRun({ text: reds.map((x) => `${x.name} ${fmtKpi(x.actual, x.unit)} (target ${x.targetText})`).join("; ") + "." })])] : []),
         k.H("Overdue as of the report date", 2),
         ...REGS.filter((r) => f.s2[r]?.length).map((r) => k.B(`${f.overdueN[r]} ${label(r)} overdue (of ${f.open[r]} open)`)),
@@ -442,7 +507,8 @@ export async function buildReport(opts, onStep = () => {}) {
   }
 
   if (on("charts")) {
-    const which = type === "daily" ? { qcal: true, t1: true } : type === "weekly" ? { qcal: true, charts: ["flow", "ageing", "overdueowner", "mix"], t1: true } : { qcal: true, charts: true, t1: true, t1activity: true };
+    const t2 = hasTier("t2"), t1 = hasTier("t1");
+    const which = type === "daily" ? { qcal: t2, t1 } : type === "weekly" ? { qcal: t2, charts: t2 ? ["flow", "ageing", "overdueowner", "mix"] : null, t1 } : { qcal: t2, charts: t2, t1, t1activity: t1 };
     const shots = await captureCharts(per, F, which, (c) => onStep(`Rendering chart: ${c}`));
     body.push(sec(type === "daily" ? "Pictures of the boards" : "Charts"));
     for (const sh of shots) body.push(...(await picture(d, sh.blob, sh.caption)));
@@ -502,6 +568,7 @@ export async function buildReport(opts, onStep = () => {}) {
         ...openTable(k, rows.filter((_, i) => c[i].live === "Overdue"), c.filter((x) => x.live === "Overdue"), ref, lim, [["APQR", (r) => r.id], ["Product", (r) => r.product, false, 24], ["Period", (r) => r.period], ["Due", (r) => fmtDate(r.due)], ["% complete", (r) => pct(r.pct), true], ["Overdue", late]]));
     }
     if (on("load")) body.push(sec(`QA load — ${fmtMonth(per.month)}`), k.P("Workload is calculated: the standard effort of every record each person owns, spread over its dates, counted for the month."), loadTable(k, f));
+    if (on("t1actions")) body.push(sec("Open actions & findings"), ...t1ActionsBlocks());
     if (on("t1")) {
       const counts = E.t1PillarCounts(f.t1days);
       const team = E.t1Team(s1, ref);
@@ -516,8 +583,8 @@ export async function buildReport(opts, onStep = () => {}) {
     }
     if (on("quality")) {
       const c1 = E.t1Computed(s1, ref);
-      const rows = [...Object.entries(f.comp).filter(([r]) => T2_REGISTERS[r]).map(([r, c]) => ["Tier 2", T2_REGISTERS[r].title, (f.s2[r] || []).length, E.flagged(c)]),
-        ...Object.entries(c1).filter(([r]) => T1_REGISTERS[r]).map(([r, c]) => ["Tier 1", T1_REGISTERS[r].title, (s1[r] || []).length, E.flagged(c)])];
+      const rows = [...Object.entries(hasTier("t2") ? f.comp : {}).filter(([r]) => T2_REGISTERS[r]).map(([r, c]) => ["Tier 2", T2_REGISTERS[r].title, (f.s2[r] || []).length, E.flagged(c)]),
+        ...Object.entries(hasTier("t1") ? c1 : {}).filter(([r]) => T1_REGISTERS[r]).map(([r, c]) => ["Tier 1", T1_REGISTERS[r].title, (s1[r] || []).length, E.flagged(c)])];
       body.push(sec("Data quality"), k.P("Records the data check flags (a missing status, closure date or a date order problem). A KPI is only as good as these records."),
         k.T(["Tier", "Register", "Records", "Flagged"], rows.map(([t, n, total, fl]) => [t, n, total, fl ? { v: fl, rag: "R" } : { v: 0, rag: "G" }]), { right: [2, 3] }));
     }
@@ -531,11 +598,17 @@ export async function buildReport(opts, onStep = () => {}) {
       k.P(""), k.P("RAG: ‘Higher’ KPIs are green at or above target, amber at or above the amber limit, otherwise red; ‘Lower’ KPIs the reverse. Quality Pulse and board health = (green + ½ amber) ÷ (green + amber + red). A KPI with no source data reads ‘No data’."),
       k.P(`Data as of ${fmtLong(ref)}. Registers mirror the eQMS and the site's own exports; the eQMS remains the GMP record.`));
   }
+  if (type === "monthly" && on("t1defs")) {
+    body.push(sec("Tier 1 KPI definitions"),
+      k.T(["Pillar", "KPI", "Definition", "Target", "Amber limit"], s1.kpis.map((x) => [x.pillar, x.name, x.def, E.targetText(x), x.unit === "%" ? pct(x.amber) : x.amber]), { widths: [10, 24, 40, 13, 13] }),
+      k.P(""), k.P("SQDCP letters: each day, each pillar is green, amber or red from the officers' daily log; the huddle can override a day. Board health = (green + ½ amber) ÷ (green + amber + red) of the 20 KPIs."),
+      k.P(`Data as of ${fmtLong(ref)}, from the officers' daily log, batch-record reviews, findings, actions, the huddle log and training.`));
+  }
 
   onStep("Writing the document…");
-  const headerText = `${st.site || ""} · ${T.label} · ${per.label}${docNo ? ` · ${docNo}` : ""}`;
+  const headerText = `${site} · ${TIER_WORD}${T.label} · ${per.label}${docNo ? ` · ${docNo}` : ""}`;
   const doc = new d.Document({
-    creator: "QA Tier Boards", title: `${T.label} ${per.label}`, description: st.site,
+    creator: EDITION.name, title: `${TIER_WORD}${T.label} ${per.label}`, description: site,
     styles: {
       default: { document: { run: { font: "Calibri", size: 20, color: C.ink } } },
       paragraphStyles: [
@@ -562,17 +635,20 @@ function loadTable(k, f) {
 /* ── plain-text summary (e-mail, Teams, WhatsApp) ────────── */
 
 export function textSummary(type, per, F = {}, notes = {}) {
+  if (ONE_TIER === "t1") return textSummaryT1(type, per, F, notes);
   const f = facts(per, F);
   const st = f.s2.setup;
   const L = [];
   const list = (arr, n = 8) => arr.slice(0, n).map((x) => `  • ${x.r.id || x.r.member || label(x.reg)} (${label(x.reg)}) — ${descOf(x.r).slice(0, 80)}${x.r[OWNER_KEY[x.reg]] ? ` — ${x.r[OWNER_KEY[x.reg]]}` : ""}${has(f.dueOf(x)) ? ` — due ${fmtDate(f.dueOf(x))}` : ""}`).concat(arr.length > n ? [`  • … and ${arr.length - n} more`] : []);
   const fd = describe({ ...F, period: "all" });
   L.push(`${TYPES[type].label.toUpperCase()} — ${per.label}`, `${st.site || ""}${fd.length ? ` · ${fd.join(" · ")}` : ""}`, "");
-  L.push(`Quality Pulse ${f.pulse.score === "" ? "—" : pct(f.pulse.score)} (${f.pulse.g} on target · ${f.pulse.a} watch · ${f.pulse.r} off target) · Tier 1 health ${f.k1.health.score === "" ? "—" : pct(f.k1.health.score)}`);
+  L.push(`Quality Pulse ${f.pulse.score === "" ? "—" : pct(f.pulse.score)} (${f.pulse.g} on target · ${f.pulse.a} watch · ${f.pulse.r} off target)${hasTier("t1") ? ` · Tier 1 health ${f.k1.health.score === "" ? "—" : pct(f.k1.health.score)}` : ""}`);
   if (type === "daily") {
     const day = f.t1days.find((x) => x.date === per.ref);
     const t = E.t1Today(f.ctx);
-    if (day) L.push(`Tier 1 SQDCP: ${E.PILLARS.map((p) => `${p.key} ${({ 1: "🟢", 2: "🟡", 3: "🔴", 7: "⚪", 8: "—" })[day.codes[p.key]] || "·"}`).join("  ")} · present ${t.present}/${t.roster} · actions overdue ${t.overdue}`);
+    const lg = f.s2.daily[per.ref] || {};
+    if (!hasTier("t1") && (lg.t1held || lg.t1red || lg.t1safety)) L.push(`Tier 1 huddle: ${lg.t1held === "Yes" ? "held" : lg.t1held === "No" ? "not held" : "—"} · red letters ${lg.t1red || "none"}${lg.t1safety ? ` · safety: ${lg.t1safety}` : ""}`);
+    if (day && hasTier("t1")) L.push(`Tier 1 SQDCP: ${E.PILLARS.map((p) => `${p.key} ${({ 1: "🟢", 2: "🟡", 3: "🔴", 7: "⚪", 8: "—" })[day.codes[p.key]] || "·"}`).join("  ")} · present ${t.present}/${t.roster} · actions overdue ${t.overdue}`);
     const c = f.cal.find((x) => x.date === per.ref);
     if (c && !c.weekend) L.push(`Tier 2 Q-calendar: ${c.status || "—"} (${c.procs.map((p) => `${p.label} ${p.status || "—"}`).join(" · ")})`);
     const log = f.s2.daily[per.ref] || {};
@@ -590,7 +666,38 @@ export function textSummary(type, per, F = {}, notes = {}) {
   L.push("", `Overdue (${f.overdue.length}):`, ...(f.overdue.length ? list(f.overdue, 10) : ["  none 🎉"]));
   if (f.esc3.length || f.t1esc.length) L.push("", `Escalations: ${f.esc3.length} open to Tier 3 · ${f.t1esc.length} open from Tier 1`);
   for (const [key, title] of NOTES) if ((notes[key] || "").trim()) L.push("", `${title}:`, ...notes[key].trim().split("\n").map((l) => `  ${l.replace(/^[-•*]\s*/, "• ")}`));
-  L.push("", `— QA Tier Boards · data as of ${fmtDate(per.ref)} · the eQMS remains the record of truth`);
+  L.push("", `— ${EDITION.name} · data as of ${fmtDate(per.ref)} · the eQMS remains the record of truth`);
+  return L.join("\n");
+}
+
+/** The summary of a Tier 1 app: the shop floor only. */
+function textSummaryT1(type, per, F = {}, notes = {}) {
+  const f = facts(per, F);
+  const s1 = f.s1, L = [];
+  const inPer = (dt) => has(dt) && dt >= per.from && dt <= per.to;
+  const dot = { 1: "🟢", 2: "🟡", 3: "🔴", 7: "⚪", 8: "—" };
+  L.push(`QA TIER 1 · ${TYPES[type].label.toUpperCase()} — ${per.label}`, `${s1.setup.site || ""}${f.officer !== "All team" ? ` · ${f.officer}` : ""}`, "");
+  L.push(`Board health ${f.k1.health.score === "" ? "—" : pct(f.k1.health.score)} (${f.k1.health.g} green · ${f.k1.health.a} amber · ${f.k1.health.r} red of 20 KPIs)`);
+  if (type === "daily") {
+    const day = f.t1days.find((x) => x.date === per.ref);
+    const t = E.t1Today(f.ctx);
+    if (day) L.push(`SQDCP today: ${E.PILLARS.map((p) => `${p.key} ${dot[day.codes[p.key]] || "·"}`).join("  ")}`);
+    L.push(`Present ${t.present}/${t.roster} · line clearances ${t.lc}${t.lcf ? ` (${t.lcf} failed)` : ""} · records reviewed ${t.reviewed} · findings ${t.findings} · actions overdue ${t.overdue} · due today ${t.dueToday}`);
+    const hd = s1.hd.find((h) => h.date === per.ref);
+    if (hd) L.push("", "Huddle priorities:", ...[hd.p1, hd.p2, hd.p3].filter(Boolean).map((p, i) => `  ${i + 1}. ${p}`));
+  } else {
+    const days = f.t1days.filter((x) => inPer(x.date));
+    L.push(`Red-letter days: ${E.PILLARS.map((p) => `${p.key} ${days.filter((x) => x.codes[p.key] === 3).length}`).join(" · ")}`);
+    const reds = f.k1.kpis.filter((x) => x.rag === "R");
+    if (reds.length) L.push("", "Off-target KPIs:", ...reds.map((x) => `  • ${x.pillar} · ${x.name}: ${fmtKpi(x.actual, x.unit)} vs ${x.targetText}`));
+  }
+  const over = f.t1open.filter((a) => has(a.due) && a.due < per.ref);
+  L.push("", `Open actions (${f.t1open.length}, ${over.length} overdue):`, ...(f.t1open.length ? f.t1open.slice(0, 10).map((a) => `  • ${a.id} — ${String(a.desc || "").slice(0, 80)} — ${a.officer || "—"} — ${E.dueLabel(a.due, per.ref)}`) : ["  none 🎉"]));
+  if (f.t1esc.length) L.push("", `Escalated to Tier 2 (${f.t1esc.length}):`, ...f.t1esc.map((a) => `  • ${a.id} — ${String(a.desc || "").slice(0, 80)} — ${a.officer || "—"}`));
+  const fn = s1.fn.filter((x) => inPer(x.opened));
+  if (fn.length) L.push("", `Findings raised (${fn.length}):`, ...fn.slice(0, 8).map((x) => `  • ${x.id} — ${String(x.desc || "").slice(0, 70)}${x.sev ? ` — ${x.sev}` : ""}`));
+  for (const [key, title] of NOTES) if ((notes[key] || "").trim()) L.push("", `${title}:`, ...notes[key].trim().split("\n").map((l) => `  ${l.replace(/^[-•*]\s*/, "• ")}`));
+  L.push("", `— ${EDITION.name} · data as of ${fmtDate(per.ref)}`);
   return L.join("\n");
 }
 
@@ -598,30 +705,35 @@ export function textSummary(type, per, F = {}, notes = {}) {
 
 export const ROUTINES = {
   daily: [
-    ["t1log", "Tier 1 daily log entered for every officer present", "08:00–08:25 · register A", (f) => f.s1.dl.filter((r) => r.date === f.per.ref).length >= Math.max(1, f.s1.roster.length)],
-    ["huddle", "Tier 1 huddle held and logged", "08:30 · register E", (f) => f.s1.hd.some((h) => h.date === f.per.ref && h.held === "Yes")],
-    ["reds", "Every red letter has an action with an owner and a due date", "Tier 1 actions register", null],
-    ["t2log", "Tier 2 Daily Log: meeting, attendees and Top 3 priorities", "10:30 · Daily Log", (f) => { const l = f.s2.daily[f.per.ref] || {}; return !!(l.held && l.p1); }],
-    ["registers", "New events of the day entered in the registers", "Deviations, CAPA, changes, inspections, actions", null],
-    ["overrides", "Every manual Q-calendar override justified in the remarks", "Daily Log", null],
-    ["escal", "Escalations to Tier 3 raised the same day", "Register 10", null],
+    ["t1log", "Tier 1 daily log entered for every officer present", "08:00–08:25 · register A", (f) => f.s1.dl.filter((r) => r.date === f.per.ref).length >= Math.max(1, f.s1.roster.length), "t1"],
+    ["huddle", "Tier 1 huddle held and logged", "08:30 · register E", (f) => f.s1.hd.some((h) => h.date === f.per.ref && h.held === "Yes"), "t1"],
+    ["reds", "Every red letter has an action with an owner and a due date", "Tier 1 actions register", null, "t1"],
+    ["t1esc", "What the huddle cannot solve handed to the 10:30 stand-up", "Tier 1 actions · escalated to Tier 2", null, "t1"],
+    ["t1in", "Tier 1 headlines and escalations entered", "Daily Log (huddle held, red letters, safety) · register 10·A", (f) => !!(f.s2.daily[f.per.ref] || {}).t1held, "t2solo"],
+    ["t2log", "Tier 2 Daily Log: meeting, attendees and Top 3 priorities", "10:30 · Daily Log", (f) => { const l = f.s2.daily[f.per.ref] || {}; return !!(l.held && l.p1); }, "t2"],
+    ["registers", "New events of the day entered in the registers", "Deviations, CAPA, changes, inspections, actions", null, "t2"],
+    ["overrides", "Every manual Q-calendar override justified in the remarks", "Daily Log", null, "t2"],
+    ["escal", "Escalations to Tier 3 raised the same day", "Register 10", null, "t2"],
     ["sent", "Daily report or summary sent to the QA manager", "Reports → Daily", null],
   ],
   weekly: [
-    ["import", "Latest Scigeniq exports imported", "Import from Scigeniq", (f) => { const h = store.t2.imports?.[0]; return !!h && E.diffDays(f.per.ref, h.at.slice(0, 10)) <= 7; }],
-    ["flags", "Data-check flags cleared in every register", "Each register's ⚠ strip", (f) => f.flags === 0],
-    ["overdue", "Every overdue item reviewed with its owner — new date or escalation", "Analytics → Overdue items by person", (f) => f.overdue.length === 0],
-    ["next", "Items due next week confirmed with their owners", "Reports → Weekly → Due next 7 days", null],
-    ["load", "QA load reviewed — work reassigned above the threshold", "Register 07 · QA load", null],
-    ["trend", "Raised vs closed and ageing reviewed — backlog trend named", "Analytics charts 9 and 10", null],
-    ["skills", "Tier 1 skills / training gaps reviewed", "Skills matrix", null],
+    ["import", "Latest Scigeniq exports imported", "Import from Scigeniq", (f) => { const h = store.t2.imports?.[0]; return !!h && E.diffDays(f.per.ref, h.at.slice(0, 10)) <= 7; }, "t2"],
+    ["flags", "Data-check flags cleared in every register", "Each register's ⚠ strip", (f) => (hasTier("t2") ? f.flags : 0) + (hasTier("t1") ? f.flags1 : 0) === 0],
+    ["actions", "Every open Tier 1 action reviewed — overdue ones re-planned", "Tier 1 actions register", (f) => !f.t1open.some((a) => has(a.due) && a.due < f.per.ref), "t1"],
+    ["findings", "Findings of the week closed or actioned", "Tier 1 findings register", null, "t1"],
+    ["overdue", "Every overdue item reviewed with its owner — new date or escalation", "Analytics → Overdue items by person", (f) => f.overdue.length === 0, "t2"],
+    ["next", "Items due next week confirmed with their owners", "Reports → Weekly → Due next 7 days", null, "t2"],
+    ["load", "QA load reviewed — work reassigned above the threshold", "Register 07 · QA load", null, "t2"],
+    ["trend", "Raised vs closed and ageing reviewed — backlog trend named", "Analytics charts 9 and 10", null, "t2"],
+    ["skills", "Tier 1 skills / training gaps reviewed", "Skills matrix", null, "t1"],
     ["sent", "Weekly review filed and sent", "Reports → Weekly", null],
   ],
 };
 
+const routineShown = (tier) => !tier || (tier === "t2solo" ? ONE_TIER === "t2" : hasTier(tier));
 function routineHTML(type, per, f) {
-  const done = store.t2.routine?.[per.key] || {};
-  return `<div class="check-list">${ROUTINES[type].map(([key, text, where, auto]) => {
+  const done = store[MAIN_TIER].routine?.[per.key] || {};
+  return `<div class="check-list">${ROUTINES[type].filter((x) => routineShown(x[4])).map(([key, text, where, auto]) => {
     const a = auto ? auto(f) : null;
     const on = !!done[key];
     return `<label class="check-item ${on ? "on" : ""}"><input type="checkbox" data-routine="${key}" ${on ? "checked" : ""}><span>${esc(text)}<small>${esc(where)}${a === true ? " · ✓ the boards show it is done" : a === false ? " · not yet visible on the boards" : ""}${on ? ` · ticked ${esc(String(done[key]).slice(0, 16).replace("T", " "))}` : ""}</small></span></label>`;
@@ -633,14 +745,14 @@ function routineHTML(type, per, f) {
 const DEF_SIGN = { prepared: "", preparedRole: "", reviewed: "", reviewedRole: "", approved: "", approvedRole: "" };
 export function reportPrefs() {
   const p = store.prefs.reports || {};
-  const sec = Object.fromEntries(Object.entries(TYPES).map(([t, T]) => [t, p.sections?.[t] || T.sections.map(([k]) => k)]));
-  return { type: p.type || "daily", date: p.date || "", month: p.month || "", limit: p.limit ?? 40, sections: sec, filters: p.filters || {}, sign: { ...DEF_SIGN, ...(p.sign || {}) }, docNo: p.docNo ?? "QA-T2-{TYPE}-{PERIOD}", version: p.version || "1.0", classification: p.classification || "Internal — confidential" };
+  const sec = Object.fromEntries(Object.entries(TYPES).map(([t, T]) => [t, p.sections?.[t] || sectionsOf(T).map(([k]) => k)]));
+  return { type: p.type || "daily", date: p.date || "", month: p.month || "", limit: p.limit ?? 40, sections: sec, filters: p.filters || {}, sign: { ...DEF_SIGN, ...(p.sign || {}) }, docNo: p.docNo ?? `QA-${MAIN_TIER.toUpperCase()}-{TYPE}-{PERIOD}`, version: p.version || "1.0", classification: p.classification || "Internal — confidential" };
 }
 const savePrefs = (p) => { store.prefs.reports = p; store.save(); };
 const notesOf = (key) => store.prefs.reportNotes?.[key] || {};
 const saveNotes = (key, n) => { store.prefs.reportNotes = { ...(store.prefs.reportNotes || {}), [key]: n }; store.save(); };
 export const docNoFor = (p, per) => (p.docNo || "").replace("{TYPE}", { daily: "DR", weekly: "WR", monthly: "MR" }[per.type]).replace("{PERIOD}", per.file.replace(/^week-ending-/, "W"));
-export const fileName = (per, site = store.t2.setup.site) => `QA_${TYPES[per.type].short}_Report_${(site || "site").split(/[—-]/)[0].trim().replace(/\W+/g, "_")}_${per.file}.docx`;
+export const fileName = (per, site = store[MAIN_TIER].setup.site) => `QA_${ONE_TIER ? `${ONE_TIER === "t1" ? "Tier1" : "Tier2"}_` : ""}${TYPES[per.type].short}_Report_${(site || "site").split(/[—-]/)[0].trim().replace(/\W+/g, "_")}_${per.file}.docx`;
 
 export function renderReportPage(root, { type: forced } = {}) {
   root = fresh(root);
@@ -666,16 +778,16 @@ export function renderReportPage(root, { type: forced } = {}) {
     <div class="grid split-wide">
       <div class="stack">
         <div class="card card-pad"><div class="card-head"><h2>Period & filters <span class="sub">${esc(per.label)}</span></h2></div>
-          <div class="fgrid" data-rfilters>${dateCtl}${filterControls(p.filters, { dims: ["owner", "area", "product", "cls", "source", "dept"], period: false })}</div>
-          <p class="muted" style="margin:8px 0 0;font-size:12px">${type === "monthly" ? `Data as of ${fmtLong(per.ref)} (the status date, kept inside the month).` : `Overdue and due items are counted as of ${fmtLong(per.ref)}.`} A filter applies to the registers that record that field.</p></div>
+          <div class="fgrid" data-rfilters>${dateCtl}${MAIN_TIER === "t1" ? filterControls(p.filters, { tier: "t1", dims: ["owner"], period: false }) : filterControls(p.filters, { dims: ["owner", "area", "product", "cls", "source", "dept"], period: false })}</div>
+          <p class="muted" style="margin:8px 0 0;font-size:12px">${type === "monthly" ? `Data as of ${fmtLong(per.ref)} (the ${MAIN_TIER === "t1" ? "board" : "status"} date, kept inside the month).` : `Counted as of ${fmtLong(per.ref)}.`} ${MAIN_TIER === "t1" ? "Pick one officer for that officer's report." : "A filter applies to the registers that record that field."}</p></div>
         <div class="card card-pad"><div class="card-head"><h2>At a glance</h2></div>
-          <div class="glance">
+          <div class="glance">${ONE_TIER === "t1" ? glanceT1(type, per, f) : `
             <div class="${f.pulse.rag}"><b>${f.pulse.score === "" ? "—" : pct(f.pulse.score)}</b><span>Quality Pulse</span></div>
-            <div class="${f.k1.health.rag}"><b>${f.k1.health.score === "" ? "—" : pct(f.k1.health.score)}</b><span>Tier 1 board health</span></div>
+            ${hasTier("t1") ? `<div class="${f.k1.health.rag}"><b>${f.k1.health.score === "" ? "—" : pct(f.k1.health.score)}</b><span>Tier 1 board health</span></div>` : `<div class="${f.t1esc.length ? "A" : ""}"><b>${f.t1esc.length}</b><span>open escalations from Tier 1</span></div>`}
             <div><b>${raisedN}</b><span>raised ${type === "daily" ? "today" : type === "weekly" ? "this week" : "this month"}</span></div>
             <div><b>${closedN}</b><span>closed ${type === "daily" ? "today" : type === "weekly" ? "this week" : "this month"}</span></div>
             <div class="${over ? "R" : "G"}"><b>${over}</b><span>overdue now</span></div>
-            <div><b>${type === "weekly" ? f.dueNext.length : f.dueToday.length}</b><span>${type === "weekly" ? "due next 7 days" : "due today / tomorrow"}</span></div>
+            <div><b>${type === "weekly" ? f.dueNext.length : f.dueToday.length}</b><span>${type === "weekly" ? "due next 7 days" : "due today / tomorrow"}</span></div>`}
           </div></div>
         <div class="card card-pad"><div class="card-head"><h2>Commentary <span class="sub">goes into the report and the summary · saved for this period</span></h2></div>
           <div class="form-grid" data-notes>${NOTES.map(([key, title, help]) => `<label class="field full"><span>${esc(key === "focus" ? `Focus for ${type === "monthly" ? "next month" : type === "weekly" ? "next week" : "tomorrow"}` : title)}</span><textarea name="${key}" rows="3" placeholder="${esc(help)}">${esc(notes[key] || "")}</textarea></label>`).join("")}</div></div>
@@ -688,7 +800,7 @@ export function renderReportPage(root, { type: forced } = {}) {
           <div data-progress class="callout" style="margin-top:10px" hidden></div>
           <p class="muted" style="margin:10px 0 0;font-size:12px">File name: <span class="mono">${esc(fileName(per))}</span></p></div>
         <div class="card card-pad"><div class="card-head"><h2>Sections</h2><div class="row"><button class="btn sm" data-all>All</button><button class="btn sm" data-none>None</button></div></div>
-          <div class="check-list">${T.sections.map(([key, l, hint]) => `<label class="check-item ${p.sections[type].includes(key) ? "on" : ""}"><input type="checkbox" data-sec="${key}" ${p.sections[type].includes(key) ? "checked" : ""}><span><b>${esc(l)}</b><small>${esc(hint)}</small></span></label>`).join("")}</div>
+          <div class="check-list">${sectionsOf(T).map(([key, l, hint]) => `<label class="check-item ${p.sections[type].includes(key) ? "on" : ""}"><input type="checkbox" data-sec="${key}" ${p.sections[type].includes(key) ? "checked" : ""}><span><b>${esc(l)}</b><small>${esc(hint)}</small></span></label>`).join("")}</div>
           <label class="field" style="margin-top:10px"><span>Rows per table</span><select data-limit>${[[15, "15 most urgent"], [40, "40 most urgent"], [100, "100"], [0, "All records"]].map(([v, l]) => `<option value="${v}" ${+p.limit === v ? "selected" : ""}>${l}</option>`).join("")}</select></label></div>
         <div class="card card-pad"><div class="card-head"><h2>Sign-off & document control</h2></div>
           <div class="form-grid" data-sign>
@@ -697,7 +809,7 @@ export function renderReportPage(root, { type: forced } = {}) {
             <label class="field"><span>Version</span><input name="version" value="${esc(p.version)}"></label>
             <label class="field full"><span>Classification</span><input name="classification" value="${esc(p.classification)}"></label>
           </div></div>
-        ${type === "monthly" ? `<div class="card card-pad"><div class="card-head"><h2>Month-end</h2></div><p class="muted" style="margin:0 0 10px;font-size:13px">The monthly pack is step 6 of the month-end close: freeze the KPIs, make this report, export the charts, archive the boards and roll the month.</p><a class="btn" href="#/close">Open the month-end close ›</a></div>`
+        ${type === "monthly" ? `<div class="card card-pad"><div class="card-head"><h2>Month-end</h2></div><p class="muted" style="margin:0 0 10px;font-size:13px">${MAIN_TIER === "t1" ? "The monthly report is a step of the month-end close: complete the logs, make this report, archive the board and file the pack." : "The monthly pack is step 6 of the month-end close: freeze the KPIs, make this report, export the charts, archive the boards and roll the month."}</p><a class="btn" href="#/close">Open the month-end close ›</a></div>`
           : `<div class="card card-pad"><div class="card-head"><h2>${type === "daily" ? "Daily" : "Weekly"} routine <span class="sub">shared with the team · ${esc(per.label)}</span></h2></div>${routineHTML(type, per, f)}</div>`}
       </div>
     </div>`;
@@ -721,11 +833,11 @@ export function renderReportPage(root, { type: forced } = {}) {
     }
     if (e.target.matches("[data-routine]")) {
       const key = e.target.dataset.routine;
-      store.patch("t2", ["routine", per.key, key], e.target.checked ? new Date().toISOString() : "", `Routine ${per.key}`);
+      store.patch(MAIN_TIER, ["routine", per.key, key], e.target.checked ? new Date().toISOString() : "", `Routine ${per.key}`);
       rerender();
     }
   });
-  $("[data-all]", root).onclick = () => { const q = reportPrefs(); q.sections[type] = T.sections.map(([k2]) => k2); savePrefs(q); rerender(); };
+  $("[data-all]", root).onclick = () => { const q = reportPrefs(); q.sections[type] = sectionsOf(T).map(([k2]) => k2); savePrefs(q); rerender(); };
   $("[data-none]", root).onclick = () => { const q = reportPrefs(); q.sections[type] = []; savePrefs(q); rerender(); };
   $("[data-copytext]", root).onclick = () => {
     const t = $("[data-summary]", root);
@@ -733,6 +845,21 @@ export function renderReportPage(root, { type: forced } = {}) {
   };
   $("[data-savetext]", root).onclick = () => saveFile(fileName(per).replace(/\.docx$/, ".txt"), new Blob([$("[data-summary]", root).value], { type: "text/plain" }));
   $("[data-make]", root).onclick = () => makeReport(root, { type, per });
+}
+
+/** The "at a glance" figures of a Tier 1 app. */
+function glanceT1(type, per, f) {
+  const inPer = (dt) => has(dt) && dt >= per.from && dt <= per.to;
+  const days = f.t1days.filter((x) => inPer(x.date));
+  const red = days.reduce((a, x) => a + E.PILLARS.filter((p) => x.codes[p.key] === 3).length, 0);
+  const over = f.t1open.filter((a) => has(a.due) && a.due < per.ref).length;
+  const logs = f.s1.dl.filter((r) => inPer(r.date)).length;
+  return `<div class="${f.k1.health.rag}"><b>${f.k1.health.score === "" ? "—" : pct(f.k1.health.score)}</b><span>board health</span></div>
+    <div class="${red ? "R" : "G"}"><b>${red}</b><span>red letters ${type === "daily" ? "today" : type === "weekly" ? "this week" : "this month"}</span></div>
+    <div><b>${logs}</b><span>officer-days logged</span></div>
+    <div><b>${f.t1open.length}</b><span>open actions</span></div>
+    <div class="${over ? "R" : "G"}"><b>${over}</b><span>actions overdue</span></div>
+    <div class="${f.t1esc.length ? "A" : ""}"><b>${f.t1esc.length}</b><span>escalated to Tier 2</span></div>`;
 }
 
 /** Build and save the report of a type and period with the viewer's settings. */

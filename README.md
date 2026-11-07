@@ -64,6 +64,8 @@ A second app in this repository: the **QA Tier 1 huddle board** and the **QA Tie
 
 **Team sharing.** When the app runs as the published Artifact, both boards live in its shared database (`qa-tiers/js/sync.js`). Each record is its own document, so two people editing different records never overwrite each other, and every open copy updates live. Change history records who changed what. The first person to open it chooses what the team starts from. Anywhere else (a local copy, a signed-out visitor) the app keeps its data in the browser (`localStorage`). The boards mirror the eQMS; they don't replace it.
 
+**Two separate apps.** `qa-tiers/js/edition.js` decides which tiers a copy shows (`tiers: ["t1"]`, `["t2"]` or both). A single-tier copy is a separate app with its own shared database: it syncs, reports, closes and archives only its own tier, with no link to the other. What Tier 2 used to read from Tier 1 is entered in the Tier 2 app itself: register **10·A Escalations from Tier 1**, and the Tier 1 headlines (huddle held, red letters, safety) in the Daily Log; absences are typed in the QA load register. Reports, the month-end close, the guides and the masterclass show the sections of the app's tier only.
+
 ## Running locally
 
 Requires Node.js 18 or later. There are no dependencies to install.

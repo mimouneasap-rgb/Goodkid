@@ -4,6 +4,7 @@
 import { store } from "./store.js";
 import * as E from "./engine.js";
 import { SKILL_LEVELS } from "./schema.js";
+import { hasTier } from "./edition.js";
 import { columns, hbars, ring } from "./charts.js";
 import { openEditor } from "./registers.js";
 import { esc, pill, fmtDate, fmtLong, fmtMonth, fmtKpi, pct, fmtNum, toast, $, $$ } from "./ui.js";
@@ -87,7 +88,7 @@ export function renderBoard(root) {
         </div>
       </div>
       <div style="display:grid;gap:10px;justify-items:end">
-        <div class="ladder"><div class="on">Tier 1<small>you are here</small></div><div>Tier 2<small>${esc(store.t2.setup.meetingTime)}</small></div><div>Tier 3<small>site</small></div></div>
+        <div class="ladder"><div class="on">Tier 1<small>you are here</small></div><div>Tier 2<small>${hasTier("t2") ? esc(store.t2.setup.meetingTime) : "stand-up"}</small></div><div>Tier 3<small>site</small></div></div>
         <div class="chip" style="max-width:360px">⏱ Huddle <b>${esc(st.huddleTime)}</b> · ${esc(st.location)}</div>
       </div>
     </div>

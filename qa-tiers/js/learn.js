@@ -4,6 +4,7 @@
 // generated from schema.js so they always match the forms.
 
 import { store } from "./store.js";
+import { hasTier } from "./edition.js";
 import * as E from "./engine.js";
 import { T1_REGISTERS, T2_REGISTERS, T2_ORDER, T1_ORDER } from "./schema.js";
 import { ring } from "./charts.js";
@@ -632,9 +633,13 @@ function quizBlock() {
     }).join("")}</div>`;
 }
 
+/** Modules that belong to one tier (a separate app shows only its own). */
+const MODULE_TIER = { setup: "t2", enter: "t2", outputs: "t2", monthend: "t2", practice: "t2", tier1: "t1" };
+const shownModules = () => MODULES.filter((m) => !MODULE_TIER[m.id] || hasTier(MODULE_TIER[m.id]));
 function progress() {
-  const done = MODULES.filter((m) => store.prefs.learned?.[m.id]).length;
-  return { done, total: MODULES.length, pct: done / MODULES.length };
+  const mods = shownModules();
+  const done = mods.filter((m) => store.prefs.learned?.[m.id]).length;
+  return { done, total: mods.length, pct: mods.length ? done / mods.length : 0 };
 }
 
 export function renderLearnHome(root) {
@@ -659,7 +664,7 @@ export function renderLearnHome(root) {
         ["Close the month", "Run the month-end close, make the pack and archive the boards."],
         ["Report every rhythm", "Daily report, weekly review and monthly pack — filtered, commented and signed."],
       ].map(([t, x], i) => `<div class="lcard"><span class="n">${i + 1}</span><b>${t}</b><span>${x}</span></div>`).join("")}</div></div>
-    <div class="modules">${MODULES.map((m) => `<a class="card module ${store.prefs.learned?.[m.id] ? "done" : ""}" href="#/learn/${m.id}">
+    <div class="modules">${shownModules().map((m) => `<a class="card module ${store.prefs.learned?.[m.id] ? "done" : ""}" href="#/learn/${m.id}">
       <span class="m-no">${store.prefs.learned?.[m.id] ? "✓" : m.no}</span><h3>${esc(m.title)}</h3><p>${esc(m.lead)}</p>
       <div class="m-foot"><span>${m.lessons.length} lessons</span><span>${m.min} min</span></div></a>`).join("")}</div>
     <div class="callout" style="margin-top:16px">The practice events of module 8 open their forms in <b>practice mode</b>: you enter the event, the app checks every field against the answer key, and nothing is saved — the boards keep their data.</div>`;

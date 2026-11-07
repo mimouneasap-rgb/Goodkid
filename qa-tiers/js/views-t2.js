@@ -3,10 +3,13 @@
 
 import { store } from "./store.js";
 import * as E from "./engine.js";
-import { T2_REGISTERS, T2_DAILY_FIELDS } from "./schema.js";
+import { T2_REGISTERS, T2_DAILY_FIELDS as ALL_DAILY } from "./schema.js";
 import { hbars, stackedH, donut, ring, line, spark, columns } from "./charts.js";
 import { applyFilters, merge, pageFilters, setPageFilters, chartFilters, setChartFilters, filterBar, wireControls, chipsHTML, describe, activeCount, openChartFilter, productName } from "./filters.js";
 import { CHART_DATA, decorateCharts } from "./export.js";
+import { hasTier } from "./edition.js";
+/** Daily Log inputs: the Tier 1 headlines are typed here only in the separate Tier 2 app. */
+const T2_DAILY_FIELDS = ALL_DAILY.filter((f) => !f.tierOnly || !hasTier("t1"));
 import { openEditor, inputHTML, readField, wireInputs } from "./registers.js";
 import { esc, pill, fmtDate, fmtLong, fmtMonth, fmtKpi, pct, fmtNum, toast, drawer, modal, fresh, $, $$, dow } from "./ui.js";
 
@@ -58,9 +61,20 @@ const urgentList = (items, reg, s) => items.length ? `<div class="urgent">${item
 
 /** Open Tier 1 actions escalated to Tier 2 (the bridge between the boards). */
 export function tier1Escalations() {
+  if (!hasTier("t1")) return [];
   const t1 = store.t1;
   const ctx = E.t1Context(t1, t1.setup.selDate, "All team");
   return E.t1OpenActions(ctx).escalated;
+}
+
+/** What the 08:30 huddle reported, as entered in the Tier 2 Daily Log (Tier 2 app). */
+function t1Headlines(log, openEsc) {
+  const red = String(log.t1red || "").trim();
+  return `<div class="grid g3" style="margin-bottom:12px">
+    <div class="kpi ${log.t1held === "Yes" ? "G" : log.t1held === "No" ? "R" : "N"}"><div class="k-name">Tier 1 huddle</div><div class="k-val" style="font-size:20px">${log.t1held === "Yes" ? "Held" : log.t1held === "No" ? "Not held" : "—"}</div><div class="k-foot"><span>Daily Log</span></div></div>
+    <div class="kpi ${red ? "R" : log.t1held ? "G" : "N"}"><div class="k-name">Tier 1 red letters</div><div class="k-val" style="font-size:20px">${esc(red || (log.t1held ? "None" : "—"))}</div><div class="k-foot"><span>SQDCP</span></div></div>
+    <div class="kpi ${log.t1safety ? "A" : "N"}"><div class="k-name">Tier 1 safety & containment</div><div class="k-val" style="font-size:14px;line-height:1.3">${esc(log.t1safety || "—")}</div><div class="k-foot"><span>${openEsc.length} open escalation${openEsc.length === 1 ? "" : "s"} from Tier 1</span></div></div>
+  </div>${log.t1held ? "" : `<div class="callout" style="margin-bottom:12px">Ask the Tier 1 owner: huddle held? red letters? safety events? — and enter them in today's Daily Log (with any escalation in register 10·A).</div>`}`;
 }
 
 /* ── Dashboard ──────────────────────────────────────────── */
@@ -134,8 +148,8 @@ export function renderBoard(root, { filters = null } = {}) {
       <div class="card card-pad">
         <div class="card-head"><h2>⇪ Escalated to Tier 3</h2><a class="btn sm" href="#/t2/reg/esc">Register 10 ›</a></div>
         ${urgentList(esc3, "esc", s)}
-        <div class="card-head" style="margin:14px 0 8px"><h2>⇧ From Tier 1 <span class="sub">open huddle escalations</span></h2><a class="btn sm" href="#/t1/reg/ac">Actions ›</a></div>
-        ${t1esc.length ? `<div class="urgent">${t1esc.map((a) => `<a href="#/t1/reg/ac?id=${encodeURIComponent(a.id)}"><span class="ref">${esc(a.id)}</span><span class="desc">${esc(a.desc)} (${esc(a.officer)})</span>${pill(E.dueLabel(a.due, store.t1.setup.selDate), a.due < store.t1.setup.selDate ? "R" : "A")}</a>`).join("")}</div>` : `<div class="empty">No open Tier 1 escalation</div>`}
+        <div class="card-head" style="margin:14px 0 8px"><h2>⇧ From Tier 1 <span class="sub">open huddle escalations</span></h2>${hasTier("t1") ? `<a class="btn sm" href="#/t1/reg/ac">Actions ›</a>` : `<a class="btn sm" href="#/t2/reg/t1e">Register 10·A ›</a>`}</div>
+        ${!hasTier("t1") ? urgentList(E.t2Top(s, "t1e", 5, comp), "t1e", s) : t1esc.length ? `<div class="urgent">${t1esc.map((a) => `<a href="#/t1/reg/ac?id=${encodeURIComponent(a.id)}"><span class="ref">${esc(a.id)}</span><span class="desc">${esc(a.desc)} (${esc(a.officer)})</span>${pill(E.dueLabel(a.due, store.t1.setup.selDate), a.due < store.t1.setup.selDate ? "R" : "A")}</a>`).join("")}</div>` : `<div class="empty">No open Tier 1 escalation</div>`}
       </div>
     </div>
   </div>
@@ -281,9 +295,9 @@ function standup(onDone) {
 
   const content = () => {
     const yesterday = E.addDays(st.statusDate, -1);
-    const t1 = E.t1Kpis(E.t1Context(store.t1, store.t1.setup.selDate, "All team")).kpis;
+    const t1 = hasTier("t1") ? E.t1Kpis(E.t1Context(store.t1, store.t1.setup.selDate, "All team")).kpis : [];
     switch (step) {
-      case 0: return `<div class="grid g3">${t1.slice(0, 4).map((k) => `<div class="kpi ${k.rag}"><div class="k-name">Tier 1 · ${esc(k.name)}</div><div class="k-val">${fmtKpi(k.actual, k.unit)}</div><div class="k-foot"><span>${esc(k.targetText)}</span></div></div>`).join("")}
+      case 0: return `${hasTier("t1") ? "" : t1Headlines(s.daily[st.statusDate] || {}, open("t1e"))}<div class="grid g3">${t1.slice(0, 4).map((k) => `<div class="kpi ${k.rag}"><div class="k-name">Tier 1 · ${esc(k.name)}</div><div class="k-val">${fmtKpi(k.actual, k.unit)}</div><div class="k-foot"><span>${esc(k.targetText)}</span></div></div>`).join("")}
         <div class="kpi ${E.t2Kpis(s).other.rag}"><div class="k-name">${esc(st.otherDesc)}</div><div class="k-val" style="font-size:20px">${esc(st.otherStatus)}</div></div></div>
         <div class="callout warn" style="margin-top:12px">Yesterday's remarks: ${esc(s.daily[yesterday]?.remarks || "none logged")}</div>`;
       case 1: return list(open("dev").sort((a, b) => (a.r.due || "").localeCompare(b.r.due || "")), [(x) => ref("dev", x.r), (x) => esc(x.r.desc), (x) => pill(x.r.cls), (x) => esc(x.r.owner), (x) => x.c.live === "Overdue" ? pill("Overdue", "R") : `due ${fmtDate(x.r.due)}`]);

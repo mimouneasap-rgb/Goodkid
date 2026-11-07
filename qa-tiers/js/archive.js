@@ -20,29 +20,33 @@ import * as T2 from "./views-t2.js";
 import { renderPNG, saveFile, loadZip, slug, pngPrefs } from "./export.js";
 import { periodOf, makeReport } from "./report.js";
 import { esc, fmtDate, fmtLong, fmtMonth, pct, toast, confirmDialog, fresh, toCSV, today, $, $$ } from "./ui.js";
+import { hasTier, ONE_TIER, MAIN_TIER, EDITION } from "./edition.js";
 
 const CHUNK = 90000;
 const LOCAL = "qaTiers.archive.";
 const has = (v) => v !== "" && v != null;
 const strip = (s) => { const c = JSON.parse(JSON.stringify(s)); delete c.audit; return c; };
-const siteShort = () => (store.t2.setup.site || "site").split(/[—-]/)[0].trim().replace(/\W+/g, "_");
+const siteShort = () => (store[MAIN_TIER].setup.site || "site").split(/[—-]/)[0].trim().replace(/\W+/g, "_");
+/** The month this app closes: Tier 2's reporting month, or the month of the Tier 1 board date. */
+export const closeMonth = () => (MAIN_TIER === "t2" ? store.t2.setup.month : E.monthStart(store.t1.setup.selDate));
+const dataDate = () => (MAIN_TIER === "t2" ? store.t2.setup.statusDate : store.t1.setup.selDate);
 
 /** Headline figures kept with an archive, so the list can show them without loading it. */
 function headline() {
-  const s = store.t2, comp = E.t2Computed(s);
-  const { pulse } = E.t2Kpis(s, comp);
+  const s = store.t2, comp = hasTier("t2") ? E.t2Computed(s) : {};
+  const pulse = hasTier("t2") ? E.t2Kpis(s, comp).pulse : { score: "" };
   const k1 = E.t1Kpis(E.t1Context(store.t1, store.t1.setup.selDate, "All team"));
   const overdue = Object.values(comp).reduce((a, c) => a + c.filter((x) => x.live === "Overdue").length, 0);
-  const records = T2_ORDER.reduce((a, r) => a + (s[r]?.length || 0), 0) + T1_ORDER.reduce((a, r) => a + (store.t1[r]?.length || 0), 0);
-  return { pulse: pulse.score, health: k1.health.score, overdue, records };
+  const records = (hasTier("t2") ? T2_ORDER.reduce((a, r) => a + (s[r]?.length || 0), 0) : 0) + (hasTier("t1") ? T1_ORDER.reduce((a, r) => a + (store.t1[r]?.length || 0), 0) : 0);
+  return { pulse: pulse.score, health: hasTier("t1") ? k1.health.score : "", overdue, records };
 }
 
-export function snapshot(month = store.t2.setup.month) {
-  return { app: "qa-tiers", kind: "month-end", version: 1, month, created: new Date().toISOString(), site: store.t2.setup.site, statusDate: store.t2.setup.statusDate, summary: headline(), t1: strip(store.t1), t2: strip(store.t2) };
+export function snapshot(month = closeMonth()) {
+  return { app: "qa-tiers", kind: "month-end", version: 1, tiers: EDITION.tiers, month, created: new Date().toISOString(), site: store[MAIN_TIER].setup.site, statusDate: dataDate(), summary: headline(), t1: strip(store.t1), t2: strip(store.t2) };
 }
 
 /** Save the month's boards to the archive (shared database, else this browser). */
-export async function saveArchive(month = store.t2.setup.month, { note = "" } = {}) {
+export async function saveArchive(month = closeMonth(), { note = "" } = {}) {
   const snap = snapshot(month);
   const text = JSON.stringify(snap);
   const m = month.slice(0, 7);
@@ -103,7 +107,7 @@ export async function deleteArchive(month, where) {
 export function openSnapshot(snap, navigate) {
   if (!snap?.t1 || !snap?.t2) { toast("This file is not a QA Tier Boards archive"); return; }
   store.enterView(snap.t1, snap.t2, { kind: "archive", label: `Archive · ${fmtMonth(`${String(snap.month).slice(0, 7)}-01`)}`, month: snap.month });
-  navigate("#/t2/board");
+  navigate(`#/${MAIN_TIER}/board`);
   toast(`Viewing the ${fmtMonth(`${String(snap.month).slice(0, 7)}-01`)} archive — read-only`);
 }
 
@@ -146,15 +150,15 @@ async function chartPictures(onStep) {
     }
   };
   try {
-    await grab("tier2-dashboard", (v) => T2.renderBoard(v, { filters: { period: "all" } }));
-    await grab("tier2-analytics", (v) => T2.renderAnalytics(v, { filters: { period: "all" }, ownFilters: false }));
-    await grab("tier1-board", (v) => T1.renderBoard(v));
+    if (hasTier("t2")) await grab("tier2-dashboard", (v) => T2.renderBoard(v, { filters: { period: "all" } }));
+    if (hasTier("t2")) await grab("tier2-analytics", (v) => T2.renderAnalytics(v, { filters: { period: "all" }, ownFilters: false }));
+    if (hasTier("t1")) await grab("tier1-board", (v) => T1.renderBoard(v));
   } finally { host.remove(); }
   return out;
 }
 
 /** Everything for the controlled folder in one ZIP. */
-export async function monthPack(month = store.t2.setup.month, onStep = () => {}) {
+export async function monthPack(month = closeMonth(), onStep = () => {}) {
   const JSZip = await loadZip();
   const zip = new JSZip();
   const m = month.slice(0, 7);
@@ -167,10 +171,10 @@ export async function monthPack(month = store.t2.setup.month, onStep = () => {})
   pics.forEach((x) => dir.file(x.name, x.blob));
   onStep("Register tables (CSV)…");
   const regs = zip.folder("03_Registers");
-  T2_ORDER.forEach((r, i) => regs.file(`T2-${String(i + 1).padStart(2, "0")}-${slug(T2_REGISTERS[r].title)}.csv`, registerCSV("t2", r)));
-  T1_ORDER.forEach((r) => regs.file(`T1-${T1_REGISTERS[r].no}-${slug(T1_REGISTERS[r].title)}.csv`, registerCSV("t1", r)));
+  if (hasTier("t2")) T2_ORDER.forEach((r, i) => regs.file(`T2-${String(i + 1).padStart(2, "0")}-${slug(T2_REGISTERS[r].title)}.csv`, registerCSV("t2", r)));
+  if (hasTier("t1")) T1_ORDER.forEach((r) => regs.file(`T1-${T1_REGISTERS[r].no}-${slug(T1_REGISTERS[r].title)}.csv`, registerCSV("t1", r)));
   zip.file(`04_Boards_snapshot_${m}.json`, JSON.stringify(snapshot(month), null, 1));
-  const st = store.t2.setup, y = m.slice(0, 4);
+  const st = { ...store[MAIN_TIER].setup, statusDate: dataDate() }, y = m.slice(0, 4);
   zip.file("00_README.txt", [
     `QA TIER BOARDS — MONTH-END PACK — ${fmtMonth(`${m}-01`).toUpperCase()}`,
     `${st.site || ""} · data as of ${st.statusDate} · prepared ${today()}`, "",
@@ -201,12 +205,39 @@ function lastWorkingDay(month, setup) {
   return d;
 }
 
+/** The month-end close of a Tier 1 app. */
+function closeStepsT1() {
+  const s = store.t1, st = s.setup, M = E.monthStart(st.selDate);
+  const c1 = E.t1Computed(s, st.selDate);
+  const flags1 = Object.entries(c1).reduce((a, [r, c]) => a + (T1_REGISTERS[r] ? E.flagged(c) : 0), 0);
+  const lwd = lastWorkingDay(M, st);
+  const work = E.monthDays(M).filter((d) => d <= st.selDate && !E.isWeekend(d, st));
+  const logDays = new Set(s.dl.filter((r) => r.date >= M && r.date <= E.monthEnd(M)).map((r) => r.date));
+  const hdDays = new Set(s.hd.filter((h) => h.date >= M && h.date <= E.monthEnd(M) && h.held).map((h) => h.date));
+  let next = E.addDays(E.monthEnd(M), 1);
+  while (E.isWeekend(next, st)) next = E.addDays(next, 1);
+  const ticks = s.close?.[M.slice(0, 7)] || {};
+  return { M, next, lwd, ticks, list: [
+    { key: "flags", title: "Clear the data-check flags", text: "Open each register with a ⚠ flag and complete the missing status, closure date or date order. A KPI is only as good as its records.", auto: flags1 === 0, info: `${flags1} record(s) flagged`, acts: `<a class="btn sm" href="#/home">See the flagged registers</a>` },
+    { key: "logs", title: "Complete the daily logs and the huddle log", text: "Every working day of the month: one daily-log line per officer present, and the huddle (held, attendees, 3 priorities, escalation).", auto: work.length > 0 && work.every((d) => logDays.has(d)) && work.every((d) => hdDays.has(d)), info: `Daily log: ${work.filter((d) => logDays.has(d)).length}/${work.length} working days · huddle log: ${work.filter((d) => hdDays.has(d)).length}/${work.length}`, acts: `<a class="btn sm" href="#/t1/reg/dl">Daily log</a><a class="btn sm" href="#/t1/reg/hd">Huddle log</a>` },
+    { key: "actions", title: "Review the open actions and findings", text: "Every open action has an owner and a realistic due date; overdue ones are re-planned or escalated to Tier 2.", auto: null, info: `${E.t1OpenActions(E.t1Context(s, st.selDate, "All team")).open.length} open action(s)`, acts: `<a class="btn sm" href="#/t1/reg/ac">Actions</a><a class="btn sm" href="#/t1/reg/fn">Findings</a>` },
+    { key: "asof", title: `Set the board date to the last working day (${fmtDate(lwd)})`, text: "The month-to-date KPIs, the SQDCP letters and the team table are read on this date.", auto: st.selDate === lwd, info: `Now: ${fmtLong(st.selDate)}`, acts: st.selDate === lwd ? "" : `<button class="btn sm" data-asof="${lwd}">Set ${fmtDate(lwd)}</button>` },
+    { key: "report", title: "Create the monthly report (Word)", text: "Cover, document control, Tier 1 summary, SQDCP pictures, the board (letters, 20 KPIs, team), actions and findings, data quality, commentary, sign-off, KPI definitions.", auto: null, acts: `<button class="btn sm primary" data-report>⤓ Create the Word report</button><a class="btn sm" href="#/report">Settings & commentary</a>` },
+    { key: "charts", title: "Export the board pictures", text: "SQDCP letters, the 20 KPIs and the daily activity as high-resolution PNG.", auto: null, acts: `<a class="btn sm" href="#/t1/board">Huddle board ›</a>` },
+    { key: "archive", title: `Archive the ${fmtMonth(M)} board`, text: store.db ? "A frozen, read-only copy of the board is kept in the shared archive — anyone in the team can re-open this month later." : "A frozen copy is kept in this browser's archive; download the JSON too.", auto: null, acts: `<button class="btn sm primary" data-archive>🗄 Archive now</button><a class="btn sm" href="#/archive">Archive</a>` },
+    { key: "file", title: "File the month-end pack in the controlled folder", text: "One ZIP: the Word report, the board pictures, every register as CSV, the board snapshot and the filing instructions. Sign the printed report and keep the PDF beside it.", auto: null, acts: `<button class="btn sm primary" data-pack>⤓ Month-end pack (ZIP)</button>`,
+      list: [`Folder: Controlled folder → QA Tier 1 Huddle → ${M.slice(0, 4)} → ${M.slice(0, 7)} ${fmtMonth(M).split(" ")[0]}`, "Signed PDF of the report next to the ZIP", "Never edit a filed pack — issue a new version (v1.1) instead"] },
+    { key: "roll", title: `Move the board to ${fmtMonth(next)}`, text: "Sets the board date to the first working day of the new month: the letters, KPIs and team table start the month afresh. Registers are never cleared.", auto: st.selDate >= next, acts: `<button class="btn sm" data-roll>→ ${fmtDate(next)}</button>` },
+  ] };
+}
+
 function closeSteps() {
+  if (ONE_TIER === "t1") return closeStepsT1();
   const s = store.t2, st = s.setup, M = st.month;
   const comp = E.t2Computed(s);
   const c1 = E.t1Computed(store.t1, store.t1.setup.selDate);
   const flags2 = Object.entries(comp).reduce((a, [r, c]) => a + (T2_REGISTERS[r] ? E.flagged(c) : 0), 0);
-  const flags1 = Object.entries(c1).reduce((a, [r, c]) => a + (T1_REGISTERS[r] ? E.flagged(c) : 0), 0);
+  const flags1 = hasTier("t1") ? Object.entries(c1).reduce((a, [r, c]) => a + (T1_REGISTERS[r] ? E.flagged(c) : 0), 0) : 0;
   const cal = E.t2Calendar(s);
   const work = cal.filter((d) => !d.weekend && !d.future);
   const logged = work.filter((d) => d.log.held).length;
@@ -219,16 +250,17 @@ function closeSteps() {
   const next = E.addDays(E.monthEnd(M), 1);
   const ticks = s.close?.[M.slice(0, 7)] || {};
   return { M, next, lwd, ticks, list: [
-    { key: "flags", title: "Clear the data-check flags", text: `Open each register with a ⚠ flag and complete the missing status, closure date or date order. A KPI is only as good as its records.`, auto: flags1 + flags2 === 0, info: `${flags2} Tier 2 · ${flags1} Tier 1 record(s) flagged`, acts: `<a class="btn sm" href="#/home">See the flagged registers</a>` },
-    { key: "logs", title: "Complete the Daily Log and the Tier 1 logs", text: "Every working day of the month: Tier 2 meeting held / attendees / Top 3, and the Tier 1 daily activity log of each officer.", auto: work.length > 0 && logged === work.length, info: `Tier 2: ${logged}/${work.length} working days logged · Tier 1: ${t1days} day(s) with entries`, acts: `<a class="btn sm" href="#/t2/calendar">Daily Log</a><a class="btn sm" href="#/t1/reg/dl">Tier 1 log</a>` },
+    { key: "flags", title: "Clear the data-check flags", text: `Open each register with a ⚠ flag and complete the missing status, closure date or date order. A KPI is only as good as its records.`, auto: flags1 + flags2 === 0, info: hasTier("t1") ? `${flags2} Tier 2 · ${flags1} Tier 1 record(s) flagged` : `${flags2} record(s) flagged`, acts: `<a class="btn sm" href="#/home">See the flagged registers</a>` },
+    hasTier("t1") ? { key: "logs", title: "Complete the Daily Log and the Tier 1 logs", text: "Every working day of the month: Tier 2 meeting held / attendees / Top 3, and the Tier 1 daily activity log of each officer.", auto: work.length > 0 && logged === work.length, info: `Tier 2: ${logged}/${work.length} working days logged · Tier 1: ${t1days} day(s) with entries`, acts: `<a class="btn sm" href="#/t2/calendar">Daily Log</a><a class="btn sm" href="#/t1/reg/dl">Tier 1 log</a>` }
+      : { key: "logs", title: "Complete the Daily Log", text: "Every working day of the month: meeting held, attendees, Top 3 priorities and the Tier 1 headlines (huddle held, red letters, safety); every escalation from Tier 1 in register 10·A.", auto: work.length > 0 && logged === work.length, info: `${logged}/${work.length} working days logged`, acts: `<a class="btn sm" href="#/t2/calendar">Daily Log</a><a class="btn sm" href="#/t2/reg/t1e">Register 10·A</a>` },
     { key: "asof", title: `Set the as-of date to the last working day (${fmtDate(lwd)})`, text: "Every overdue count, KPI and the Q-calendar are calculated as of this date.", auto: st.statusDate === lwd, info: `Now: ${fmtLong(st.statusDate)}`, acts: st.statusDate === lwd ? "" : `<button class="btn sm" data-asof="${lwd}">Set ${fmtDate(lwd)}</button>` },
     { key: "remarks", title: "Write the monthly remarks", text: "Count first · name the trend · state what was escalated and why · end with next month's focus. They open the executive summary of the pack.", auto: has(st.remarks), info: "", body: `<textarea class="input" data-remarks rows="3" style="width:100%;margin-top:8px" placeholder="e.g. November: 6 new deviations (1 major) …">${esc(st.remarks || "")}</textarea>` },
     { key: "freeze", title: `Freeze the KPIs into ${E.MONTHS[m]}`, text: "Copies every live KPI into its month column of KPI Trend — the 12-month history and next month's trend arrows come from here.", auto: frozen, info: withData.length ? `${withData.length} KPI(s) with data` : "No KPI has data yet", acts: `<button class="btn sm" data-freeze>❄ Freeze ${E.MONTHS[m]}</button><a class="btn sm" href="#/t2/trend">KPI Trend</a>` },
     { key: "report", title: "Create the monthly management pack (Word)", text: "Cover, document control, executive summary, the month in numbers, KPIs, every chart, the registers, QA load, Tier 1, data quality, commentary and sign-off.", auto: null, acts: `<button class="btn sm primary" data-report>⤓ Create the Word pack</button><a class="btn sm" href="#/report">Settings & commentary</a>` },
-    { key: "charts", title: "Export the chart pictures", text: "Every chart of the dashboard, Analytics and the Tier 1 board as high-resolution PNG for the Tier 3 slides.", auto: null, acts: `<a class="btn sm" href="#/t2/analytics">Analytics (ZIP)</a>` },
+    { key: "charts", title: "Export the chart pictures", text: `Every chart of the dashboard${hasTier("t1") ? ", Analytics and the Tier 1 board" : " and Analytics"} as high-resolution PNG for the Tier 3 slides.`, auto: null, acts: `<a class="btn sm" href="#/t2/analytics">Analytics (ZIP)</a>` },
     { key: "archive", title: `Archive the ${fmtMonth(M)} boards`, text: store.db ? "A frozen, read-only copy of both boards is kept in the shared archive — anyone in the team can re-open this month later." : "A frozen copy is kept in this browser's archive; download the JSON too.", auto: null, acts: `<button class="btn sm primary" data-archive>🗄 Archive now</button><a class="btn sm" href="#/archive">Archive</a>` },
     { key: "file", title: "File the month-end pack in the controlled folder", text: "One ZIP with everything: the Word pack, the chart pictures, every register as CSV, the boards snapshot and filing instructions. Sign the printed report and keep the PDF beside it.", auto: null, acts: `<button class="btn sm primary" data-pack>⤓ Month-end pack (ZIP)</button>`,
-      list: [`Folder: Controlled folder → QA Tier Boards → ${M.slice(0, 4)} → ${M.slice(0, 7)} ${fmtMonth(M).split(" ")[0]}`, "Signed PDF of the report next to the ZIP", "Never edit a filed pack — issue a new version (v1.1) instead", "The eQMS stays the GMP record of truth"] },
+      list: [`Folder: Controlled folder → ${ONE_TIER === "t2" ? "QA Tier 2 Daily Management" : "QA Tier Boards"} → ${M.slice(0, 4)} → ${M.slice(0, 7)} ${fmtMonth(M).split(" ")[0]}`, "Signed PDF of the report next to the ZIP", "Never edit a filed pack — issue a new version (v1.1) instead", "The eQMS stays the GMP record of truth"] },
     { key: "roll", title: `Roll the board to ${fmtMonth(next)}`, text: "The calendar, the Daily Log and every ‘this month’ count move to the new month. Registers are never cleared: closed records stay for traceability and trending.", auto: st.month > M, acts: `<button class="btn sm" data-roll>→ ${fmtMonth(next)}</button>` },
   ] };
 }
@@ -240,7 +272,7 @@ export function renderClose(root, { navigate } = {}) {
   root.innerHTML = `
     <section class="hero"><div class="hero-grid"><div>
       <div class="eyebrow">Month-end close · last working day</div><h1>Close ${fmtMonth(M)}</h1>
-      <p>Ten steps, in order. Each shows whether the boards already show it done; tick the others when they are. The ticks are shared with the team. When every step is green, the month is closed and stored.</p></div>
+      <p>${list.length} steps, in order. Each shows whether the board already shows it done; tick the others when they are. The ticks are shared with the team. When every step is green, the month is closed and stored.</p></div>
       <div style="display:grid;gap:8px;justify-items:end"><span class="chip">${doneN} of ${list.length} steps done</span><div class="progress" style="width:220px"><i style="width:${(doneN / list.length) * 100}%"></i></div><a class="btn" href="#/archive">🗄 Archive ›</a></div></div></section>
     <div data-closeprog class="callout" hidden style="margin-bottom:12px"></div>
     <div class="steps">${list.map((x, i) => {
@@ -254,7 +286,7 @@ export function renderClose(root, { navigate } = {}) {
     }).join("")}</div>`;
 
   const m7 = M.slice(0, 7);
-  const tick = (key, on = true) => store.patch("t2", ["close", m7, key], on ? new Date().toISOString() : "", `Month-end ${m7}`);
+  const tick = (key, on = true) => store.patch(MAIN_TIER, ["close", m7, key], on ? new Date().toISOString() : "", `Month-end ${m7}`);
   const prog = $("[data-closeprog]", root);
   const step = (t) => { prog.hidden = false; prog.textContent = t; };
   const rerender = () => renderClose(root, { navigate });
@@ -265,7 +297,7 @@ export function renderClose(root, { navigate } = {}) {
   root.addEventListener("click", async (e) => {
     const b = e.target.closest("button");
     if (!b || !root.contains(b)) return;
-    if (b.dataset.asof) { store.patch("t2", ["setup", "statusDate"], b.dataset.asof, "Status date"); rerender(); }
+    if (b.dataset.asof) { if (MAIN_TIER === "t2") store.patch("t2", ["setup", "statusDate"], b.dataset.asof, "Status date"); else store.patch("t1", ["setup", "selDate"], b.dataset.asof, "Board date"); rerender(); }
     if (b.hasAttribute("data-freeze")) { T2.freezeMonth(rerender); }
     if (b.hasAttribute("data-report")) {
       b.disabled = true;
@@ -290,6 +322,14 @@ export function renderClose(root, { navigate } = {}) {
         if (await saveFile(name, blob)) tick("file");
       } catch (err) { step(err?.message || "The pack could not be created"); }
       b.disabled = false;
+    }
+    if (b.hasAttribute("data-roll") && MAIN_TIER === "t1") {
+      if (!await confirmDialog({ title: `Move the board to ${fmtMonth(next)}?`, body: `<p>Archive the ${fmtMonth(M)} board first. The board date moves to ${fmtLong(next)}. Registers are kept.</p>`, ok: "Move the board" })) return;
+      tick("roll");
+      store.patch("t1", ["setup", "selDate"], next, "Board date");
+      toast(`Board date: ${fmtLong(next)}`);
+      navigate?.("#/close");
+      return;
     }
     if (b.hasAttribute("data-roll")) {
       if (!await confirmDialog({ title: `Roll to ${fmtMonth(next)}?`, body: `<p>Freeze ${E.MONTHS[+M.slice(5, 7) - 1]} and archive the boards first. The calendar, the Daily Log and every ‘this month’ count move to ${fmtMonth(next)}. Registers are kept.</p>`, ok: "Roll the month" })) return;

@@ -12,7 +12,7 @@ import { esc, fmtDate, $, $$ } from "./ui.js";
 
 const has = (v) => v !== "" && v != null;
 
-export const T2_REGS = ["dev", "capa", "cc", "insp", "rel", "doc", "apqr", "trn", "esc", "act", "tasks", "aud", "find", "rej", "load"];
+export const T2_REGS = ["dev", "capa", "cc", "insp", "rel", "doc", "apqr", "trn", "esc", "act", "tasks", "aud", "find", "rej", "t1e", "load"];
 export const T1_REGS = ["dl", "br", "fn", "ac", "hd", "tr"];
 
 /** Every filterable dimension: the record fields it reads. */

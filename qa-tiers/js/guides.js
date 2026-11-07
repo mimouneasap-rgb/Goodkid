@@ -4,7 +4,7 @@
 // guided tours that walk through the real screens, highlighting each control.
 
 import { store } from "./store.js";
-import { EDITION } from "./edition.js";
+import { EDITION, hasTier, ONE_TIER } from "./edition.js";
 import * as E from "./engine.js";
 import { T1_ORDER, T2_ORDER } from "./schema.js";
 import { esc, fmtLong, fmtMonth, toast, fresh, today, $, $$ } from "./ui.js";
@@ -56,9 +56,11 @@ export const TOURS = {
 };
 
 let tour = null;
+const stepShown = (st) => !(/^#\/t1\//.test(st.route) && !hasTier("t1")) && !(/^#\/(t2\/|import|start)/.test(st.route) && !hasTier("t2")) && !(st.sel === "[data-step=freeze]" && !hasTier("t2"));
+const tourOf = (id) => { const t = TOURS[id]; return t && { ...t, steps: t.steps.filter(stepShown) }; };
 export function startTour(id) {
-  const t = TOURS[id];
-  if (!t) return;
+  const t = tourOf(id);
+  if (!t?.steps.length) return;
   endTour();
   tour = { id, i: 0, t };
   showStep();
@@ -263,8 +265,9 @@ const GUIDES = [
   ] },
   { id: "daily", tour: "daily", icon: "☀", title: "Every day", when: "08:00 → 16:00", steps: [
     ["08:00 · Update the registers", "Each owner enters yesterday's and this morning's events: new deviations, CAPA, changes, actions, batch-release steps."],
-    ["08:00–08:25 · Tier 1 daily log", "Each officer: one line — shift, attendance, line clearances (and failures), IPC, AQL, Gemba, records, findings."],
-    ["08:30 · Tier 1 huddle (10 min)", "Huddle board: SQDCP letters, red KPIs, open actions. Red letter → action with owner and due date. Log the huddle (register E): held, attendees, 3 priorities, escalation to Tier 2."],
+    ["10:30 · Tier 1 headlines", "At the start of the stand-up the Tier 1 owner reports the huddle: held, red letters, safety events. Enter them in today's Daily Log; each escalation goes into register 10·A with a Tier 2 owner.", "t2solo"],
+    ["08:00–08:25 · Tier 1 daily log", "Each officer: one line — shift, attendance, line clearances (and failures), IPC, AQL, Gemba, records, findings.", "t1"],
+    ["08:30 · Tier 1 huddle (10 min)", "Huddle board: SQDCP letters, red KPIs, open actions. Red letter → action with owner and due date. Log the huddle (register E): held, attendees, 3 priorities, escalation to Tier 2.", "t1"],
     ["09:30 · Clear the data checks", "Every ⚠ flag on a register strip: fix the status, closure date or date order."],
     ["10:00 · Cut-off", "The data is frozen for the stand-up; late changes wait until 10:45."],
     ["10:30 · Tier 2 stand-up (15 min)", "Dashboard → ▶ Run the 15-min stand-up: safety, deviations, CAPA, changes, Gemba, release & documents, priorities & escalation."],
@@ -315,12 +318,47 @@ const GUIDES = [
   ] },
 ];
 
+/** The guides of a separate Tier 1 app. */
+const GUIDES_T1 = [
+  { id: "daily", tour: "daily", icon: "☀", title: "Every day — the huddle", when: "08:00 → 08:45", steps: [
+    ["08:00–08:25 · Daily log", "Each officer adds one line: shift, attendance, line clearances (and failures), IPC, AQL, sampling, Gemba, records reviewed, findings."],
+    ["Batch records", "Each BMR / BPR received and reviewed goes into Batch reviews: received, reviewed, errors, returned."],
+    ["Findings", "Every finding of the floor with its severity, owner and due date — High severity the same day."],
+    ["08:30 · Huddle (10 min)", "Huddle board: SQDCP letters, red KPIs, open actions. Every red letter gets an action with an owner and a due date."],
+    ["Huddle log", "Held, attendees, 3 priorities; tick the actions to escalate to Tier 2 — the huddle owner presents them at the 10:30 stand-up."],
+    ["Daily report", "Reports → Daily: the SQDCP letters, tiles, open actions and the summary to paste for the QA manager."],
+  ] },
+  { id: "weekly", tour: null, icon: "▦", title: "Every week", when: "Last working day of the week", steps: [
+    ["Clear every flag", "Data-check flags at zero in every register."],
+    ["Review the actions", "Every open action has an owner and a realistic date; overdue ones are re-planned or escalated to Tier 2."],
+    ["Read the week", "Reports → Weekly: the SQDCP letters of each day, the 20 KPIs, each officer's performance."],
+    ["Skills", "Skills matrix: training gaps planned in register F."],
+  ] },
+  { id: "monthend", tour: "monthend", icon: "▣", title: "Month-end close & storage", when: "Last working day of the month", steps: [
+    ["Clean the data", "Clear the flags; complete the daily log and the huddle log for every working day."],
+    ["Fix the date", "Set the board date to the last working day."],
+    ["Make the monthly report", "Reports → Monthly: commentary and sign-off names first, then Create."],
+    ["Archive & file", "Close: archive the board, then the month-end pack (ZIP) for the controlled folder; sign the printed report."],
+    ["Move on", "Move the board to the first working day of the new month. Registers are never cleared."],
+  ] },
+  { id: "exports", tour: null, icon: "⤓", title: "Exports", when: "Any time", steps: [
+    ["Pictures", "⤓ Export on the SQDCP letters, the KPI cards and the daily activity: PNG 2× / 3× / 4×, copy, SVG."],
+    ["Registers", "Quick buttons and ⚲ More filters on every register; Export CSV exports what is shown."],
+    ["Reports", "Daily, weekly and monthly Word reports, filtered by officer, with commentary and sign-off."],
+  ] },
+  { id: "team", tour: null, icon: "⎘", title: "Sharing & data integrity", when: "Always", steps: [
+    ["One live board", "Everyone with edit access works on the same board; changes appear on every screen within seconds."],
+    ["Attributable", "Every change is recorded in Change history."],
+    ["ALCOA+", "Officer always filled · plain descriptions · enter the day it happens · no blank status."],
+  ] },
+];
+
 export function renderGuide(root) {
   root = fresh(root);
   root.innerHTML = `
     <div class="page-head"><div><div class="eyebrow">How-to guides</div><h1>Every routine, step by step</h1>
       <p>Written steps for each routine, and a guided tour that walks you through the real screens with each control highlighted. Use ← → to move through a tour.</p></div></div>
-    <div class="grid g2">${GUIDES.map((g) => `<div class="card card-pad guide" data-guide="${g.id}"><div class="card-head"><h2>${g.icon} ${esc(g.title)} <span class="sub">${esc(g.when)}</span></h2>${g.tour ? `<button class="btn sm primary" data-tour="${g.tour}">▶ Guided tour</button>` : ""}</div>
+    <div class="grid g2">${(ONE_TIER === "t1" ? GUIDES_T1 : GUIDES.map((g) => ({ ...g, steps: g.steps.filter((st) => !st[2] || (st[2] === "t2solo" ? ONE_TIER === "t2" : hasTier(st[2]))) }))).map((g) => `<div class="card card-pad guide" data-guide="${g.id}"><div class="card-head"><h2>${g.icon} ${esc(g.title)} <span class="sub">${esc(g.when)}</span></h2>${g.tour && tourOf(g.tour)?.steps.length ? `<button class="btn sm primary" data-tour="${g.tour}">▶ Guided tour</button>` : ""}</div>
       <ol>${g.steps.map(([t, x]) => `<li><b>${esc(t)}</b> — ${esc(x)}</li>`).join("")}</ol></div>`).join("")}</div>`;
   $$("[data-tour]", root).forEach((b) => b.onclick = () => startTour(b.dataset.tour));
 }

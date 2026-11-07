@@ -2,7 +2,7 @@
 // drop-down lists, the month-end roll-over and data backup.
 
 import { store, HAS_REAL, demoAllowed, REAL_INFO } from "./store.js";
-import { EDITION } from "./edition.js";
+import { EDITION, ONE_TIER, hasTier } from "./edition.js";
 import { saveFile } from "./export.js";
 import * as E from "./engine.js";
 import { LOCKED_LISTS, LIST_LABELS, T1_REGISTERS, T2_REGISTERS } from "./schema.js";

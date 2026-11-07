@@ -6,7 +6,7 @@ import { DEMO_T1, DEMO_T2 } from "./demo-data.js";
 import * as SITE from "./real-data.js";
 const { REAL_T1, REAL_T2 } = SITE;
 import { DEFAULT_ACTIVITIES, monthEnd } from "./engine.js";
-import { EDITION } from "./edition.js";
+import { EDITION, hasTier } from "./edition.js";
 import { ensureKeys, stateFrom } from "./sync.js";
 
 const KEYS = { t1: "qaTiers.t1.v1", t2: "qaTiers.t2.v1", prefs: "qaTiers.prefs.v1" };
@@ -45,7 +45,9 @@ function seedLists(tier, s) {
     s.tasks ??= /El Kendi/.test(s.setup.site) && s.setup.month === "2026-09-01" ? clone(DEMO_TASKS) : [];
     s.activities = s.activities.concat(DEFAULT_ACTIVITIES.filter((a) => !s.activities.some((x) => x.name === a.name)).map((a) => ({ ...a, role: REAL_ROLES[a.role] ?? a.role })));
     s.act ??= [];
-    s.aud ??= []; s.find ??= []; s.rej ??= [];
+    s.aud ??= []; s.find ??= []; s.rej ??= []; s.t1e ??= [];
+    s.lists.T1EStatus ??= ["Open", "In Progress", "Resolved", "Escalated to Tier 3"];
+    s.lists.Pillars ??= ["S · Safety", "Q · Quality", "D · Delivery", "C · Compliance", "P · People"];
     s.lists.RejStatus ??= ["Open", "In Progress", "Pending Signature", "Closed"];
     s.lists.RejType ??= ["Raw material", "Packaging material", "Intermediate / bulk", "Validation batch", "Finished product"];
     s.lists.AudKind ??= ["Plan", "Audit"];
@@ -73,7 +75,9 @@ const REAL_ROLES = {
 
 /** A new board: the imported El Kendi data (default) or the September 2026 demo. */
 /** Whether this copy of the app carries site data (see real-data.js). */
-export const HAS_REAL = !!(REAL_T1 && REAL_T2);
+const realOf = (tier) => (tier === "t1" ? REAL_T1 : REAL_T2);
+/** This copy ships site data for every tier it shows (a single-tier app ships only its own tier). */
+export const HAS_REAL = EDITION.tiers.every((t) => !!realOf(t));
 /** Whether the boards hold site data — shipped with this copy, or already on the shared board.
  * A real board never offers the demo, whichever copy of the app opens it. */
 /** The site data this copy ships: its dataset id, name, date and what it holds. */
@@ -83,14 +87,14 @@ export const REAL_INFO = {
   summary: "11 QA staff from QA0007E/Onc/TE01, 359 officer-days of shop-floor activity, 51 batches, 75 batch-record reviews, 19 oncology deviations (QE-KO), 163 APQRs and 136 Scigeniq tasks",
   ...(SITE.REAL_META || {}),
 };
-export const isRealBoard = () => HAS_REAL || String(store.t2?.dataset || "").startsWith("elkendi") || String(store.t1?.dataset || "").startsWith("elkendi");
+export const isRealBoard = () => HAS_REAL || EDITION.tiers.some((t) => String(store[t]?.dataset || "").startsWith("elkendi"));
 /** The September 2026 demo is offered only by a demo edition on a board without site data. */
 export const demoAllowed = () => !isRealBoard() && EDITION.start === "demo";
 /** Where a new board starts when nothing says otherwise. */
 export const DEFAULT_SOURCE = HAS_REAL ? "real" : EDITION.start;
 
 const T1_REGS = ["dl", "br", "fn", "ac", "hd", "tr"];
-const T2_REGS = ["dev", "capa", "cc", "insp", "rel", "doc", "load", "apqr", "trn", "esc", "tasks", "act", "aud", "find", "rej"];
+const T2_REGS = ["dev", "capa", "cc", "insp", "rel", "doc", "load", "apqr", "trn", "esc", "tasks", "act", "aud", "find", "rej", "t1e"];
 const isoToday = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
 
 /** An empty board for the edition's reporting month: the standard lists,
@@ -120,8 +124,9 @@ function blankState(tier) {
 }
 
 function fresh(tier, source = DEFAULT_SOURCE) {
-  if (source === "blank" || (source === "real" && !HAS_REAL && EDITION.start === "blank")) return blankState(tier);
-  const real = source === "real" && HAS_REAL;
+  // a tier this copy has no site data for (e.g. the other tier of a single-tier app) starts blank
+  if (source === "blank" || (source === "real" && !realOf(tier) && (EDITION.start === "blank" || !hasTier(tier)))) return blankState(tier);
+  const real = source === "real" && !!realOf(tier);
   const s = clone(tier === "t1" ? (real ? REAL_T1 : DEMO_T1) : (real ? REAL_T2 : DEMO_T2));
   s.audit = [];
   s.dataset = real ? REAL_INFO.dataset : "demo-2026-09";
@@ -172,11 +177,12 @@ export const store = {
   /** Start sharing: `upload` sends this browser's boards to an empty store. */
   attachSync(sync, { upload = false } = {}) {
     this.sync = sync;
-    if (upload) { sync.push("t1", this.t1); sync.push("t2", this.t2); }
+    if (upload) for (const t of ["t1", "t2"]) if (hasTier(t)) sync.push(t, this[t]);
   },
   /** A teammate changed something: rebuild that board from the shared copy. */
   applyRemote(tier) {
     if (tier === "audit") { this.listeners.forEach((fn) => fn(tier, "remote")); return; }
+    if (!hasTier(tier)) return; // the other tier lives in its own app
     if (!this.sync?.ready(tier)) return;
     const host = this.viewing ? this.live : this; // a teammate's change lands on the live board, not on the view
     const raw = stateFrom(tier, this.sync.remote[tier], host[tier]);
@@ -257,7 +263,7 @@ export const store = {
       this[tier] = s; this.save(tier); return;
     }
     const s = fresh(tier, "real");
-    const regs = tier === "t1" ? ["dl", "br", "fn", "ac", "hd", "tr"] : ["dev", "capa", "cc", "insp", "rel", "doc", "apqr", "trn", "esc", "tasks", "act", "aud", "find", "rej"];
+    const regs = tier === "t1" ? ["dl", "br", "fn", "ac", "hd", "tr"] : ["dev", "capa", "cc", "insp", "rel", "doc", "apqr", "trn", "esc", "tasks", "act", "aud", "find", "rej", "t1e"];
     for (const r of regs) s[r] = [];
     if (tier === "t2") { s.daily = {}; s.trend.rows = s.trend.rows.map(() => Array(12).fill(null)); }
     this[tier] = s; this.save(tier);

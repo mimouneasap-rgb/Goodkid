@@ -12,7 +12,7 @@
 
 export const REGS = {
   t1: ["dl", "br", "fn", "ac", "hd", "tr"],
-  t2: ["dev", "capa", "cc", "insp", "rel", "doc", "load", "tasks", "apqr", "trn", "esc", "act", "aud", "find", "rej"],
+  t2: ["dev", "capa", "cc", "insp", "rel", "doc", "load", "tasks", "apqr", "trn", "esc", "act", "aud", "find", "rej", "t1e"],
 };
 const LOCAL_ONLY = { t1: { setup: ["selDate"] }, t2: {} }; // per-viewer view state, never shared
 const CONCURRENCY = 4;
@@ -69,7 +69,7 @@ export function stateFrom(tier, docs, keep) {
   return s;
 }
 
-export function createSync({ db, user, onRemote, onStatus }) {
+export function createSync({ db, user, onRemote, onStatus, tiers = ["t1", "t2"] }) {
   const remote = { t1: new Map(), t2: new Map() };   // the shared copy, as last seen (+ our writes in flight)
   const base = { t1: new Map(), t2: new Map() };     // this page's board as of its last sync: changes are measured from here
   const chains = new Map();                          // one write at a time per document
@@ -122,7 +122,7 @@ export function createSync({ db, user, onRemote, onStatus }) {
    * what it merely has not received yet, so a teammate's newer change is
    * never undone. */
   function push(tier, state) {
-    if (readOnly) return 0;
+    if (readOnly || !tiers.includes(tier)) return 0; // a single-tier app shares only its own tier
     const next = docsOf(tier, ensureKeys(tier, state));
     const prev = base[tier], shared = remote[tier];
     let n = 0;
@@ -177,11 +177,11 @@ export function createSync({ db, user, onRemote, onStatus }) {
       }, (e) => { if (e?.code !== "revoked") failed = true; status(); });
       unsubs.push(un);
     };
-    for (const tier of ["t1", "t2"]) {
+    for (const tier of tiers) {
       for (const reg of REGS[tier]) watch(tier, `${tier}-${reg}`);
       watch(tier, `${tier}-meta`);
     }
-    watch("t2", "t2-daily");
+    if (tiers.includes("t2")) watch("t2", "t2-daily");
     unsubs.push(db.collection("audit").orderBy("day", "desc").limit(31).onSnapshot((snap) => {
       for (const d of snap.docs) auditDays.set(d.id, d.data().entries || []);
       onRemote("audit");
@@ -190,7 +190,7 @@ export function createSync({ db, user, onRemote, onStatus }) {
 
   /** One read of the whole store: is the shared board set up yet? */
   async function probe() {
-    const snap = await db.collection("t2-meta").get();
+    const snap = await db.collection(`${tiers.includes("t2") ? "t2" : "t1"}-meta`).get();
     return snap.docs.some((d) => d.id === "setup");
   }
 
@@ -201,6 +201,7 @@ export function createSync({ db, user, onRemote, onStatus }) {
     /** A board can be rebuilt once every one of its collections has arrived. */
     ready: (tier) => delivered[tier].size >= REGS[tier].length + (tier === "t2" ? 2 : 1) && remote[tier].has(`${tier}-meta/setup`),
     get readOnly() { return readOnly; },
+    tiers,
     stop() { unsubs.forEach((u) => u()); },
   };
 }
