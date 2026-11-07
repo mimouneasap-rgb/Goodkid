@@ -524,6 +524,7 @@ export function renderRegister(root, { tier, reg, query = {} }) {
   if (query.flag) vs.flagged = true;
   if (query.quick != null) vs.quick = query.quick; // e.g. from the dashboard's "new today" panel
   if (query.stage != null) vs.stage = query.stage; // from the dashboard's batch pipeline
+  if (query.lotType != null) vs.by = { ...vs.by, lotType: query.lotType };
   const fx = fxSpec(tier, reg);
   const fieldsByKey = Object.fromEntries(sc.fields.map((f) => [f.key, f]));
   const dateKey = sc.dateKey || (fieldsByKey.opened ? "opened" : fieldsByKey.date ? "date" : fieldsByKey.mfg ? "mfg" : null);

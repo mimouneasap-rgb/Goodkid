@@ -549,7 +549,8 @@ export async function buildReport(opts, onStep = () => {}) {
         ...openTable(k, Fd, cf, ref, lim, [["Finding", (r) => r.id], ["Audit", (r) => r.audit], ["Finding", (r) => r.desc, false, 32], ["Class", (r) => r.cls], ["Owner", (r) => r.owner], ["Due", (r) => fmtDate(r.due)], ["Overdue", late], ["CAPA", (r, c) => (c.capa ? c.capa.join(", ") : "—")]]));
     }
     if (on("rel")) {
-      const rows = s2.rel, c = comp.rel, released = rows.filter((r) => r.status === "Released").length;
+      const keep = s2.rel.map((r, i) => i).filter((i) => !E.lotTracking(s2.rel[i])); // registration lots: tracking only
+      const rows = keep.map((i) => s2.rel[i]), c = keep.map((i) => comp.rel[i]), released = rows.filter((r) => r.status === "Released").length;
       body.push(sec("Batch release"), k.P(`${rows.length} batches · ${released} released · ${c.filter((x) => x.late === "Yes").length} released late · ${c.filter((x) => x.live === "Overdue").length} past the ${st.brTarget}-day target without a decision.`),
         ...openTable(k, rows, c, ref, lim, [["Batch", (r) => r.id], ["Product", (r) => r.product, false, 24], ["Mfg completion", (r) => fmtDate(r.mfg)], ["Target", (r, x) => fmtDate(x.target)], ["Status", (r, x) => (x.live === "Overdue" ? { v: "Overdue", rag: "R" } : r.status)], ["Lead (d)", (r, x) => x.lead, true]]));
     }

@@ -136,6 +136,8 @@ export const BATCH_STAGES = [
   ["registration", "Registration lot — not for release", "N", "Done"],
 ];
 export const BATCH_STAGE_LABEL = Object.fromEntries(BATCH_STAGES.map(([k, l]) => [k, l]));
+/** Registration lots are kept for traceability only: never counted on the dashboard, in the KPI or as overdue. */
+export const lotTracking = (r) => /registration/i.test(r?.lotType || "");
 export function batchStage(r) {
   if (r.status === "Released") return "released";
   if (r.status === "Rejected") return "rejected";
@@ -162,6 +164,7 @@ export function t2Release(r, setup) {
   else if (final && r.status !== "Not for release" && !has(r.decision)) check = "Decision date missing";
   else if (has(r.decision) && !final) check = "Date entered, status still open";
   const stage = batchStage(r);
+  if (lotTracking(r)) return { target: "", lead: "", live: "Tracking only", late: "", check, open: false, toDue: "", stage, tfOver: false, tracking: true };
   const tfOver = !final && has(r.tf) && r.tf < setup.statusDate;
   return { target, lead, live, late, check, open: !final, toDue: !final && target ? diffDays(target, setup.statusDate) : "", stage, tfOver };
 }
@@ -433,7 +436,7 @@ export function t2Kpis(state, comp = t2Computed(state)) {
   const overdue = (reg) => count(comp[reg], (c) => c.live === "Overdue");
   const onTimeRate = (reg) => ratio(count(comp[reg], (c) => c.onTime === "Yes"),
     count(state[reg], (r) => r.status === "Closed") + overdue(reg));
-  const released = count(state.rel, (r) => r.status === "Released");
+  const released = count(state.rel, (r) => r.status === "Released" && !lotTracking(r));
   const loadAvail = sum(comp.load, (c) => c.available);
   // the KPI follows the annual department plan: unplanned and external training are tracked, not targeted
   const trnRows = state.trn.filter((r) => trnCat(r) === "Planned" && trnQA(r) && has(r.date) && r.date <= s.statusDate && r.status !== "Cancelled");
@@ -520,7 +523,10 @@ export function t2Summary(state, comp = t2Computed(state)) {
     capa: { total: state.capa.length, new: count(state.capa, (r) => inMonth(r.opened)), lines: [["Open", st("capa", "Open")], ["In progress", st("capa", "In Progress", "Effectiveness Check")], ["Closed", st("capa", "Closed")], ["Avg closure (d)", avg(state.capa.map((r, i) => (r.status === "Closed" ? comp.capa[i].age : null)).filter((v) => v !== null && v !== ""))]] },
     cc: { total: state.cc.length, new: count(state.cc, (r) => inMonth(r.opened)), lines: [["Open", st("cc", "Open")], ["In progress", st("cc", "In Progress")], ["Implemented", st("cc", "Implemented")], ["Closed", st("cc", "Closed")]] },
     insp: { total: state.insp.length, new: count(state.insp, (r) => inMonth(r.opened)), lines: [["Open", st("insp", "Open")], ["In progress", st("insp", "In Progress")], ["Closed", st("insp", "Closed")], ["Overdue", od("insp")]] },
-    rel: { total: state.rel.length, new: count(state.rel, (r) => inMonth(r.mfg)), lines: [["Waiting / review", st("rel", "Waiting", "Under Review", "On Hold")], ["Released", st("rel", "Released")], ["Released late", count(comp.rel, (c) => c.late === "Yes")], ["Overdue", od("rel")]] },
+    rel: (() => {
+      const q = state.rel.filter((r) => !lotTracking(r)), stq = (...v) => count(q, (r) => v.includes(r.status));
+      return { total: q.length, new: count(q, (r) => inMonth(r.mfg)), lines: [["Waiting / review", stq("Waiting", "Under Review", "On Hold")], ["Released", stq("Released")], ["Released late", count(comp.rel, (c) => c.late === "Yes")], ["Overdue", od("rel")]] };
+    })(),
     doc: { total: state.doc.length, new: count(state.doc, (r) => inMonth(r.opened)), lines: [["Open", st("doc", "Open")], ["In course", st("doc", "In Course", "In Approval")], ["Closed", st("doc", "Closed")], ["Avg revision (d)", avg(state.doc.map((r, i) => (r.status === "Closed" ? comp.doc[i].age : null)).filter((v) => v !== null && v !== ""))]] },
     load: { total: state.load.length, new: workingDays(s.month, s), newLabel: "working days", lines: [["Absence (days)", sum(comp.load, (c) => c.absence)], ["High load (n)", count(comp.load, (c) => c.status === "High load" || c.status === "Overloaded")], ["Delayed tasks", sum(comp.load, (c) => c.delayed)], ["Utilisation", ratio(sum(comp.load, (c) => c.workload), sum(comp.load, (c) => c.available))]] },
     apqr: { total: state.apqr.length, new: count(state.apqr, (r) => inMonth(r.opened)), lines: [["Not started", st("apqr", "Not Started")], ["In progress", st("apqr", "In Progress", "In Review")], ["Closed", st("apqr", "Closed")], ["Completion", avg(comp.apqr.map((c) => c.effPct))]] },

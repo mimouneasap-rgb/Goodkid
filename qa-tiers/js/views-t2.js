@@ -39,6 +39,7 @@ export function newCounts(s, reg) {
   const days = +mE.slice(8, 10), series = Array(days).fill(0);
   let day = 0, month = 0;
   for (const r of s[reg]) {
+    if (reg === "rel" && E.lotTracking(r)) continue; // registration lots: tracking only
     const d = r[dk];
     if (!has(d)) continue;
     if (d === ref) day++;
@@ -231,7 +232,9 @@ export function renderBoard(root, { filters = null } = {}) {
 
 /** Dashboard panel: every batch where it stands — production, quality decision, release, done. */
 function batchPipeline(s, comp) {
-  const rows = (s.rel || []).map((r, i) => ({ r, c: comp.rel[i] })).filter((x) => x.r.id);
+  const all = (s.rel || []).map((r, i) => ({ r, c: comp.rel[i] })).filter((x) => x.r.id);
+  // registration lots: traceability only — not counted here
+  const rows = all.filter((x) => !E.lotTracking(x.r)), tracked = all.length - rows.length;
   if (!rows.length) return "";
   const mS = E.monthStart(s.setup.month), mE = E.monthEnd(s.setup.month);
   const by = (k) => rows.filter((x) => x.c.stage === k);
@@ -252,10 +255,10 @@ function batchPipeline(s, comp) {
       <div class="b-chips">${list.slice(0, 6).map(chip).join("")}${list.length > 6 ? `<a class="b-more" href="#/t2/reg/rel?stage=${k}">+${list.length - 6} more</a>` : ""}</div></div>`;
   };
   return `<section class="card card-pad b-panel" style="margin-top:16px">
-    <div class="card-head"><h2>Batch pipeline <span class="sub">every lot of the release register, from its steps (lot tracker · WIP master · batch record) — as of ${fmtDate(s.setup.statusDate)}</span></h2>
+    <div class="card-head"><h2>Batch pipeline <span class="sub">commercial lots of the release register, from their steps (lot tracker · WIP master · batch record) — as of ${fmtDate(s.setup.statusDate)}</span></h2>
       <div class="nw-total"><span><b>${pending.length}</b> pending</span><span><b>${warns}</b> past a time frame</span><span><b>${relMonth.length}</b> released in ${esc(fmtMonth(s.setup.month).split(" ")[0])}</span></div></div>
     <div class="b-flow">${phases.map((ph) => `<div class="b-phase"><div class="b-ph-t">${esc(ph)}</div><div class="b-ph-s">${E.BATCH_STAGES.filter((x) => x[3] === ph).map(tile).join("")}</div></div>`).join('<span class="b-arrow" aria-hidden="true">›</span>')}</div>
-    <div class="b-done">${[["released", `Released · ${by("released").length}`, "G"], ["rejected", `Rejected · ${by("rejected").length}`, "N"], ["registration", `Registration lots, not for release · ${by("registration").length}`, "N"]].map(([k, l, c]) => `<a class="b-done-i c-${c}" href="#/t2/reg/rel?stage=${k}">${esc(l)}</a>`).join("")}
+    <div class="b-done">${[["released", `Released · ${by("released").length}`, "G"], ["rejected", `Rejected · ${by("rejected").length}`, "N"]].map(([k, l, c]) => `<a class="b-done-i c-${c}" href="#/t2/reg/rel?stage=${k}">${esc(l)}</a>`).join("")}${tracked ? `<a class="b-done-i track" href="#/t2/reg/rel?lotType=Registration" title="Kept in the register for traceability — not counted on the dashboard or in the KPI">◌ ${tracked} registration lots · tracking only</a>` : ""}
       <span class="muted">⚠ red outline = WIP time frame or release lead time exceeded · a lot without a CoA date waits for QC · click a stage to open the register on it</span></div>
   </section>`;
 }
