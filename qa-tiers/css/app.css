@@ -853,3 +853,7 @@ table.data td { padding: 9px 10px; }
   background: var(--n-bg); color: var(--n-ink); border: 1px dashed var(--line-strong); }
 
 @media (prefers-reduced-motion: reduce) { .kpi, .btn, .nav a { transition: none; } a.kpi:hover { transform: none; } }
+
+/* A3 board export: the preview sits on a desk-grey ground like a sheet of paper */
+.a3-preview { background: var(--surface-3); border-radius: 12px; padding: 14px; display: grid; place-items: center; min-height: 220px; }
+.a3-preview canvas { width: 100%; height: auto; aspect-ratio: 420 / 297; max-width: 100%; background: #fff; box-shadow: 0 2px 4px rgba(14, 26, 43, .12), 0 14px 32px -12px rgba(14, 26, 43, .35); border-radius: 2px; }

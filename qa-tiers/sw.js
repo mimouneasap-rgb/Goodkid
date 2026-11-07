@@ -6,7 +6,7 @@ const SHELL = [
   "./", "index.html", "manifest.webmanifest", "icon.svg", "css/app.css",
   "js/app.js", "js/engine.js", "js/schema.js", "js/store.js", "js/demo-data.js", "js/ui.js", "js/charts.js",
   "js/registers.js", "js/views-t1.js", "js/views-t2.js", "js/setup.js", "js/learn.js",
-  "js/sync.js", "js/export.js", "js/report.js", "js/filters.js", "js/archive.js", "js/guides.js", "js/edition.js", "js/real-data.js", "js/scigeniq.js", "js/regcharts.js",
+  "js/sync.js", "js/export.js", "js/report.js", "js/filters.js", "js/archive.js", "js/guides.js", "js/edition.js", "js/real-data.js", "js/scigeniq.js", "js/regcharts.js", "js/poster.js",
 ];
 
 self.addEventListener("install", (e) => {

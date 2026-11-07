@@ -111,7 +111,7 @@ export function renderBoard(root, { filters = null } = {}) {
       </div>
       <div style="display:grid;gap:10px;justify-items:end">
         <div class="ladder"><div>Tier 1<small>08:30 huddle</small></div><div class="on">Tier 2<small>you are here</small></div><div>Tier 3<small>site management</small></div></div>
-        <div class="row"><button class="btn primary" data-standup>▶ Run the 15-min stand-up</button><a class="btn" href="#/report">⤓ Word report</a></div>
+        <div class="row"><button class="btn primary" data-standup>▶ Run the 15-min stand-up</button><button class="btn" data-a3 title="The dashboard on one A3 landscape page, 300 dpi — PDF or PNG">⎙ A3 board</button><a class="btn" href="#/report">⤓ Word report</a></div>
       </div>
     </div>
   </section>
@@ -186,6 +186,7 @@ export function renderBoard(root, { filters = null } = {}) {
   }
   $("[data-asof]", root).onchange = (e) => { if (e.target.value) { store.patch("t2", ["setup", "statusDate"], e.target.value, "Status date"); renderBoard(root); } };
   $("[data-standup]", root).onclick = () => standup(() => renderBoard(root));
+  $("[data-a3]", root).onclick = () => import("./poster.js").then((m) => m.openA3Export()).catch(() => toast("The A3 export could not be loaded — check the connection"));
   root.addEventListener("click", (e) => {
     const b = e.target.closest("[data-day]");
     if (b) dayEditor(b.dataset.day, () => renderBoard(root));
