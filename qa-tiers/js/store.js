@@ -5,7 +5,7 @@
 import { DEMO_T1, DEMO_T2 } from "./demo-data.js";
 import * as SITE from "./real-data.js";
 const { REAL_T1, REAL_T2 } = SITE;
-import { DEFAULT_ACTIVITIES, monthEnd, splitAuditCapa } from "./engine.js";
+import { DEFAULT_ACTIVITIES, monthEnd, splitAuditCapa, PLAN_ROLES, normalizeTraining } from "./engine.js";
 import { EDITION, hasTier } from "./edition.js";
 import { ensureKeys, stateFrom, dedupe } from "./sync.js";
 
@@ -55,6 +55,8 @@ function seedLists(tier, s) {
     s.lists.TrCat = ["Planned", "Unplanned", "External"];
     s.lists.TrStatus = uniq(["Planned", "Rescheduled", "In Progress", "Completed", "Cancelled", ...(s.lists.TrStatus || [])]);
     s.lists.TrAudience ??= ["QA", "Other departments"];
+    s.lists.TrPlanRoles ??= [...PLAN_ROLES];
+    normalizeTraining(s);
     if (s.kpis?.[8] && /sessions due to date/.test(s.kpis[8].def || "")) s.kpis[8] = { ...s.kpis[8], def: "Annual plan: employees trained ÷ to be trained (topics due to date)" };
     s.lists.T1EStatus ??= ["Open", "In Progress", "Resolved", "Escalated to Tier 3"];
     s.lists.Pillars ??= ["S · Safety", "Q · Quality", "D · Delivery", "C · Compliance", "P · People"];
@@ -202,7 +204,7 @@ export const store = {
   save(tier) {
     if (tier && this.viewing) { this.listeners.forEach((fn) => fn(tier, "blocked")); return; }
     if (tier) {
-      if (tier === "t2") splitAuditCapa(this.t2); // a CAPA whose source became Audit moves to Audit CAPA (and back)
+      if (tier === "t2") { splitAuditCapa(this.t2); normalizeTraining(this.t2); } // audit CAPA to their register; plan topics on the mandatory group
       ensureKeys(tier, this[tier]);
       write(KEYS[tier], this[tier]);
       this.sync?.push(tier, this[tier]);

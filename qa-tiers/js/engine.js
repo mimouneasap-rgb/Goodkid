@@ -144,6 +144,41 @@ export function trnBucket(r) {
   return r.type === "Revised SOP" || r.type === "New SOP" ? "SOP Training" : "Others";
 }
 
+/** Job titles the annual department plan makes mandatory (GS0024/Onc/T06 attendee group).
+ * Other people (QA manager, quality head…) may attend: they do not count in the plan figures. */
+export const PLAN_ROLES = ["QA Documentation Officer", "QA Documentation Senior Officer", "QA Documentation Supervisor", "QA Documentation Section Head", "QA Officer", "QA Senior Officer", "QA Section Head"];
+const normRole = (v) => String(v || "").toLowerCase().replace(/\s+/g, " ").trim();
+/** The people the plan makes mandatory: the QA load members holding one of those job titles. */
+export function planGroup(state) {
+  const roles = new Set((state.lists?.TrPlanRoles?.length ? state.lists.TrPlanRoles : PLAN_ROLES).map(normRole));
+  return (state.load || []).filter((r) => has(r.member) && roles.has(normRole(r.role))).map((r) => r.member);
+}
+const namesIn = (r) => String(r.attendees || "").split(",").map((x) => x.trim()).filter(Boolean);
+/** "To be trained" and "trained" of a training: on the annual plan, the mandatory group only. */
+export function trnFigures(r, group) {
+  if (trnCat(r) === "Planned" && trnQA(r) && group?.length && r.status !== "Cancelled") {
+    const names = namesIn(r);
+    return { planned: group.length, trained: names.length ? names.filter((n) => group.includes(n)).length : Math.min(num(r.trained), group.length) };
+  }
+  return { planned: num(r.planned), trained: num(r.trained) };
+}
+/** Keep the stored figures of the plan topics on the mandatory group (boards saved before the rule). */
+export function normalizeTraining(state) {
+  const group = planGroup(state);
+  if (!group.length) return 0;
+  let n = 0;
+  for (const r of state.trn || []) {
+    if (trnCat(r) !== "Planned" || !trnQA(r) || r.status === "Cancelled") continue;
+    const f = trnFigures(r, group);
+    if (num(r.planned) !== f.planned || (namesIn(r).length && num(r.trained) !== f.trained)) {
+      r.planned = f.planned;
+      if (namesIn(r).length) r.trained = f.trained;
+      n++;
+    }
+  }
+  return n;
+}
+
 /** A training is done when its status says so, or when a completion date has been entered (not cancelled). */
 export const trnDone = (r) => r.status === "Completed" || (r.status !== "Cancelled" && has(r.done));
 
@@ -348,7 +383,7 @@ export function t2Kpis(state, comp = t2Computed(state)) {
     overdue("doc"),
     ratio(sum(comp.load, (c) => c.workload), loadAvail),
     overdue("apqr"),
-    ratio(sum(trnRows, (r) => r.trained), sum(trnRows, (r) => r.planned)),
+    (() => { const g = planGroup(state); return ratio(sum(trnRows, (r) => trnFigures(r, g).trained), sum(trnRows, (r) => trnFigures(r, g).planned)); })(),
   ];
   // a count over an empty register is "no data" until the first record is entered
   [["dev", 0], ["cc", 2], ["doc", 5], ["apqr", 7]].forEach(([reg, i]) => { if (!state[reg].length) actuals[i] = ""; });

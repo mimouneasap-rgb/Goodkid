@@ -30,6 +30,7 @@ function rowsOf(s) {
 /** The corporate department report: per month, Planned (P, E, to be trained, trained) and Unplanned (Quality Circle, SOP, Others) + External. */
 export function monthlyReport(s, year) {
   const rows = rowsOf(s).filter((x) => x.qa);
+  const g = E.planGroup(s);
   const ref = s.setup.statusDate;
   return MON.map((m, k) => {
     const ym = `${year}-${String(k + 1).padStart(2, "0")}`;
@@ -41,7 +42,7 @@ export function monthlyReport(s, year) {
     return {
       ym, label: `${MON[k]} ${year}`, past,
       P: plan.length, E: past ? plan.filter((x) => E.trnDone(x.r)).length : null,
-      toTrain: sum(plan, (x) => x.r.planned), trained: past ? sum(plan, (x) => x.r.trained) : null,
+      toTrain: sum(plan, (x) => E.trnFigures(x.r, g).planned), trained: past ? sum(plan, (x) => E.trnFigures(x.r, g).trained) : null,
       qc: sum(un.filter((x) => x.bucket === "Quality Circle"), (x) => x.r.trained),
       sop: sum(un.filter((x) => x.bucket === "SOP Training"), (x) => x.r.trained),
       other: sum(un.filter((x) => x.bucket === "Others"), (x) => x.r.trained),
@@ -52,13 +53,14 @@ export function monthlyReport(s, year) {
 
 /** The QA team: the QA load members, then anyone else trained with the QA department. */
 function teamOf(s) {
-  // the plan's attendee group: QA job titles (a member with another role counts once trained on the plan)
-  const inPlan = new Set(rowsOf(s).filter((x) => x.cat === "Planned").flatMap((x) => x.names));
-  const load = (s.load || []).map((r) => ({ name: r.member, role: r.role })).filter((x) => x.name && (/\bQA\b/i.test(x.role || "") || inPlan.has(x.name)));
-  const seen = new Set(load.map((x) => x.name));
+  const group = new Set(E.planGroup(s));
+  const members = (s.load || []).filter((r) => r.member).map((r) => ({ name: r.member, role: r.role || "", mandatory: group.has(r.member) }));
+  const load = members.filter((x) => x.mandatory);
+  const optional = members.filter((x) => !x.mandatory);
+  const seen = new Set(members.map((x) => x.name));
   const extra = [];
-  for (const x of rowsOf(s)) if (x.qa) for (const n of x.names) if (!seen.has(n)) { seen.add(n); extra.push({ name: n, role: "" }); }
-  return { load, extra };
+  for (const x of rowsOf(s)) if (x.qa) for (const n of x.names) if (!seen.has(n)) { seen.add(n); extra.push({ name: n, role: "", mandatory: false }); }
+  return { load, optional, extra };
 }
 
 const yearOf = (s) => +String(s.setup.statusDate || s.setup.month).slice(0, 4);
@@ -84,7 +86,7 @@ export function renderTraining(root) {
   const adh = k.actual === "" ? null : Math.max(0, Math.min(1, +k.actual));
   const RR = 52, CC = 2 * Math.PI * RR;
   const stat = (label, value, sub = "", cls = "") => `<div class="ths ${cls}"><dt>${esc(label)}</dt><dd>${value}${sub ? `<small>${sub}</small>` : ""}</dd></div>`;
-  const TABS = [["overview", "▧", "Overview & monthly report"], ["plan", "▦", "Annual plan"], ["matrix", "▤", "Team matrix"], ["cards", "▭", "Training cards"]];
+  const TABS = [["overview", "▧", "Overview & monthly report"], ["plan", "▦", "Annual plan"], ["unplanned", "✚", `Unplanned · ${unY.length}`], ["external", "◇", `External · ${extAll.length}`], ["matrix", "▤", "Team matrix"], ["cards", "▭", "Training cards"]];
   root.innerHTML = `
     <section class="hero trn-hero">
       <div class="trn-hero-grid">
@@ -123,6 +125,8 @@ export function renderTraining(root) {
   if (view.tab === "overview") overview(body, s, Y, rows);
   else if (view.tab === "plan") planView(body, s, Y, rows);
   else if (view.tab === "matrix") matrixView(body, s, Y, rows);
+  else if (view.tab === "unplanned") unplannedView(body, s, Y, rows, () => redraw());
+  else if (view.tab === "external") externalView(body, s, Y, rows, () => redraw());
   else cardsView(body, s, rows);
 
   const redraw = () => { renderTraining(root); decorateCharts(root.parentElement || root); };
@@ -186,6 +190,7 @@ function overview(body, s, Y, rows) {
 
 /* ── the annual plan, month by month ──────────────────── */
 function planView(body, s, Y, rows) {
+  const g = E.planGroup(s);
   const plan = rows.filter((x) => x.cat === "Planned" && String(x.r.date || "").startsWith(`${Y}`)).sort((a, b) => String(a.r.date).localeCompare(String(b.r.date)) || a.i - b.i);
   const months = MON.map((m, k) => ({ ym: `${Y}-${String(k + 1).padStart(2, "0")}`, label: `${fmtMonth(`${Y}-${String(k + 1).padStart(2, "0")}-01`)}` }))
     .map((m) => ({ ...m, items: plan.filter((x) => x.r.date.startsWith(m.ym)) })).filter((m) => m.items.length);
@@ -197,12 +202,79 @@ function planView(body, s, Y, rows) {
     }).join("")}</div>
     <div class="legend" style="margin-top:10px"><span><i class="bg-G"></i>Completed</span><span><i class="bg-A"></i>In progress / rescheduled</span><span><i class="bg-R"></i>Overdue</span><span><i style="background:var(--accent)"></i>Planned</span><span><i class="bg-N"></i>Cancelled</span></div>
     <div class="row" style="margin:14px 0 10px"><span class="muted" style="font-size:13px">${plan.length} topics · click a topic to record attendance, a new date (rescheduled) or the completion date.</span><span class="spacer"></span>
-      <a class="btn sm" href="#/t2/reg/trn?new=1&prefill=${encodeURIComponent(JSON.stringify({ cat: "Planned", type: "SOP (annual plan)", dept: "QA", status: "Planned", resched: "No", planned: (s.load || []).length - 1 }))}">＋ Add a plan topic</a></div>
+      <a class="btn sm" href="#/t2/reg/trn?new=1&prefill=${encodeURIComponent(JSON.stringify({ cat: "Planned", type: "SOP (annual plan)", dept: "QA", status: "Planned", resched: "No", planned: g.length }))}">＋ Add a plan topic</a></div>
     <div class="stack">${months.map((m) => `<div class="card plan-month"><div class="pm-head"><b>${esc(m.label)}</b><span class="muted">${m.items.length} topic${m.items.length > 1 ? "s" : ""} · ${m.items.filter((x) => E.trnDone(x.r)).length} completed</span></div>
-      ${m.items.map((x) => { const [lbl, rag] = state(x); const p = +x.r.planned || 0, t = +x.r.trained || 0; return `<button type="button" class="pm-row" data-open="${x.i}">
+      ${m.items.map((x) => { const [lbl, rag] = state(x); const { planned: p, trained: t } = E.trnFigures(x.r, g); return `<button type="button" class="pm-row" data-open="${x.i}">
         <span class="mono">${esc(x.r.sop || "—")}</span>
         <span class="pm-title">${esc(x.r.topic)}<small>${esc(x.r.type || "")}${x.r.trainer ? ` · ${esc(x.r.trainer)}` : ""}${x.r.done ? ` · held ${fmtDate(x.r.done)}` : ""}</small></span>
-        <span class="pm-bar" title="${t} of ${p} trained"><i style="width:${p ? Math.min(100, (t / p) * 100) : 0}%" class="${rag}"></i></span><span class="num">${p ? `${t}/${p}` : ""}</span>${pill(lbl, rag)}</button>`; }).join("")}</div>`).join("") || `<div class="empty">No annual plan for ${Y} yet — add the topics of the department plan.</div>`}</div>`;
+        <span class="pm-bar" title="${t} of the ${p} people of the plan group trained"><i style="width:${p ? Math.min(100, (t / p) * 100) : 0}%" class="${rag}"></i></span><span class="num">${p ? `${t}/${p}` : ""}</span>${pill(lbl, rag)}</button>`; }).join("")}</div>`).join("") || `<div class="empty">No annual plan for ${Y} yet — add the topics of the department plan.</div>`}</div>`;
+}
+
+/* ── unplanned and external training: add and edit ───── */
+const UN_TYPES = [["Revised SOP", "SOP revision"], ["New SOP", "New SOP"], ["Quality Circle", "Quality circle"], ["Corporate", "Corporate"], ["Audit / CAPA driven", "Audit / CAPA"], ["On the job", "On the job"], ["Basic GMP", "Basic GMP"], ["Induction / New Hire", "Induction"], ["Other", "Other"]];
+/** The next free ID with a prefix (TU-26-041, TX-26-10…). */
+function nextTrnId(s, prefix) {
+  const n = Math.max(0, ...(s.trn || []).map((r) => String(r.id || "")).filter((id) => id.startsWith(prefix)).map((id) => +id.slice(prefix.length) || 0));
+  const width = Math.max(2, ...(s.trn || []).map((r) => String(r.id || "")).filter((id) => id.startsWith(prefix)).map((id) => id.length - prefix.length));
+  return prefix + String(n + 1).padStart(width, "0");
+}
+const avatars = (names, max = 5) => `<span class="av-stack" title="${esc(names.join(", "))}">${names.slice(0, max).map((n) => `<span class="av sm">${esc(initials(n))}</span>`).join("")}${names.length > max ? `<span class="av sm more">+${names.length - max}</span>` : ""}</span>`;
+
+function unplannedView(body, s, Y, rows, redraw) {
+  const ref = s.setup.statusDate, yy = String(Y).slice(2);
+  view.unType ??= ""; view.unDept ??= "QA"; view.unQ ??= "";
+  const all = rows.filter((x) => x.cat === "Unplanned" && String(x.when).startsWith(`${Y}`));
+  const inDept = all.filter((x) => (view.unDept === "all" ? true : view.unDept === "QA" ? x.qa : !x.qa));
+  const q = view.unQ.toLowerCase();
+  const list = inDept.filter((x) => (!view.unType || x.r.type === view.unType) && (!q || [x.r.id, x.r.sop, x.r.topic, x.r.trainer, x.r.attendees].join(" ").toLowerCase().includes(q)))
+    .sort((a, b) => String(b.when).localeCompare(String(a.when)) || b.i - a.i);
+  const count = (t) => inDept.filter((x) => x.r.type === t).length;
+  const months = [];
+  for (const x of list) { const m = String(x.when).slice(0, 7); if (!months.length || months[months.length - 1].m !== m) months.push({ m, items: [] }); months[months.length - 1].items.push(x); }
+  const people = list.reduce((a, x) => a + (+x.r.trained || x.names.length || 0), 0);
+  body.innerHTML = `
+    <div class="card card-pad un-head">
+      <div class="card-head"><h2>Unplanned training ${Y} <span class="sub">SOP revisions, new SOPs, quality circles, corporate, audit-driven, on the job, induction — not in the annual plan, not in the KPI</span></h2></div>
+      <div class="un-add"><span class="un-add-l">＋ Add</span>${UN_TYPES.map(([t, l]) => `<button type="button" class="btn sm" data-addun="${esc(t)}">${esc(l)}</button>`).join("")}</div>
+      <div class="un-filters">
+        <div class="seg-ctl" role="group" aria-label="Department">${[["QA", "QA team"], ["other", "Given to other departments"], ["all", "All"]].map(([v, l]) => `<button type="button" data-undept="${v}" aria-pressed="${view.unDept === v}">${l}</button>`).join("")}</div>
+        <div class="un-chips">${[["", `All types · ${inDept.length}`], ...UN_TYPES.filter(([t]) => count(t)).map(([t, l]) => [t, `${l} · ${count(t)}`])].map(([t, l]) => `<button type="button" class="chip-btn ${view.unType === t ? "on" : ""}" data-untype="${esc(t)}">${esc(l)}</button>`).join("")}</div>
+        <input type="search" data-unq placeholder="Search SOP, title, trainer, name…" value="${esc(view.unQ)}" aria-label="Search unplanned training">
+      </div>
+      <p class="muted" style="margin:10px 0 0;font-size:13px">${list.length} session${list.length === 1 ? "" : "s"} · ${people} employee${people === 1 ? "" : "s"} trained · click a session to edit it, change the people trained or delete it.</p>
+    </div>
+    <div class="stack" style="margin-top:14px">${months.map((g) => `<div class="card plan-month"><div class="pm-head"><b>${esc(fmtMonth(`${g.m}-01`))}</b><span class="muted">${g.items.length} session${g.items.length > 1 ? "s" : ""} · ${g.items.reduce((a, x) => a + (+x.r.trained || 0), 0)} trained</span></div>
+      ${g.items.map((x) => `<button type="button" class="un-row" data-open="${x.i}">
+        <span class="un-date">${x.r.done || x.r.date ? fmtDate(x.r.done || x.r.date) : "—"}</span>
+        <span class="mono">${esc(x.r.sop || "—")}</span>
+        <span class="pm-title">${esc(x.r.topic || "")}<small><span class="type-tag t-${slug(x.r.type || "other")}">${esc(x.r.type || "Other")}</span>${x.r.trainer ? ` · ${esc(x.r.trainer)}` : ""}${x.r.link ? ` · ${esc(x.r.link)}` : ""}${!x.qa ? ` · <b>given to another department</b>` : ""}</small></span>
+        ${avatars(x.names)}<span class="num">${x.r.trained || x.names.length || ""}</span>${x.r.eff ? pill(x.r.eff) : `<span class="muted">—</span>`}</button>`).join("")}</div>`).join("") || `<div class="card card-pad"><div class="empty">No unplanned training matches${view.unType || view.unQ ? " these filters" : ` in ${Y}`} — add one with the buttons above.</div></div>`}</div>`;
+  $$("[data-addun]", body).forEach((b) => b.onclick = () => {
+    const other = view.unDept === "other";
+    openEditor({ tier: "t2", reg: "trn", prefill: { id: nextTrnId(s, other ? `TD-${yy}-` : `TU-${yy}-`), cat: "Unplanned", type: b.dataset.addun, dept: other ? "Other departments" : "QA", audience: other ? "Other departments" : "QA team", status: "Completed", date: ref, done: ref }, onSaved: redraw });
+  });
+  $$("[data-undept]", body).forEach((b) => b.onclick = () => { view.unDept = b.dataset.undept; view.unType = ""; unplannedView(body, s, Y, rows, redraw); });
+  $$("[data-untype]", body).forEach((b) => b.onclick = () => { view.unType = b.dataset.untype; unplannedView(body, s, Y, rows, redraw); });
+  const qi = $("[data-unq]", body);
+  qi.oninput = () => { view.unQ = qi.value; const pos = qi.selectionStart; unplannedView(body, s, Y, rows, redraw); const n = $("[data-unq]", body); n.focus(); n.setSelectionRange(pos, pos); };
+}
+
+function externalView(body, s, Y, rows, redraw) {
+  const ref = s.setup.statusDate, yy = String(Y).slice(2);
+  const list = rows.filter((x) => x.cat === "External").sort((a, b) => String(b.r.done || b.r.date || b.r.year || "").localeCompare(String(a.r.done || a.r.date || a.r.year || "")) || b.i - a.i);
+  const years = [...new Set(list.map((x) => String(x.r.done || x.r.date || x.r.year || "").slice(0, 4) || "—"))];
+  const seats = list.reduce((a, x) => a + (+x.r.trained || x.names.length || 0), 0);
+  body.innerHTML = `
+    <div class="card card-pad un-head">
+      <div class="card-head"><h2>External training <span class="sub">courses given by an outside provider — tracked, not in the KPI</span></h2><button class="btn sm primary" data-addext>＋ Add an external course</button></div>
+      <p class="muted" style="margin:0;font-size:13px">${list.length} course${list.length === 1 ? "" : "s"} · ${seats} participation${seats === 1 ? "" : "s"} · enter the date when known, otherwise the year.</p>
+    </div>
+    <div class="stack" style="margin-top:14px">${years.map((y) => { const items = list.filter((x) => (String(x.r.done || x.r.date || x.r.year || "").slice(0, 4) || "—") === y); return `<div class="card plan-month"><div class="pm-head"><b>${esc(y)}</b><span class="muted">${items.length} course${items.length > 1 ? "s" : ""}</span></div>
+      ${items.map((x) => `<button type="button" class="un-row ext" data-open="${x.i}">
+        <span class="un-date">${x.r.done || x.r.date ? fmtDate(x.r.done || x.r.date) : esc(String(x.r.year || "—"))}</span>
+        <span class="pm-title">${esc(x.r.topic || "")}<small>${esc(x.r.provider || "External provider")}</small></span>
+        ${avatars(x.names)}<span class="num">${x.r.trained || x.names.length || ""}</span>${x.r.eff ? pill(x.r.eff) : `<span class="muted">—</span>`}</button>`).join("")}</div>`; }).join("") || `<div class="card card-pad"><div class="empty">No external course recorded yet.</div></div>`}</div>`;
+  $("[data-addext]", body).onclick = () => openEditor({ tier: "t2", reg: "trn", prefill: { id: nextTrnId(s, `TX-${yy}-`), cat: "External", type: "External course", dept: "QA", audience: "QA team", status: "Completed", done: ref, date: ref, year: Y }, onSaved: redraw });
 }
 
 /* ── team × topic matrix ──────────────────────────────── */
@@ -211,7 +283,11 @@ const shortLabel = (x) => {
   const t = x.r.sop ? x.r.sop.replace(/\/Onc$/i, "") : String(x.r.topic).replace(/^Chapitre\s*(\d+)\s*:\s*«?\s*/i, "Ch. $1 · ").replace(/\s*»\s*$/, "");
   return t.length > 24 ? `${t.slice(0, 23).trim()}…` : t;
 };
-function personPlan(rows, name, ref, Y) {
+function personPlan(rows, name, ref, Y, mandatory = true) {
+  if (!mandatory) {
+    const done = rows.filter((x) => x.cat === "Planned" && x.qa && String(x.r.date || "").startsWith(`${Y}`) && x.names.includes(name)).length;
+    return { due: 0, done, rate: null, optional: true };
+  }
   const topics = rows.filter((x) => x.cat === "Planned" && x.qa && x.r.status !== "Cancelled" && String(x.r.date || "").startsWith(`${Y}`));
   const due = topics.filter((x) => x.r.date <= ref);
   const done = due.filter((x) => x.names.includes(name)).length;
@@ -223,8 +299,9 @@ function matrixView(body, s, Y, rows) {
   const ref = s.setup.statusDate;
   let topics = rows.filter((x) => x.cat === "Planned" && x.qa && x.r.status !== "Cancelled" && String(x.r.date || "").startsWith(`${Y}`)).sort((a, b) => String(a.r.date).localeCompare(String(b.r.date)) || a.i - b.i);
   if (view.mxDue) topics = topics.filter((x) => x.r.date <= ref);
-  const { load, extra } = teamOf(s);
-  const team = [...load, ...extra.filter((p) => topics.some((x) => x.names.includes(p.name)))];
+  const { load, optional, extra } = teamOf(s);
+  const opt = [...optional.filter((p) => topics.some((x) => x.names.includes(p.name)) || /\b(QA|Quality)\b/i.test(p.role)), ...extra.filter((p) => topics.some((x) => x.names.includes(p.name)))];
+  const team = [...load, ...opt];
   const un = (n) => rows.filter((x) => x.qa && x.cat === "Unplanned" && String(x.when).startsWith(`${Y}`) && x.names.includes(n)).length;
   const ex = (n) => rows.filter((x) => x.qa && x.cat === "External" && x.names.includes(n)).length;
   const months = [];
@@ -232,33 +309,34 @@ function matrixView(body, s, Y, rows) {
   const starts = new Set(months.map((g) => g.start));
   const csv = [["Person", "Role", ...topics.map((x) => `${x.r.date.slice(0, 7)} ${x.r.sop || x.r.topic}`), "Plan done", "Plan due", "Unplanned", "External"]];
   const cur = ref.slice(0, 7);
-  const bodyRows = team.map((p) => {
-    const pp = personPlan(rows, p.name, ref, Y);
+  const bodyRows = team.map((p, ix) => {
+    const pp = personPlan(rows, p.name, ref, Y, p.mandatory);
     const cells = topics.map((x, j) => {
       const ok = x.names.includes(p.name), isDue = x.r.date <= ref;
-      const st = ok ? "ok" : isDue ? "no" : "fut";
-      const tip = `${p.name}\n${x.r.sop ? `${x.r.sop} · ` : ""}${x.r.topic}\n${ok ? `Trained${x.r.done ? ` · ${fmtDate(x.r.done)}` : ""}` : isDue ? `Not trained — due ${fmtMonth(x.r.date)}` : `Planned ${fmtMonth(x.r.date)}`}`;
-      return `<td class="mx ${st} ${starts.has(j) ? "ms" : ""}" data-open="${x.i}" title="${esc(tip)}"><i>${ok ? "✓" : isDue ? "✕" : ""}</i></td>`;
+      const st = ok ? "ok" : !p.mandatory ? "na" : isDue ? "no" : "fut";
+      const tip = `${p.name}\n${x.r.sop ? `${x.r.sop} · ` : ""}${x.r.topic}\n${ok ? `Trained${x.r.done ? ` · ${fmtDate(x.r.done)}` : ""}` : !p.mandatory ? "Not required by the plan" : isDue ? `Not trained — due ${fmtMonth(x.r.date)}` : `Planned ${fmtMonth(x.r.date)}`}`;
+      return `<td class="mx ${st} ${starts.has(j) ? "ms" : ""}" data-open="${x.i}" title="${esc(tip)}"><i>${ok ? "✓" : st === "no" ? "✕" : ""}</i></td>`;
     });
     csv.push([p.name, p.role, ...topics.map((x) => (x.names.includes(p.name) ? "Trained" : x.r.date <= ref ? "Not trained" : "Planned")), pp.done, pp.due, un(p.name), ex(p.name)]);
-    return `<tr><th class="mx-name" scope="row"><span class="av">${esc(initials(p.name))}</span><span class="nm">${esc(p.name)}<small>${esc(p.role || "")}</small></span></th>
-      <td class="mx-sum"><div class="mx-rate ${rateCls(pp.rate)}"><span><i style="width:${pp.rate == null ? 0 : Math.round(pp.rate * 100)}%"></i></span><b>${pp.rate == null ? "—" : pct(pp.rate)}</b></div><small>${pp.done} / ${pp.due} due</small></td>
+    const sep = !p.mandatory && (ix === 0 || team[ix - 1].mandatory) ? `<tr class="mx-sep"><th class="mx-name" scope="rowgroup"><span class="nm">Not required by the plan<small>may attend — not in the plan figures</small></span></th><td colspan="${topics.length + 3}"></td></tr>` : "";
+    return `${sep}<tr class="${p.mandatory ? "" : "optional"}"><th class="mx-name" scope="row"><span class="av">${esc(initials(p.name))}</span><span class="nm">${esc(p.name)}<small>${esc(p.role || "")}</small></span></th>
+      <td class="mx-sum">${pp.optional ? `<span class="opt-tag">Optional</span><small>${pp.done} plan topic${pp.done === 1 ? "" : "s"} attended</small>` : `<div class="mx-rate ${rateCls(pp.rate)}"><span><i style="width:${pp.rate == null ? 0 : Math.round(pp.rate * 100)}%"></i></span><b>${pp.rate == null ? "—" : pct(pp.rate)}</b></div><small>${pp.done} / ${pp.due} due</small>`}</td>
       <td class="mx-cnt">${un(p.name) || "—"}</td><td class="mx-cnt last">${ex(p.name) || "—"}</td>${cells.join("")}</tr>`;
   }).join("");
   const foot = topics.map((x, j) => {
-    const n = team.filter((p) => x.names.includes(p.name)).length, r = team.length ? n / team.length : 0, isDue = x.r.date <= ref;
-    return `<td class="mx-foot ${starts.has(j) ? "ms" : ""}" title="${esc(`${x.r.topic}: ${n} of ${team.length} trained`)}"><span class="${isDue ? rateCls(r) : "N"}">${n}</span></td>`;
+    const n = load.filter((p) => x.names.includes(p.name)).length, r = load.length ? n / load.length : 0, isDue = x.r.date <= ref;
+    return `<td class="mx-foot ${starts.has(j) ? "ms" : ""}" title="${esc(`${x.r.topic}: ${n} of the ${load.length} people of the plan group trained`)}"><span class="${isDue ? rateCls(r) : "N"}">${n}</span></td>`;
   }).join("");
   body.innerHTML = `<div class="card card-pad mx-card">
-    <div class="card-head"><h2>Team × annual plan ${Y} <span class="sub">${team.length} people · ${topics.length} topics · click a cell to record attendance</span></h2>
+    <div class="card-head"><h2>Team × annual plan ${Y} <span class="sub">${load.length} people in the plan group · ${topics.length} topics · click a cell to record attendance</span></h2>
       <div class="row"><label class="row" style="gap:6px;font-size:13px"><input type="checkbox" data-mxdue ${view.mxDue ? "checked" : ""}> Topics due only</label><button class="btn sm" data-mxcsv>⤓ CSV</button></div></div>
-    <div class="mx-legend"><span><i class="mx-key ok">✓</i>Trained</span><span><i class="mx-key no">✕</i>Due, not trained</span><span><i class="mx-key fut"></i>Still to come</span><span class="muted">Plan = topics trained ÷ topics due · bottom row = people trained per topic</span></div>
+    <div class="mx-legend"><span><i class="mx-key ok">✓</i>Trained</span><span><i class="mx-key no">✕</i>Due, not trained</span><span><i class="mx-key fut"></i>Still to come</span><span><i class="mx-key na"></i>Not required</span><span class="muted">Plan = topics trained ÷ topics due, for the job titles of the plan · bottom row = plan group trained per topic</span></div>
     <div class="matrix-wrap"><table class="matrix">
       <thead><tr class="mx-months"><th class="mx-name corner" rowspan="2" scope="col">Person</th><th class="mx-sum" rowspan="2" scope="col">Plan</th><th class="mx-cnt" rowspan="2" scope="col" title="Unplanned trainings in ${Y}">Unpl.</th><th class="mx-cnt last" rowspan="2" scope="col" title="External courses (all years)">Ext.</th>
         ${months.map((g) => `<th colspan="${g.n}" class="mx-month ms ${g.m === cur ? "cur" : g.m < cur ? "past" : ""}" scope="colgroup">${MON[+g.m.slice(5, 7) - 1]}</th>`).join("")}</tr>
         <tr>${topics.map((x, j) => `<th class="mx-h ${starts.has(j) ? "ms" : ""}" scope="col" title="${esc(`${x.r.sop ? `${x.r.sop} · ` : ""}${x.r.topic} — ${fmtMonth(x.r.date)}`)}"><span>${esc(shortLabel(x))}</span></th>`).join("")}</tr></thead>
       <tbody>${bodyRows || `<tr><td colspan="${topics.length + 4}"><div class="empty">No QA team member yet — fill the QA load register.</div></td></tr>`}</tbody>
-      <tfoot><tr><th class="mx-name" scope="row"><span class="nm">Trained per topic<small>of ${team.length}</small></span></th><td class="mx-sum"></td><td class="mx-cnt"></td><td class="mx-cnt last"></td>${foot}</tr></tfoot>
+      <tfoot><tr><th class="mx-name" scope="row"><span class="nm">Trained per topic<small>of the ${load.length} in the plan group</small></span></th><td class="mx-sum"></td><td class="mx-cnt"></td><td class="mx-cnt last"></td>${foot}</tr></tfoot>
     </table></div></div>`;
   $("[data-mxdue]", body).onchange = (e) => { view.mxDue = e.target.checked; matrixView(body, s, Y, rows); };
   $("[data-mxcsv]", body).onclick = () => saveFile(`QA_Training_Matrix_${Y}.csv`, new Blob(["﻿" + csv.map((r) => r.map((v) => `"${String(v ?? "").replace(/"/g, '""')}"`).join(",")).join("\r\n")], { type: "text/csv" }));
@@ -273,27 +351,27 @@ function cardRows(rows, name) {
   })).sort((a, b) => String(a.date || a.month || a.year).localeCompare(String(b.date || b.month || b.year)));
 }
 function cardsView(body, s, rows) {
-  const { load, extra } = teamOf(s);
-  const people = [...load, ...extra];
+  const { load, optional, extra } = teamOf(s);
+  const people = [...load, ...optional, ...extra];
   const Y = view.year, ref = s.setup.statusDate;
   view.person = people.some((p) => p.name === view.person) ? view.person : people[0]?.name || null;
   const p = people.find((x) => x.name === view.person);
   const lines = p ? cardRows(rows, p.name) : [];
-  const pp = p ? personPlan(rows, p.name, ref, Y) : null;
+  const pp = p ? personPlan(rows, p.name, ref, Y, p.mandatory) : null;
   const by = (c) => lines.filter((l) => l.cat === c).length;
   const last = lines.filter((l) => l.date).slice(-1)[0];
   body.innerHTML = `
     <div class="card card-pad">
       <div class="card-head"><h2>Employee training cards <span class="sub">template GS0024/Onc/T03 · built from the register · no employee code or hiring date</span></h2>
         <div class="row"><button class="btn sm" data-card ${p ? "" : "disabled"}>⤓ This card (xlsx)</button><button class="btn sm" data-cards ${people.length ? "" : "disabled"}>⤓ All ${people.length} cards</button></div></div>
-      <div class="tc-people" role="tablist" aria-label="Person">${people.map((x) => { const q = personPlan(rows, x.name, ref, Y); return `<button type="button" role="tab" class="tc-person" data-person="${esc(x.name)}" aria-selected="${x.name === view.person}">
-        <span class="av ${rateCls(q.rate)}">${esc(initials(x.name))}</span><span class="nm">${esc(x.name)}<small>${q.due ? `${q.done}/${q.due} plan · ${pct(q.rate)}` : "no plan topic due"}</small></span></button>`; }).join("")}</div>
+      <div class="tc-people" role="tablist" aria-label="Person">${people.map((x) => { const q = personPlan(rows, x.name, ref, Y, x.mandatory); return `<button type="button" role="tab" class="tc-person" data-person="${esc(x.name)}" aria-selected="${x.name === view.person}">
+        <span class="av ${rateCls(q.rate)}">${esc(initials(x.name))}</span><span class="nm">${esc(x.name)}<small>${q.optional ? `optional · ${q.done} plan topic${q.done === 1 ? "" : "s"}` : q.due ? `${q.done}/${q.due} plan · ${pct(q.rate)}` : "no plan topic due"}</small></span></button>`; }).join("")}</div>
     </div>
     ${p ? `<article class="card tc-doc">
       <header class="tc-docbar">
         <div class="tc-who"><span class="av big ${rateCls(pp.rate)}">${esc(initials(p.name))}</span><div><div class="eyebrow">Employee training card · Quality Assurance</div><h2>${esc(p.name)}</h2><div class="muted">${esc(p.role || "—")}</div></div></div>
         <dl class="tc-stats">
-          <div class="${rateCls(pp.rate)}"><dt>Annual plan ${Y}</dt><dd>${pp.rate == null ? "—" : pct(pp.rate)}</dd><small>${pp.done} of ${pp.due} topics due</small></div>
+          <div class="${rateCls(pp.rate)}"><dt>Annual plan ${Y}</dt><dd ${pp.optional ? 'class="sm"' : ""}>${pp.optional ? "Optional" : pp.rate == null ? "—" : pct(pp.rate)}</dd><small>${pp.optional ? `not in the plan group · ${pp.done} attended` : `${pp.done} of ${pp.due} topics due`}</small></div>
           <div><dt>Planned</dt><dd>${by("Planned")}</dd><small>sessions attended</small></div>
           <div><dt>Unplanned</dt><dd>${by("Unplanned")}</dd><small>SOP, induction, other</small></div>
           <div><dt>External</dt><dd>${by("External")}</dd><small>courses</small></div>

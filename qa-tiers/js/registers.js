@@ -191,7 +191,7 @@ export function inputHTML(tier, field, value, { name = field.key, cls = "", reg 
     const box = (p) => `<label class="pp ${chosen.includes(p) ? "on" : ""}"><input type="checkbox" value="${esc(p)}" ${chosen.includes(p) ? "checked" : ""}> ${esc(p)}</label>`;
     return `<div class="people-pick ${cls}" data-people="${name}"${field.countInto ? ` data-count="${field.countInto}"` : ""}>
       <input type="hidden" name="${name}" value="${esc(chosen.join(", "))}">
-      <div class="pp-head"><b data-ppn>${chosen.length}</b> selected <span class="spacer"></span><button type="button" class="btn sm ghost" data-ppall>QA team</button><button type="button" class="btn sm ghost" data-ppnone>None</button></div>
+      <div class="pp-head"><b data-ppn>${chosen.length}</b> selected <span class="spacer"></span><button type="button" class="btn sm ghost" data-ppall title="The job titles the annual plan makes mandatory">Plan group</button><button type="button" class="btn sm ghost" data-ppnone>None</button></div>
       <div class="pp-list">${first.map(box).join("")}</div>
       ${rest.length ? `<details class="pp-more"><summary>Other people (${rest.length})</summary><div class="pp-list">${rest.map(box).join("")}</div></details>` : ""}
       <div class="inline" style="margin-top:6px"><input type="text" data-ppadd placeholder="Add a name (e.g. a trainee from another department)" autocomplete="off"><button type="button" class="btn sm" data-ppaddbtn>Add</button></div>
@@ -234,7 +234,7 @@ export function wireInputs(root, tier, fields, onChange) {
   if (refFields.length) { syncRefs(); root.addEventListener("change", syncRefs); }
   // people pickers: the hidden value, the count, and the number field it fills
   root.querySelectorAll("[data-people]").forEach((pp) => {
-    const team = (store[tier].load || []).filter((r) => /\bQA\b/i.test(r.role || "")).map((r) => r.member).filter(Boolean);
+    const team = tier === "t2" ? E.planGroup(store.t2) : [];
     const sync = () => {
       const names = [...pp.querySelectorAll("input[type=checkbox]:checked")].map((c) => c.value);
       pp.querySelector("input[type=hidden]").value = names.join(", ");
