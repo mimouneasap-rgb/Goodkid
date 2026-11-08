@@ -1212,3 +1212,69 @@ table.matrix th.mx-name .nm { white-space: normal; text-overflow: clip; }
 .cap-step small { font: 600 10.5px/1.2 var(--font-display); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
 .cap-step b { font-size: 20px; }
 .cap-step span { font-size: 12px; }
+
+/* ── Training · attendance sheets and missing training ── */
+.att-months { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 6px; }
+.att-months button { display: grid; gap: 2px; justify-items: start; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); cursor: pointer; text-align: left; font: inherit; color: var(--ink); min-width: 0; }
+.att-months button b { font: 700 14px var(--font-display); }
+.att-months button span { font-size: 11.5px; color: var(--muted); }
+.att-months button i { font-style: normal; font-size: 11px; font-weight: 700; border-radius: 999px; padding: 1px 7px; }
+.att-months button i.miss { background: var(--r-bg); color: var(--r-ink); }
+.att-months button i.ok { background: var(--g-bg); color: var(--g-ink); }
+.att-months button.empty { opacity: .55; }
+.att-months button.cur { border-color: var(--accent); }
+.att-months button[aria-selected="true"] { background: var(--navy); color: #fff; border-color: var(--navy); opacity: 1; }
+.att-months button[aria-selected="true"] span { color: #c9d6ea; }
+.att-grid { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 16px; margin-top: 16px; align-items: start; }
+@media (max-width: 1100px) { .att-grid { grid-template-columns: 1fr; } .att-months { grid-template-columns: repeat(6, minmax(0, 1fr)); } }
+.att-title { font-size: 18px; margin: 2px 0 10px; }
+.att-sheet { margin-bottom: 14px; overflow: hidden; }
+.att-head { display: flex; gap: 16px; align-items: flex-start; justify-content: space-between; padding: 16px 18px 12px; border-bottom: 1px solid var(--line); background: var(--surface-2); }
+.att-head h3 { font-size: 16.5px; margin: 4px 0 6px; line-height: 1.3; }
+.att-head h3 .mono { font-size: 13px; color: var(--accent); margin-right: 4px; }
+.att-meta { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 12.5px; color: var(--muted); }
+.att-meta b { color: var(--ink); font-weight: 600; }
+.att-score { flex: none; display: grid; justify-items: center; min-width: 78px; padding: 8px 10px; border-radius: 12px; background: var(--surface); border: 1px solid var(--line); }
+.att-score b { font: 800 24px var(--font-display); line-height: 1; }
+.att-score b small { font-size: 14px; color: var(--muted); font-weight: 600; }
+.att-score span { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+.att-score.G { border-color: var(--g); } .att-score.A { border-color: var(--a); } .att-score.R { border-color: var(--r); }
+.att-tbl td, .att-tbl th { padding: 7px 10px; vertical-align: middle; }
+.att-tbl tr.miss td { background: color-mix(in srgb, var(--r-bg) 45%, transparent); }
+.att-tbl td.sig { border-bottom: 1px dashed var(--line-strong); }
+.att-tick { display: inline-flex; align-items: center; gap: 9px; cursor: pointer; font-weight: 600; }
+.att-tick input { width: 17px; height: 17px; accent-color: var(--g); }
+.att-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px 18px 14px; font-size: 12.5px; }
+.att-miss { position: sticky; top: 12px; max-height: calc(100vh - 40px); overflow-y: auto; }
+.miss-p { padding: 10px 0; border-top: 1px solid var(--line); }
+.miss-p:first-of-type { border-top: 0; }
+.miss-who { display: flex; align-items: center; gap: 10px; }
+.miss-who .nm { display: grid; font-weight: 600; font-size: 14px; flex: 1; min-width: 0; }
+.miss-who .nm small { font-weight: 400; color: var(--muted); font-size: 12px; }
+.miss-who .av.sm { margin: 0; }
+.miss-n { min-width: 26px; height: 26px; display: grid; place-items: center; border-radius: 999px; background: var(--r-bg); color: var(--r-ink); font-size: 13px; }
+.miss-p ul { list-style: none; margin: 6px 0 0 36px; padding: 0; display: grid; gap: 4px; }
+.miss-p li button { display: grid; grid-template-columns: auto 1fr; gap: 0 8px; width: 100%; text-align: left; border: 0; background: var(--surface-2); border-radius: 8px; padding: 6px 9px; cursor: pointer; font: inherit; font-size: 12.5px; color: var(--ink); }
+.miss-p li button:hover { background: var(--accent-soft); }
+.miss-p li .mono { color: var(--accent); font-size: 11.5px; }
+.miss-p li small { grid-column: 2; color: var(--muted); }
+table.mm-tbl { border-collapse: separate; border-spacing: 3px; width: 100%; }
+table.mm-tbl th { font: 600 11px var(--font-display); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); padding: 4px; text-align: center; }
+table.mm-tbl th.cur { color: var(--accent); } table.mm-tbl th.sel { color: var(--ink); text-decoration: underline; text-underline-offset: 4px; }
+table.mm-tbl th.mx-name { text-align: left; text-transform: none; letter-spacing: 0; font: inherit; color: var(--ink); display: flex; align-items: center; gap: 10px; min-width: 220px; padding: 4px 8px 4px 0; }
+table.mm-tbl th.mx-name .nm { display: grid; font-weight: 600; font-size: 13.5px; }
+table.mm-tbl th.mx-name .nm small { font-weight: 400; color: var(--muted); font-size: 11.5px; }
+.av.sm2 { width: 28px; height: 28px; font-size: 10.5px; }
+td.mm { height: 34px; min-width: 44px; text-align: center; border-radius: 7px; cursor: pointer; font-size: 13px; background: var(--surface-2); }
+td.mm.na { background: transparent; box-shadow: inset 0 0 0 1px var(--line); cursor: default; }
+td.mm.ok { background: var(--g-bg); color: var(--g-ink); font-weight: 700; }
+td.mm.no { background: var(--r-bg); color: var(--r-ink); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--r) 45%, transparent); }
+td.mm.no b { font-size: 15px; }
+td.mm.fut { background: color-mix(in srgb, var(--accent-soft) 70%, transparent); color: var(--muted); }
+td.mm.cur { outline: 2px solid var(--accent); outline-offset: -1px; }
+td.mm.sel { box-shadow: inset 0 0 0 2px var(--navy); }
+table.mm-tbl td.num { text-align: center; padding: 0 6px; }
+table.mm-tbl b.bad { color: var(--r-ink); }
+td.mm.nh, .mx-key.nh { background: var(--a-bg); color: var(--a-ink); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--a) 45%, transparent); }
+.miss-p li button.abs { box-shadow: inset 3px 0 0 var(--r); }
+.miss-p li button.nh { box-shadow: inset 3px 0 0 var(--a); }

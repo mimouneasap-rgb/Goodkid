@@ -16,7 +16,7 @@ const XLSX_URL = "https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.m
 const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const has = (v) => v !== "" && v != null;
 const namesOf = (r) => String(r.attendees || "").split(",").map((x) => x.trim()).filter(Boolean);
-const view = { tab: "overview", person: null, year: null, mxDue: false };
+const view = { tab: "overview", person: null, year: null, mxDue: false, attMonth: null, attScope: "month" };
 
 /** Every training with its computed columns and the month it belongs to. */
 function rowsOf(s) {
@@ -85,7 +85,7 @@ export function renderTraining(root) {
   const adh = k.actual === "" ? null : Math.max(0, Math.min(1, +k.actual));
   const RR = 52, CC = 2 * Math.PI * RR;
   const stat = (label, value, sub = "", cls = "") => `<div class="ths ${cls}"><dt>${esc(label)}</dt><dd>${value}${sub ? `<small>${sub}</small>` : ""}</dd></div>`;
-  const TABS = [["overview", "▧", "Overview & monthly report"], ["plan", "▦", "Annual plan"], ["unplanned", "✚", `Unplanned · ${unY.length}`], ["external", "◇", `External · ${extAll.length}`], ["induction", "◎", `Induction · ${inductees(s).filter((p) => !p.m.ph2).length}`], ["matrix", "▤", "Team matrix"], ["cards", "▭", "Training cards"]];
+  const TABS = [["overview", "▧", "Overview & monthly report"], ["plan", "▦", "Annual plan"], ["unplanned", "✚", `Unplanned · ${unY.length}`], ["external", "◇", `External · ${extAll.length}`], ["induction", "◎", `Induction · ${inductees(s).filter((p) => !p.m.ph2).length}`], ["attendance", "✓", `Attendance · ${missingTraining(s, Y, rows).reduce((a, p) => a + p.missed.length, 0)} missing`], ["matrix", "▤", "Team matrix"], ["cards", "▭", "Training cards"]];
   root.innerHTML = `
     <section class="hero trn-hero">
       <div class="trn-hero-grid">
@@ -127,6 +127,7 @@ export function renderTraining(root) {
   else if (view.tab === "unplanned") unplannedView(body, s, Y, rows, () => redraw());
   else if (view.tab === "external") externalView(body, s, Y, rows, () => redraw());
   else if (view.tab === "induction") inductionView(body, s, Y, rows, () => redraw());
+  else if (view.tab === "attendance") attendanceView(body, s, Y, rows, () => redraw());
   else cardsView(body, s, rows);
 
   const redraw = () => { renderTraining(root); decorateCharts(root.parentElement || root); };
@@ -328,6 +329,187 @@ function inductionView(body, s, Y, rows, redraw) {
     save(+b.dataset.indph2, { ph2: ref, ...(m.ph1 ? {} : { ph1: ref }) }, `${m.member}: phase 2 achieved — now in the annual plan`);
   });
   $$("[data-indtrn]", body).forEach((b) => b.onclick = () => openEditor({ tier: "t2", reg: "trn", prefill: { id: nextTrnId(s, `TU-${String(Y).slice(2)}-`), cat: "Unplanned", type: "Induction / New Hire", dept: "QA", audience: "New hire", status: "Completed", date: ref, done: ref, attendees: b.dataset.indtrn, trained: 1, planned: 1 }, onSaved: redraw }));
+}
+
+/* ── attendance sheets and missing training ───────────── */
+/** The plan topics of a year, with the people each must train and who attended. */
+function planTopics(s, Y, rows) {
+  return rows.filter((x) => x.cat === "Planned" && x.qa && x.r.status !== "Cancelled" && String(x.r.date || "").startsWith(`${Y}`))
+    .sort((a, b) => String(a.r.date).localeCompare(String(b.r.date)) || a.i - b.i)
+    .map((x) => ({ ...x, req: E.trnRequired(x.r, s), ym: x.r.date.slice(0, 7), held: E.trnDone(x.r) || x.names.length > 0 }));
+}
+/** Person × month: the plan topics each person must take, and the ones missed (due, not attended). */
+export function missingTraining(s, Y, rows = rowsOf(s)) {
+  const ref = s.setup.statusDate;
+  const topics = planTopics(s, Y, rows);
+  const { load } = teamOf(s);
+  const order = [...load.map((p) => p.name)];
+  for (const t of topics) for (const n of t.req) if (!order.includes(n)) order.push(n);
+  const roleOf = new Map((s.load || []).map((r) => [r.member, r.role || ""]));
+  return order.map((name) => {
+    const months = MON.map((_, k) => {
+      const ym = `${Y}-${String(k + 1).padStart(2, "0")}`;
+      const mine = topics.filter((t) => t.ym === ym && t.req.includes(name));
+      const due = mine.filter((t) => t.r.date <= ref);
+      const missed = due.filter((t) => !t.names.includes(name));
+      return { ym, req: mine.length, due: due.length, done: due.length - missed.length, missed, absent: missed.filter((t) => t.held).length, upcoming: mine.length - due.length };
+    });
+    const missed = months.flatMap((m) => m.missed);
+    return { absent: missed.filter((t) => t.held).length, name, role: roleOf.get(name) || "", months, missed, due: months.reduce((a, m) => a + m.due, 0), induction: E.inInduction(s, name, ref) };
+  }).filter((p) => p.months.some((m) => m.req));
+}
+
+function attendanceView(body, s, Y, rows, redraw) {
+  const ref = s.setup.statusDate;
+  const topics = planTopics(s, Y, rows);
+  const months = MON.map((m, k) => `${Y}-${String(k + 1).padStart(2, "0")}`);
+  if (!view.attMonth || !view.attMonth.startsWith(`${Y}`)) {
+    // the current month when it has topics, else the latest month with topics up to now
+    const cur = ref.slice(0, 7), withT = [...new Set(topics.map((t) => t.ym))];
+    view.attMonth = withT.includes(cur) ? cur : withT.filter((m) => m <= cur).pop() || withT[0] || months[0];
+  }
+  const M = view.attMonth;
+  const inMonth = topics.filter((t) => t.ym === M);
+  const people = missingTraining(s, Y, rows);
+  const roleOf = new Map((s.load || []).map((r) => [r.member, r.role || ""]));
+  const totalMissed = people.reduce((a, p) => a + p.missed.length, 0);
+  const monthMissed = people.reduce((a, p) => a + (p.months.find((m) => m.ym === M)?.missed.length || 0), 0);
+  const scope = view.attScope || "month";
+  const missList = people.map((p) => ({ p, list: scope === "month" ? p.months.find((m) => m.ym === M)?.missed || [] : p.missed })).filter((x) => x.list.length);
+
+  const sheet = (t) => {
+    const fg = E.trnFigures(t.r, s);
+    const extra = t.names.filter((n) => !t.req.includes(n));
+    const held = E.trnDone(t.r), isDue = t.r.date <= ref;
+    const line = (n, k, optional) => {
+      const on = t.names.includes(n);
+      const st = on ? ["Present", "G"] : optional ? ["", ""] : !isDue ? ["To come", "info"] : ["Missing", "R"];
+      return `<tr class="${on ? "on" : st[0] === "Missing" ? "miss" : ""}"><td class="num muted">${k}</td>
+        <td><label class="att-tick"><input type="checkbox" data-att="${t.i}" value="${esc(n)}" ${on ? "checked" : ""}><span class="nm">${esc(n)}</span></label></td>
+        <td class="muted">${esc(roleOf.get(n) || (optional ? "Not required by the plan" : ""))}</td>
+        <td>${st[0] ? pill(st[0], st[1]) : `<span class="opt-tag">Optional</span>`}</td><td class="sig"></td></tr>`;
+    };
+    return `<article class="card att-sheet">
+      <header class="att-head">
+        <div><div class="eyebrow">Attendance sheet · annual plan · ${esc(fmtMonth(`${t.ym}-01`))}</div>
+          <h3>${t.r.sop ? `<span class="mono">${esc(t.r.sop)}</span> ` : ""}${esc(t.r.topic || "")}</h3>
+          <div class="att-meta"><span>Planned <b>${fmtDate(t.r.date)}</b></span>${t.r.version ? `<span>Rev. <b>${esc(t.r.version)}</b></span>` : ""}<span>Held <b>${t.r.done ? fmtDate(t.r.done) : "—"}</b></span><span>Delivery <b>${esc(t.r.mode || "—")}</b></span><span>Trainer(s) <b>${esc(E.splitNames(t.r.trainer).join(", ") || "—")}</b></span></div></div>
+        <div class="att-score ${!isDue ? "N" : rateCls(fg.planned ? fg.trained / fg.planned : null)}"><b>${fg.trained}<small>/${fg.planned}</small></b><span>present</span></div>
+      </header>
+      <div class="table-wrap"><table class="plain att-tbl"><colgroup><col style="width:40px"><col style="width:30%"><col><col style="width:120px"><col style="width:22%"></colgroup>
+        <thead><tr><th class="num">No.</th><th>Name</th><th>Job title</th><th>Attendance</th><th>Signature</th></tr></thead>
+        <tbody>${t.req.map((n, k) => line(n, k + 1, false)).join("")}${extra.map((n, k) => line(n, t.req.length + k + 1, true)).join("")}
+          ${t.req.length ? "" : `<tr><td colspan="5"><div class="empty">Nobody to train — tick the people of the plan group in the topic.</div></td></tr>`}</tbody></table></div>
+      <footer class="att-foot">
+        <span class="muted">Tick who attended — the topic's trained count follows. ${held ? `Held ${fmtDate(t.r.done)}.` : isDue ? "Not marked as held yet." : "Still to come."}</span><span class="spacer"></span>
+        ${t.names.length < t.req.length ? `<button class="btn sm ghost" data-attall="${t.i}">All present</button>` : ""}
+        ${held ? "" : `<button class="btn sm" data-atthold="${t.i}">Mark held on ${fmtDate(ref < t.r.date ? t.r.date : ref)}</button>`}
+        <button class="btn sm ghost" data-open="${t.i}">Edit topic ›</button></footer>
+    </article>`;
+  };
+
+  const cell = (p, m) => {
+    const isCur = m.ym === ref.slice(0, 7), sel = m.ym === M;
+    const cls = !m.req ? "na" : m.absent ? "no" : m.missed.length ? "nh" : m.upcoming && !m.due ? "fut" : m.due ? "ok" : "fut";
+    const tip = `${p.name} · ${fmtMonth(`${m.ym}-01`)}\n${!m.req ? "No plan topic for this person" : `${m.req} topic(s) · ${m.done} attended${m.missed.length ? ` · ${m.missed.length} missing:\n– ${m.missed.map((t) => `${t.r.sop ? `${t.r.sop} ` : ""}${t.r.topic}${t.held ? " (absent)" : " (session not held)"}`).join("\n– ")}` : ""}${m.upcoming ? ` · ${m.upcoming} to come` : ""}`}`;
+    return `<td class="mm ${cls} ${isCur ? "cur" : ""} ${sel ? "sel" : ""}" data-attm="${m.ym}" title="${esc(tip)}">${!m.req ? "" : m.missed.length ? `<b>${m.missed.length}</b>` : cls === "ok" ? "✓" : `<small>${m.upcoming}</small>`}</td>`;
+  };
+
+  body.innerHTML = `
+    <div class="card card-pad att-bar">
+      <div class="card-head"><h2>Attendance — annual plan ${Y} <span class="sub">${topics.length} topics · ${people.length} people · ${totalMissed} training${totalMissed === 1 ? "" : "s"} missing per person: ${people.reduce((a, p) => a + p.absent, 0)} absent from a held session · ${totalMissed - people.reduce((a, p) => a + p.absent, 0)} because the session was not held (${topics.filter((t) => !t.held && t.r.date <= ref).length} overdue topics)</span></h2>
+        <div class="row"><button class="btn sm" data-attx>⤓ Attendance sheets (xlsx)</button><button class="btn sm" data-missx>⤓ Missing training (xlsx)</button></div></div>
+      <div class="att-months" role="tablist" aria-label="Month">${months.map((ym, k) => { const n = topics.filter((t) => t.ym === ym).length, miss = people.reduce((a, p) => a + (p.months[k].missed.length), 0);
+        return `<button type="button" role="tab" data-attm="${ym}" aria-selected="${ym === M}" class="${ym === ref.slice(0, 7) ? "cur" : ""} ${n ? "" : "empty"}"><b>${MON[k]}</b><span>${n ? `${n} topic${n > 1 ? "s" : ""}` : "—"}</span>${miss ? `<i class="miss">${miss} missing</i>` : n && `${ym}-01` <= ref ? `<i class="ok">complete</i>` : ""}</button>`; }).join("")}</div>
+    </div>
+
+    <div class="att-grid">
+      <section>
+        <h2 class="att-title">${esc(fmtMonth(`${M}-01`))} · ${inMonth.length} plan topic${inMonth.length === 1 ? "" : "s"}</h2>
+        ${inMonth.map(sheet).join("") || `<div class="card card-pad"><div class="empty">No annual-plan topic in ${esc(fmtMonth(`${M}-01`))}.</div></div>`}
+      </section>
+      <aside class="card card-pad att-miss">
+        <div class="card-head"><h2>Missing training <span class="sub">${scope === "month" ? `${esc(fmtMonth(`${M}-01`))} · ${monthMissed}` : `${Y} to date · ${totalMissed}`}</span></h2>
+          <div class="seg-ctl"><button type="button" data-attscope="month" aria-pressed="${scope === "month"}">Month</button><button type="button" data-attscope="year" aria-pressed="${scope === "year"}">Year to date</button></div></div>
+        ${missList.map(({ p, list }) => `<div class="miss-p"><div class="miss-who"><span class="av sm">${esc(initials(p.name))}</span><span class="nm">${esc(p.name)}<small>${esc(p.role)}</small></span><b class="miss-n">${list.length}</b></div>
+          <ul>${list.map((t) => `<li><button type="button" data-open="${t.i}" class="${t.held ? "abs" : "nh"}"><span class="mono">${esc(t.r.sop || "—")}</span><span>${esc(t.r.topic || "")}</span><small>${esc(fmtMonth(t.r.date))} · ${t.held ? "absent from the session" : "session not held yet"}</small></button></li>`).join("")}</ul></div>`).join("")
+          || `<div class="empty">${scope === "month" ? "Nobody missed a plan topic this month." : "No missed training this year."}</div>`}
+      </aside>
+    </div>
+
+    <div class="card card-pad" style="margin-top:16px">
+      <div class="card-head"><h2>Missing training per person per month <span class="sub">number of plan topics due and not attended · ✓ all attended · small number = topics still to come · click a month to open its sheets</span></h2></div>
+      <div class="matrix-wrap"><table class="mm-tbl">
+        <thead><tr><th class="mx-name">Person</th>${MON.map((m, k) => `<th class="${months[k] === ref.slice(0, 7) ? "cur" : ""} ${months[k] === M ? "sel" : ""}">${m}</th>`).join("")}<th>Missing</th><th>Plan</th></tr></thead>
+        <tbody>${people.map((p) => { const done = p.due - p.missed.length; const rate = p.due ? done / p.due : null; return `<tr><th class="mx-name" scope="row"><span class="av sm2">${esc(initials(p.name))}</span><span class="nm">${esc(p.name)}<small>${esc(p.role)}${p.induction ? ` · <b class="ind-tag">in induction</b>` : ""}</small></span></th>${p.months.map((m) => cell(p, m)).join("")}<td class="num"><b class="${p.missed.length ? "bad" : ""}">${p.missed.length}</b></td><td class="num">${pill(rate == null ? "—" : pct(rate), rateCls(rate))}</td></tr>`; }).join("")
+          || `<tr><td colspan="15"><div class="empty">No plan topic for ${Y} yet.</div></td></tr>`}</tbody>
+      </table></div>
+      <div class="mx-legend" style="margin-top:10px"><span><i class="mx-key no">2</i>Absent from a held session</span><span><i class="mx-key nh">2</i>Session not held yet (topic overdue)</span><span><i class="mx-key ok">✓</i>All attended</span><span><i class="mx-key fut"></i>Still to come</span><span><i class="mx-key na"></i>No topic for this person</span></div>
+    </div>`;
+
+  // attendance ticks: the topic's attendees and trained count
+  const save = (i, names, extra = {}) => {
+    const r = { ...s.trn[i], ...extra };
+    const fg0 = E.trnRequired(r, s);
+    r.attendees = names.join(", ") || undefined;
+    if (!r.attendees) delete r.attendees;
+    r.trained = names.length || undefined;
+    if (r.trained == null) delete r.trained;
+    store.upsert("t2", "trn", i, r, r.id || r.topic);
+    toast(`${r.sop || r.topic}: ${names.filter((n) => fg0.includes(n)).length}/${fg0.length} present`);
+    redraw();
+  };
+  $$("[data-att]", body).forEach((cb) => cb.onchange = () => {
+    const i = +cb.dataset.att;
+    const names = [...body.querySelectorAll(`[data-att="${i}"]`)].filter((c) => c.checked).map((c) => c.value);
+    save(i, names);
+  });
+  $$("[data-attall]", body).forEach((b) => b.onclick = () => { const i = +b.dataset.attall; const t = topics.find((x) => x.i === i); save(i, [...new Set([...t.req, ...t.names])]); });
+  $$("[data-atthold]", body).forEach((b) => b.onclick = () => { const i = +b.dataset.atthold; const t = topics.find((x) => x.i === i); const d = ref < t.r.date ? t.r.date : ref; save(i, t.names, { done: d, status: "Completed" }); });
+  $$("[data-attm]", body).forEach((b) => b.onclick = () => { view.attMonth = b.dataset.attm; redraw(); });
+  $$("[data-attscope]", body).forEach((b) => b.onclick = () => { view.attScope = b.dataset.attscope; redraw(); });
+  $("[data-attx]", body).onclick = (e) => busy(e.currentTarget, () => exportAttendance(s, Y, M, inMonth, roleOf));
+  $("[data-missx]", body).onclick = (e) => busy(e.currentTarget, () => exportMissing(s, Y, people));
+}
+
+async function exportAttendance(s, Y, M, list, roleOf) {
+  if (!list.length) throw new Error(`No plan topic in ${fmtMonth(`${M}-01`)}`);
+  const X = await loadScript(XLSX_URL, "XLSX");
+  const wb = X.utils.book_new();
+  list.forEach((t, k) => {
+    const extra = t.names.filter((n) => !t.req.includes(n));
+    const aoa = [
+      ["Training attendance sheet (Feuille de présence) — annual department plan", "", "", "", ""], [],
+      ["Department", "Quality Assurance"], ["Training title", t.r.topic || ""], ["Document No.", t.r.sop || "NA", "", "Revision", t.r.version || ""],
+      ["Planned date", t.r.date ? new Date(`${t.r.date}T00:00:00Z`) : "", "", "Date held", t.r.done ? new Date(`${t.r.done}T00:00:00Z`) : ""],
+      ["Trainer(s)", E.splitNames(t.r.trainer).join(", "), "", "Delivery", t.r.mode || ""], [],
+      ["No.", "Name", "Job title", "Attendance", "Signature"],
+      ...[...t.req, ...extra].map((n, j) => [j + 1, n, roleOf.get(n) || "", t.names.includes(n) ? "Present" : t.req.includes(n) ? (t.r.date <= s.setup.statusDate ? "Absent" : "") : "Optional", ""]),
+      [], ["Trainer signature", "", "", "QA approval", ""],
+    ];
+    const ws = X.utils.aoa_to_sheet(aoa, { cellDates: true, dateNF: "dd/mm/yyyy" });
+    ws["!cols"] = [{ wch: 18 }, { wch: 32 }, { wch: 30 }, { wch: 14 }, { wch: 28 }];
+    ws["!merges"] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 4 } }, { s: { r: 3, c: 1 }, e: { r: 3, c: 4 } }];
+    X.utils.book_append_sheet(wb, ws, `${k + 1} ${String(t.r.sop || t.r.topic || "topic").replace(/[\\/?*[\]:]/g, " ")}`.slice(0, 31));
+  });
+  const out = X.write(wb, { type: "array", bookType: "xlsx" });
+  await saveFile(`QA_Training_Attendance_${M}.xlsx`, new Blob([out], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }));
+}
+
+async function exportMissing(s, Y, people) {
+  const X = await loadScript(XLSX_URL, "XLSX");
+  const wb = X.utils.book_new();
+  const head = ["Person", "Job title", ...MON.map((m) => `${m} ${Y}`), "Missing", "Due", "Plan %"];
+  const grid = people.map((p) => [p.name, p.role, ...p.months.map((m) => (!m.req ? "" : m.missed.length ? m.missed.length : m.due ? "✓" : "to come")), p.missed.length, p.due, p.due ? Math.round(((p.due - p.missed.length) / p.due) * 100) / 100 : ""]);
+  const ws1 = X.utils.aoa_to_sheet([head, ...grid]);
+  ws1["!cols"] = [{ wch: 28 }, { wch: 28 }, ...MON.map(() => ({ wch: 9 })), { wch: 9 }, { wch: 7 }, { wch: 8 }];
+  X.utils.book_append_sheet(wb, ws1, "Per person per month");
+  const rowsD = people.flatMap((p) => p.missed.map((t) => [p.name, p.role, fmtMonth(t.r.date), t.r.date ? new Date(`${t.r.date}T00:00:00Z`) : "", t.r.sop || "", t.r.topic || "", t.r.version || "", t.r.done ? new Date(`${t.r.done}T00:00:00Z`) : "", ""]));
+  const ws2 = X.utils.aoa_to_sheet([["Person", "Job title", "Month", "Planned date", "Document No.", "Training title", "Revision", "Session held", "Catch-up date"], ...rowsD], { cellDates: true, dateNF: "dd/mm/yyyy" });
+  ws2["!cols"] = [{ wch: 28 }, { wch: 26 }, { wch: 15 }, { wch: 12 }, { wch: 20 }, { wch: 60 }, { wch: 9 }, { wch: 12 }, { wch: 14 }];
+  X.utils.book_append_sheet(wb, ws2, "Missing training list");
+  const out = X.write(wb, { type: "array", bookType: "xlsx" });
+  await saveFile(`QA_Missing_Training_${Y}_${s.setup.statusDate}.xlsx`, new Blob([out], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }));
 }
 
 /* ── team × topic matrix ──────────────────────────────── */
