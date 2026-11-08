@@ -63,6 +63,9 @@ function seedLists(tier, s) {
     s.lists.WipSteps ??= ["Dispensing", "Granulation", "Blending", "Compression", "Coating", "Encapsulation", "Packaging"];
     s.lists.WipResp ??= ["Production", "R&D", "QA", "QC"];
     s.abs ??= [];
+    s.sop ??= [];
+    s.lists.SopState ??= ["Effective", "Released", "Draft", "Rejected", "Obsolete"];
+    if (s.kpis?.[5] && /past due date/.test(s.kpis[5].def || "") && !/periodic/.test(s.kpis[5].def)) s.kpis[5] = { ...s.kpis[5], def: "Document actions past due + SOPs past their periodic review date" };
     s.lists.AbsType ??= ["Annual leave", "Sick leave", "Training (off the job)", "Mission / external work", "Absent", "Recovery / compensatory day", "Maternity / long leave", "Public holiday / site closure", "Other"];
     s.lists.AbsStatus ??= ["Planned", "Approved", "Taken", "Cancelled"];
     s.lists.AbsPortion ??= ["Full day", "Half day"];
@@ -120,7 +123,7 @@ export const demoAllowed = () => !isRealBoard() && EDITION.start === "demo";
 export const DEFAULT_SOURCE = HAS_REAL ? "real" : EDITION.start;
 
 const T1_REGS = ["dl", "br", "fn", "ac", "hd", "tr"];
-const T2_REGS = ["dev", "capa", "cc", "insp", "rel", "doc", "load", "abs", "apqr", "trn", "esc", "tasks", "act", "aud", "find", "rej", "t1e", "acapa"];
+const T2_REGS = ["dev", "capa", "cc", "insp", "rel", "doc", "sop", "load", "abs", "apqr", "trn", "esc", "tasks", "act", "aud", "find", "rej", "t1e", "acapa"];
 const isoToday = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
 
 /** An empty board for the edition's reporting month: the standard lists,
@@ -332,7 +335,7 @@ export const store = {
       this[tier] = s; this.save(tier); return;
     }
     const s = fresh(tier, "real");
-    const regs = tier === "t1" ? ["dl", "br", "fn", "ac", "hd", "tr"] : ["dev", "capa", "cc", "insp", "rel", "doc", "apqr", "trn", "esc", "tasks", "act", "aud", "find", "rej", "t1e", "acapa", "abs"];
+    const regs = tier === "t1" ? ["dl", "br", "fn", "ac", "hd", "tr"] : ["dev", "capa", "cc", "insp", "rel", "doc", "apqr", "trn", "esc", "tasks", "act", "aud", "find", "rej", "t1e", "acapa", "abs", "sop"];
     for (const r of regs) s[r] = [];
     s.fill = "off"; // emptied on purpose: never refilled from the site data
     if (tier === "t2") { s.daily = {}; s.trend.rows = s.trend.rows.map(() => Array(12).fill(null)); }

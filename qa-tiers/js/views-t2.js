@@ -61,7 +61,7 @@ export function kpiTile(k, i, s) {
   const m = +s.setup.month.slice(5, 7) - 1;
   if (series.length) series[m] = k.actual === "" ? null : k.actual;
   const tip = `**${k.name}**\n${k.def}\nActual ${fmtKpi(k.actual, k.unit)} · target ${k.targetText} · amber ${k.unit === "%" ? pct(k.amber) : k.amber}\n${k.why || ""}${k.prev !== "" ? `\nLast month ${fmtKpi(k.prev, k.unit)}` : ""}`;
-  return `<a class="kpi ${RAGCLS[k.rag]}" href="#/t2/${KPI_LINKS[i] === "trn" ? "training" : `reg/${KPI_LINKS[i]}`}" data-tip="${esc(tip)}" style="text-decoration:none;color:inherit">
+  return `<a class="kpi ${RAGCLS[k.rag]}" href="#/t2/${KPI_LINKS[i] === "trn" ? "training" : KPI_LINKS[i] === "doc" ? "docs" : `reg/${KPI_LINKS[i]}`}" data-tip="${esc(tip)}" style="text-decoration:none;color:inherit">
     <div class="k-name">${esc(k.name)}<br><span style="font-weight:400">${esc(k.def.length > 46 ? k.def.slice(0, 44) + "…" : k.def)}</span></div>
     <div class="k-val">${fmtKpi(k.actual, k.unit)}<span class="k-trend ${trendClass(k)}">${k.trend}</span></div>
     ${(() => { const n = newCounts(s, KPI_LINKS[i]); return n ? `<div class="k-new" title="Records raised on ${fmtDate(s.setup.statusDate)} and in ${fmtMonth(s.setup.month)}"><span class="${n.day ? "on" : ""}"><b>+${n.day}</b> today</span><span><b>+${n.month}</b> this month</span></div>` : ""; })()}
@@ -204,7 +204,7 @@ export function renderBoard(root, { filters = null } = {}) {
       const sc = T2_REGISTERS[reg], x = sum[reg];
       const k = sc.kpi != null ? kpis[sc.kpi] : null;
       const fmtL = (label, v) => (/Utilisation|Completion/.test(label) ? pct(v) : typeof v === "number" ? fmtNum(v) : v === "" ? "—" : v);
-      return `<a class="card sum" href="#/t2/reg/${reg}"><div class="s-top"><span class="s-no">${sc.no}</span>${k ? `<span class="pill ${k.rag}">${E.RAG_TEXT[k.rag]}</span>` : `<span class="pill info">Log</span>`}</div>
+      return `<a class="card sum" href="#/t2/${reg === "doc" ? "docs" : reg === "trn" ? "training" : `reg/${reg}`}"><div class="s-top"><span class="s-no">${sc.no}</span>${k ? `<span class="pill ${k.rag}">${E.RAG_TEXT[k.rag]}</span>` : `<span class="pill info">Log</span>`}</div>
         <div class="s-title">${esc(sc.short)}</div><div class="s-big">${x.total}<small>+${x.new} ${esc(x.newLabel || "new")}</small></div>
         <dl>${x.lines.map(([l, v]) => `<dt>${esc(l)}</dt><dd>${fmtL(l, v)}</dd>`).join("")}</dl></a>`;
     }).join("")}

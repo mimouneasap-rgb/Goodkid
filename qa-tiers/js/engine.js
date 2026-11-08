@@ -451,6 +451,20 @@ export function batchLinks(state) {
   return { byBatch, byRec };
 }
 
+/* ── SOP master list ── */
+export const SOP_SOON = 180; // days: periodic review coming
+/** ƒx of an SOP: where it stands in its life cycle and its periodic review. */
+export function t2Sop(r, s) {
+  const st = String(r.state || "");
+  const toReview = has(r.expiry) ? diffDays(r.expiry, s.statusDate) : "";
+  const inForce = !/reject|draft|obsolete|withdraw|retire/i.test(st);
+  const live = !has(r.id) ? "" : /obsolete|withdraw|retire/i.test(st) ? "Obsolete" : /reject/i.test(st) ? "Rework needed" : /draft|review|approval/i.test(st) ? "In workflow"
+    : toReview !== "" && toReview < 0 ? "Overdue" : toReview !== "" && toReview <= SOP_SOON ? "Review due"
+    : !has(r.eff) ? "Approved — not effective" : r.eff > s.statusDate ? "Effective soon" : "Effective";
+  const check = !has(r.title) ? "Title missing" : !has(r.owner) ? "Owner missing" : inForce && !has(r.expiry) ? "Review date missing" : has(r.eff) && has(r.expiry) && r.expiry < r.eff ? "Review date before effective date" : "OK";
+  return { live, toReview: inForce ? toReview : "", open: !["Effective", "Effective soon", "Obsolete"].includes(live), check, inForce };
+}
+
 export function t2Computed(state) {
   const s = state.setup, out = {};
   for (const reg of Object.keys(T2_FLOW)) out[reg] = (state[reg] || []).map((r) => t2Row(reg, r, s.statusDate));
@@ -493,6 +507,7 @@ export function t2Computed(state) {
   out.trn = state.trn.map((r) => t2Training(r, s));
   out.load = state.load.map((r) => t2Load(r, state));
   out.abs = (state.abs || []).map((r) => t2Absence(r, s));
+  out.sop = (state.sop || []).map((r) => t2Sop(r, s));
   out.tasks = (state.tasks || []).map((r, i) => {
     const act = activityFor(state.activities || DEFAULT_ACTIVITIES, "tasks", r);
     const std = act ? num(act.effort) : "";
@@ -518,13 +533,13 @@ export function t2Kpis(state, comp = t2Computed(state)) {
     overdue("cc"),
     onTimeRate("insp"),
     ratio(count(comp.rel, (c) => c.late === "No"), released),
-    overdue("doc"),
+    overdue("doc") + count(comp.sop || [], (c) => c.live === "Overdue"), // actions past due + SOPs past their periodic review
     ratio(sum(comp.load, (c) => c.workload), loadAvail),
     overdue("apqr"),
     ratio(sum(trnRows, (r) => trnFigures(r, state).trained), sum(trnRows, (r) => trnFigures(r, state).planned)),
   ];
   // a count over an empty register is "no data" until the first record is entered
-  [["dev", 0], ["cc", 2], ["doc", 5], ["apqr", 7]].forEach(([reg, i]) => { if (!state[reg].length) actuals[i] = ""; });
+  [["dev", 0], ["cc", 2], ["doc", 5], ["apqr", 7]].forEach(([reg, i]) => { if (!state[reg].length && !(reg === "doc" && state.sop?.length)) actuals[i] = ""; });
   const m = +s.month.slice(5, 7);
   const kpis = state.kpis.map((k, i) => {
     const actual = actuals[i];
@@ -599,7 +614,7 @@ export function t2Summary(state, comp = t2Computed(state)) {
       const q = state.rel.filter((r) => !lotTracking(r)), stq = (...v) => count(q, (r) => v.includes(r.status));
       return { total: q.length, new: count(q, (r) => inMonth(r.mfg)), lines: [["Waiting / review", stq("Waiting", "Under Review", "On Hold")], ["Released", stq("Released")], ["Released late", count(comp.rel, (c) => c.late === "Yes")], ["Overdue", od("rel")]] };
     })(),
-    doc: { total: state.doc.length, new: count(state.doc, (r) => inMonth(r.opened)), lines: [["Open", st("doc", "Open")], ["In course", st("doc", "In Course", "In Approval")], ["Closed", st("doc", "Closed")], ["Avg revision (d)", avg(state.doc.map((r, i) => (r.status === "Closed" ? comp.doc[i].age : null)).filter((v) => v !== null && v !== ""))]] },
+    doc: { total: (state.sop || []).length, newLabel: "actions new", new: count(state.doc, (r) => inMonth(r.opened)), lines: [["SOPs in force", count(comp.sop || [], (c) => c.inForce)], ["Review due ≤ 6 months", count(comp.sop || [], (c) => c.live === "Review due")], ["Review overdue", count(comp.sop || [], (c) => c.live === "Overdue")], ["Actions open", st("doc", "Open", "In Course", "In Approval")]] },
     load: { total: state.load.length, new: workingDays(s.month, s), newLabel: "working days", lines: [["Absence (days)", sum(comp.load, (c) => c.absence)], ["High load (n)", count(comp.load, (c) => c.status === "High load" || c.status === "Overloaded")], ["Delayed tasks", sum(comp.load, (c) => c.delayed)], ["Utilisation", ratio(sum(comp.load, (c) => c.workload), sum(comp.load, (c) => c.available))]] },
     apqr: { total: state.apqr.length, new: count(state.apqr, (r) => inMonth(r.opened)), lines: [["Not started", st("apqr", "Not Started")], ["In progress", st("apqr", "In Progress", "In Review")], ["Closed", st("apqr", "Closed")], ["Completion", avg(comp.apqr.map((c) => c.effPct))]] },
     trn: (() => {

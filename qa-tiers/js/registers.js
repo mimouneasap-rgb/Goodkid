@@ -40,6 +40,11 @@ const FX = {
     { key: "late", label: "Released Late", cell: (c) => pill(c.late, c.late === "Yes" ? "R" : "G") },
     { key: "check", label: "Data Check", cell: (c) => checkCell(c.check) },
   ],
+  sop: [
+    { key: "live", label: "Live Status", cell: (c) => pill(c.live === "Overdue" ? "Review overdue" : c.live, c.live === "Overdue" || c.live === "Rework needed" ? "R" : c.live === "Review due" || c.live === "In workflow" ? "A" : c.live === "Effective" ? "G" : "info") },
+    { key: "toReview", label: "Days to Review", num: true, cell: (c) => (c.toReview === "" ? "" : c.toReview < 0 ? `<b style="color:var(--r)">${c.toReview}</b>` : c.toReview) },
+    { key: "check", label: "Data Check", cell: (c) => checkCell(c.check) },
+  ],
   abs: [
     { key: "days", label: "Working Days", num: true, cell: (c) => fmtNum(c.days) },
     { key: "inMonth", label: "In Month", num: true, cell: (c) => (c.inMonth ? `<b>${fmtNum(c.inMonth)}</b>` : "0") },
@@ -96,7 +101,7 @@ FX.apqr = [...FX.generic.slice(0, 1), { key: "effPct", label: "Effective %", num
 export function fxSpec(tier, reg) {
   if (tier === "t2" && ["dev", "capa", "acapa", "cc", "find"].includes(reg)) return [...FX.generic.slice(0, 3), { key: "actions", label: "Actions", cell: actionsCell }, ...(reg === "find" ? [{ key: "capa", label: "CAPA", cell: (c) => (c.capa ? esc(c.capa.join(", ")) : "") }] : []), ...FX.generic.slice(3)];
   if (tier === "t2" && reg === "aud") return [...FX.generic.slice(0, 3), { key: "findings", label: "Findings", cell: (c) => (c.findings ? `${c.findings.open} open / ${c.findings.total}${c.findings.overdue ? ` · <b style="color:var(--r)">${c.findings.overdue} overdue</b>` : ""}` : "") }, { key: "actions", label: "Actions", cell: actionsCell }, ...FX.generic.slice(3)];
-  if (tier === "t2") return reg === "rel" ? FX.rel : reg === "trn" ? FX.trn2 : reg === "load" ? FX.load : reg === "abs" ? FX.abs : reg === "tasks" ? FX.tasks : reg === "apqr" ? FX.apqr : FX.generic;
+  if (tier === "t2") return reg === "rel" ? FX.rel : reg === "trn" ? FX.trn2 : reg === "load" ? FX.load : reg === "abs" ? FX.abs : reg === "sop" ? FX.sop : reg === "tasks" ? FX.tasks : reg === "apqr" ? FX.apqr : FX.generic;
   return reg === "tr" ? FX.tr1 : FX[reg];
 }
 
@@ -115,6 +120,7 @@ function computeOne(tier, reg, rec, index) {
     if (reg === "trn") return E.t2Training(rec, s.setup);
     if (reg === "load") return E.t2Load(rec, s);
     if (reg === "abs") return E.t2Absence(rec, s.setup);
+    if (reg === "sop") return E.t2Sop(rec, s.setup);
     if (reg === "tasks") {
       const act = E.activityFor(s.activities || E.DEFAULT_ACTIVITIES, "tasks", rec);
       const std = act ? +act.effort : "";
@@ -680,7 +686,7 @@ export function renderRegister(root, { tier, reg, query = {} }) {
       ["Delayed tasks", loadTotal("delayed"), loadTotal("delayed") ? "R" : "G"],
     ] : [
       ["Total", total, "", ""], ["Active", active, "", "open"],
-      ...(reg === "load" || reg === "abs" || reg === "dl" || reg === "hd" ? [] : [["Overdue", overdue, overdue ? "R" : "G", "overdue"]]),
+      ...(reg === "load" || reg === "abs" || reg === "sop" || reg === "dl" || reg === "hd" ? [] : [["Overdue", overdue, overdue ? "R" : "G", "overdue"]]),
       ...(freshToday != null ? [[`New today · ${fmtDate(ref)}`, freshToday, freshToday ? "new" : "", "today"]] : []),
       ...(fresh != null ? [[tier === "t1" ? "Month to date" : "New this month", fresh, fresh ? "new" : "", "month"]] : []),
     ];

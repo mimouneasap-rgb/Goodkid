@@ -12,7 +12,7 @@
 
 export const REGS = {
   t1: ["dl", "br", "fn", "ac", "hd", "tr"],
-  t2: ["dev", "capa", "cc", "insp", "rel", "doc", "load", "abs", "tasks", "apqr", "trn", "esc", "act", "aud", "find", "rej", "t1e", "acapa"],
+  t2: ["dev", "capa", "cc", "insp", "rel", "doc", "sop", "load", "abs", "tasks", "apqr", "trn", "esc", "act", "aud", "find", "rej", "t1e", "acapa"],
 };
 const LOCAL_ONLY = { t1: { setup: ["selDate"] }, t2: {} }; // per-viewer view state, never shared
 const CONCURRENCY = 4;

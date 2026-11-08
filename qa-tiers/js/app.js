@@ -4,6 +4,7 @@
 import { store, HAS_REAL, demoAllowed, REAL_INFO } from "./store.js";
 import { EDITION, hasTier, ONE_TIER, MAIN_TIER } from "./edition.js";
 import { renderTraining } from "./training.js";
+import { renderDocs } from "./docs.js";
 import * as E from "./engine.js";
 import { T1_REGISTERS, T2_REGISTERS, T1_ORDER, T2_ORDER, AUDIT_GROUP } from "./schema.js";
 import { ring } from "./charts.js";
@@ -37,6 +38,7 @@ function flagCounts() {
   const out = {};
   for (const [reg, c] of Object.entries(t2)) out[`t2/reg/${reg}`] = (T2_REGISTERS[reg]?.trackOnly ? 0 : E.flagged(c)) + c.filter((x) => x.live === "Overdue").length;
   for (const [reg, c] of Object.entries(t1)) out[`t1/reg/${reg}`] = E.flagged(c) + c.filter((x) => x.live === "Overdue").length;
+  out["t2/docs"] = (out["t2/reg/doc"] || 0) + (out["t2/reg/sop"] || 0); // the hub: document actions + SOP master list
   return out;
 }
 
@@ -59,7 +61,7 @@ function navHTML() {
       ${hasTier("t2") ? `<div class="nav-group"><div class="nav-title" style="--dot:var(--accent-2)"><i class="tier-dot"></i>Tier 2 · Stand-up ${esc(store.t2.setup.meetingTime || "10:30")}</div>
         ${a("t2/board", "◫", "Dashboard")}
         ${a("t2/calendar", "▣", "Daily Log")}
-        ${T2_ORDER.filter((r) => (r !== "t1e" || !hasTier("t1")) && !AUDIT_GROUP.includes(r)).map((r) => (r === "trn" ? a("t2/training", T2_REGISTERS[r].no, T2_REGISTERS[r].short, "t2/reg/trn") : a(`t2/reg/${r}`, T2_REGISTERS[r].no, T2_REGISTERS[r].short))).join("")}
+        ${T2_ORDER.filter((r) => (r !== "t1e" || !hasTier("t1")) && r !== "sop" && !AUDIT_GROUP.includes(r)).map((r) => (r === "trn" ? a("t2/training", T2_REGISTERS[r].no, T2_REGISTERS[r].short, "t2/reg/trn") : r === "doc" ? a("t2/docs", T2_REGISTERS[r].no, T2_REGISTERS[r].short, "t2/docs") : a(`t2/reg/${r}`, T2_REGISTERS[r].no, T2_REGISTERS[r].short))).join("")}
         ${a("t2/trend", "↗", "KPI Trend")}
         ${a("t2/analytics", "◔", "Analytics")}
         ${a("t2/setup", "⚙", "Setup")}
@@ -254,6 +256,7 @@ function route({ soft = false, back = false } = {}) {
   else if (a === "t2" && b === "analytics") { T2.renderAnalytics(view); titles.push("Analytics"); }
   else if (a === "t2" && b === "setup") { renderSetupT2(view); titles.push("Tier 2 setup"); }
   else if (a === "t2" && b === "training") { renderTraining(view); titles.push("Training"); }
+  else if (a === "t2" && b === "docs") { renderDocs(view); titles.push("Documentation"); }
   else if (a === "t2" && b === "reg" && T2_REGISTERS[c]) { renderRegister(view, { tier: "t2", reg: c, query }); titles.push(T2_REGISTERS[c].title); }
   else if (a === "audit") { renderAudit(view); titles.push("Change history"); }
   else if (a === "report") { renderReportPage(view, { type: query.type }); titles.push("Reports centre"); }

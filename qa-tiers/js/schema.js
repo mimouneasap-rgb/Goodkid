@@ -136,8 +136,8 @@ export const T2_REGISTERS = {
   },
   doc: {
     no: "06", title: "Documentation", icon: "▤", short: "Documentation",
-    lead: "SOP / WI life cycle — new documents, revisions, periodic reviews and withdrawals.",
-    source: "Document control index · draft SOPs in workflow", who: "Documentation officer", when: "Weekly + on change",
+    lead: "Document actions in progress — new documents, revisions, periodic reviews and withdrawals, from start to the effective date. The SOPs themselves are in the SOP master list (06·M).",
+    source: "Document control index · draft SOPs in the DMS workflow", who: "Documentation officer", when: "Weekly + on change",
     lifecycle: ["Open", "In Course", "In Approval", "Closed"], kpi: 5, idHint: "SOP-QA-012",
     fields: [
       f("id", "Document No.", "text", { req: true, help: "Code as in the document index, e.g. SOP-QA-012" }),
@@ -274,6 +274,25 @@ export const T2_REGISTERS = {
       f("indNote", "Induction notes", "long"),
     ],
     table: ["member", "role", "fte", "routine", "comments"],
+  },
+  sop: {
+    no: "06·M", title: "SOP Master List", icon: "▤", short: "SOP master list", dateKey: "eff", sortDesc: true,
+    lead: "Every controlled SOP of the department with its revision, DMS status, effective date, periodic review date and document owner — imported from the DMS (SeedDMS / Scigeniq) export.",
+    source: "DMS export (SeedDMS / Scigeniq) — document owner = the uploader", who: "Documentation officer", when: "After each DMS release + monthly",
+    lifecycle: ["Draft", "Released", "Effective"], kpi: 5, idHint: "SOPQA0000/Onc",
+    fields: [
+      f("id", "SOP No.", "text", { req: true, help: "Reference as in the DMS, e.g. SOPQA0019/Onc" }),
+      f("title", "Title", "text", { req: true }),
+      f("rev", "Revision", "text", { help: "Revision in force, e.g. 02" }),
+      f("dms", "DMS No.", "text", { help: "Document number in the DMS" }),
+      f("state", "DMS status", "list", { list: "SopState", help: "Effective · Released (approved) · Draft (in workflow) · Rejected (rework) · Obsolete" }),
+      f("eff", "Effective date", "date"),
+      f("expiry", "Periodic review due", "date", { help: "Expiry date in the DMS — usually 3 years after the effective date" }),
+      f("owner", "Document owner", "list", { list: "People", help: "The uploader in the DMS export" }),
+      f("cc", "Change control", "text", { help: "Change control(s) behind the current revision" }),
+      f("comments", "Comments", "long"),
+    ],
+    table: ["id", "title", "rev", "state", "eff", "expiry", "owner"],
   },
   abs: {
     no: "07·A", title: "Attendance & Absence", icon: "◷", short: "Attendance & absence", dateKey: "from", sortDesc: true,
@@ -433,7 +452,7 @@ export const T2_REGISTERS = {
 };
 
 /** Order of the registers on the Tier 2 navigation. */
-export const T2_ORDER = ["dev", "capa", "cc", "act", "insp", "rel", "doc", "load", "abs", "tasks", "apqr", "trn", "esc", "t1e", "rej", "aud", "find", "acapa"];
+export const T2_ORDER = ["dev", "capa", "cc", "act", "insp", "rel", "doc", "sop", "load", "abs", "tasks", "apqr", "trn", "esc", "t1e", "rej", "aud", "find", "acapa"];
 /** Registers tracked for follow-up only, in their own menu (not QA's responsibility). */
 export const AUDIT_GROUP = ["aud", "find", "acapa"];
 
@@ -608,7 +627,7 @@ export const LIST_LABELS = {
   CCType: "Change type", CCCat: "Change category", CCStatus: "Change status", YesNoTBD: "Yes / No / TBD", YesNo: "Yes / No",
   InspCat: "Inspection category", Severity: "Severity", InspStatus: "Inspection status", BRStatus: "Batch status",
   DocType: "Document type", DocAction: "Document action", DocStatus: "Document status", APQRStatus: "APQR status",
-  TrType: "Training type", TrCat: "Training category", LotType: "Lot type", AbsType: "Absence type", AbsStatus: "Absence status", AbsPortion: "Absence portion", WipStatus: "WIP status", WipSteps: "WIP next steps", WipResp: "WIP responsible", TrMode: "Training delivery", TrPlanRoles: "Training plan — mandatory job titles", TrAudience: "Trained department", TrStatus: "Training status", TrEff: "Training effectiveness", EscSource: "Escalation source",
+  TrType: "Training type", TrCat: "Training category", LotType: "Lot type", SopState: "SOP DMS status", AbsType: "Absence type", AbsStatus: "Absence status", AbsPortion: "Absence portion", WipStatus: "WIP status", WipSteps: "WIP next steps", WipResp: "WIP responsible", TrMode: "Training delivery", TrPlanRoles: "Training plan — mandatory job titles", TrAudience: "Trained department", TrStatus: "Training status", TrEff: "Training effectiveness", EscSource: "Escalation source",
   EscStatus: "Escalation status", DayStatus: "Day status", ManualKPI: "Manual KPI status",
   People: "People & functions", Departments: "Departments", Products: "Products", Tier3: "Tier 3 escalation contacts",
   FnTypes: "Finding types", ErrCats: "Error categories", Shifts: "Shifts", Att: "Attendance", RecType: "Record type",
