@@ -1204,3 +1204,11 @@ table.matrix th.mx-name .nm { white-space: normal; text-overflow: clip; }
 .cb-g { padding: 8px 10px 3px; font: 600 10.5px/1.2 var(--font-display); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
 .cb-empty { padding: 8px 10px; color: var(--muted); font-size: 12.5px; }
 .ev-n { display: inline-block; padding: 2px 8px; border-radius: 999px; background: var(--accent-soft); color: var(--ink); font-weight: 600; font-size: 12px; white-space: nowrap; }
+
+/* ── QA load capacity ── */
+.cap-flow { display: flex; flex-wrap: wrap; align-items: stretch; gap: 8px; margin-top: 6px; }
+.cap-flow > i { align-self: center; font-style: normal; font-weight: 700; color: var(--muted); }
+.cap-step { display: grid; gap: 2px; padding: 10px 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); min-width: 110px; flex: 1 1 110px; }
+.cap-step small { font: 600 10.5px/1.2 var(--font-display); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.cap-step b { font-size: 20px; }
+.cap-step span { font-size: 12px; }

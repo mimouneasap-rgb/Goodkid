@@ -300,7 +300,7 @@ export function dayEditor(date, onSaved) {
     ];
     return `<tr><td>${esc(p.label)}</td><td>${pill(auto.status, auto.code === 3 ? "R" : auto.code === 2 ? "A" : "G")}</td><td class="muted" style="font-size:12px">${esc(reasons.join(" · ") || "Nothing open, due or raised")}</td></tr>`;
   }).join("");
-  const fields = T2_DAILY_FIELDS.map((f) => `<label class="field ${f.type === "long" || /^p\d/.test(f.key) ? "full" : ""}"><span>${esc(f.label)}</span>${inputHTML("t2", f, log[f.key])}${f.help ? `<small>${esc(f.help)}</small>` : ""}</label>`).join("");
+  const fields = T2_DAILY_FIELDS.map((f) => { const tag = f.type === "people" ? "div" : "label"; return `<${tag} class="field ${f.type === "long" || f.type === "people" || /^p\d/.test(f.key) ? "full" : ""}"><span>${esc(f.label)}</span>${inputHTML("t2", f, log[f.key])}${f.help ? `<small>${esc(f.help)}</small>` : ""}</${tag}>`; }).join("");
   const { el, close } = drawer({
     title: `${dow(date)} ${fmtDate(date)}`,
     sub: `<div class="meta-row"><span>Daily Log · Q-calendar engine</span><span>${weekend ? "Weekend day" : "Working day"}</span></div>`,

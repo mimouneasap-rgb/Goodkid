@@ -255,12 +255,16 @@ export const T2_REGISTERS = {
   load: {
     no: "07", title: "QA Load", icon: "◔", short: "QA load", idKey: "member",
     lead: "Capacity, calculated: working days − absence = available; the workload of every record each person owns ÷ available = utilisation.",
-    source: "The registers, the Task planner and the Tier 1 logs — workload is calculated", who: "Senior QA (board owner)", when: "1st of month + when a team member or leave changes",
+    source: "The Tier 2 registers, the Task planner, the Attendance & absence register and the Daily Log — all in Tier 2, workload is calculated", who: "Senior QA (board owner)", when: "1st of month + when a team member or leave changes",
     lifecycle: [], kpi: 6,
     fields: [
       f("member", "Team Member", "list", { list: "People", req: true, help: "One row per QA person. Workload counts every record where this name is the owner, inspector, trainer, releasing officer or task assignee" }),
       f("role", "Position / Role", "list", { list: "Roles", help: "Position in the QA team — shown as the typical role of each activity in Setup" }),
-      f("absence", "Planned leave not yet logged (days)", "num", { help: "Leave, sickness or external training this month that is not in the Tier 1 daily log yet. Logged Leave / Training / Absent days are added automatically" }),
+      f("fte", "Time on QA work", "pct", { help: "Share of the person's time given to QA work — 100 % full time; less for part time or a shared role (e.g. 50 %)" }),
+      f("routine", "Routine floor work", "pct", { help: "Share of the available days taken by routine duties no register tracks — line clearance, IPC, AQL, Gemba, sampling. Added to the workload" }),
+      f("joined", "In the team from", "date", { help: "A newcomer: only the working days from this date count" }),
+      f("left", "Leaves the team on", "date", { help: "Last working day — later days do not count" }),
+      f("absence", "Other absence (days)", "num", { help: "Only absence not entered in the Attendance & absence register or the Daily Log — those are counted automatically" }),
       f("comments", "Main Assignments / Comments", "long", { help: "What the person covers" }),
       f("newHire", "New hire in induction", "list", { list: "YesNo", group: "Induction of a new hire (SOPGS0024)", help: "Yes: out of the annual training plan until induction phase 2 is achieved" }),
       f("ph1", "Induction phase 1 completed", "date", { help: "General induction (site, GMP, HSE)" }),
@@ -269,7 +273,24 @@ export const T2_REGISTERS = {
       f("tutor", "Induction tutor", "list", { list: "People" }),
       f("indNote", "Induction notes", "long"),
     ],
-    table: ["member", "role", "absence", "comments"],
+    table: ["member", "role", "fte", "routine", "comments"],
+  },
+  abs: {
+    no: "07·A", title: "Attendance & Absence", icon: "◷", short: "Attendance & absence", dateKey: "from", sortDesc: true,
+    lead: "Every day a QA team member is not available for QA work — leave, sickness, off-the-job training, missions — and the site closures that stop the whole team. QA Load takes its available days from here.",
+    source: "Leave planning · HR absence records · the stand-up (who is absent today)", who: "Senior QA (board owner)", when: "When leave is planned or an absence happens",
+    lifecycle: ["Planned", "Approved", "Taken"], kpi: null, idHint: "ABS-2611-01",
+    fields: [
+      f("id", "Absence No.", "text", { req: true, help: "e.g. ABS-2611-01" }),
+      f("member", "Team Member", "list", { list: "People", help: "Leave empty for a public holiday or site closure — it applies to the whole team" }),
+      f("type", "Absence type", "list", { list: "AbsType", req: true, help: "Annual leave · Sick leave · Training (off the job) · Mission · Public holiday / site closure…" }),
+      f("from", "From", "date", { req: true }),
+      f("to", "To (included)", "date", { help: "Empty for a single day. Weekends are not counted" }),
+      f("portion", "Portion", "list", { list: "AbsPortion", help: "Half days count 0.5 per day" }),
+      f("status", "Status", "list", { list: "AbsStatus", help: "Planned and approved leave already reduces the available days; Cancelled does not" }),
+      f("comments", "Comments", "long", { help: "Replacement / back-up during the absence" }),
+    ],
+    table: ["id", "member", "type", "from", "to", "portion", "status"],
   },
   tasks: {
     no: "07·T", title: "Task Planner", icon: "☷", short: "Task planner",
@@ -412,7 +433,7 @@ export const T2_REGISTERS = {
 };
 
 /** Order of the registers on the Tier 2 navigation. */
-export const T2_ORDER = ["dev", "capa", "cc", "act", "insp", "rel", "doc", "load", "tasks", "apqr", "trn", "esc", "t1e", "rej", "aud", "find", "acapa"];
+export const T2_ORDER = ["dev", "capa", "cc", "act", "insp", "rel", "doc", "load", "abs", "tasks", "apqr", "trn", "esc", "t1e", "rej", "aud", "find", "acapa"];
 /** Registers tracked for follow-up only, in their own menu (not QA's responsibility). */
 export const AUDIT_GROUP = ["aud", "find", "acapa"];
 
@@ -423,6 +444,7 @@ export const T2_DAILY_FIELDS = [
   f("t1red", "Tier 1 red letters", "text", { tierOnly: true, help: "SQDCP letters red at the 08:30 huddle, e.g. ‘S, D’ — empty when all green" }),
   f("t1safety", "Tier 1 safety & containment", "text", { tierOnly: true, help: "Exposure, spill, near-miss or containment event reported by the huddle" }),
   f("attendees", "Attendees", "int", { help: "Number of people at the board" }),
+  f("absent", "QA team absent today", "people", { noGroup: true, help: "Tick who is absent — each day counts as absence in QA Load (unless already in the Attendance & absence register)" }),
   f("ovDev", "Override · Deviation", "list", { list: "DayStatus", help: "Only if the team disagrees with the automatic status — write why in Remarks" }),
   f("ovCapa", "Override · CAPA", "list", { list: "DayStatus" }),
   f("ovCc", "Override · Change Ctrl", "list", { list: "DayStatus" }),
@@ -586,7 +608,7 @@ export const LIST_LABELS = {
   CCType: "Change type", CCCat: "Change category", CCStatus: "Change status", YesNoTBD: "Yes / No / TBD", YesNo: "Yes / No",
   InspCat: "Inspection category", Severity: "Severity", InspStatus: "Inspection status", BRStatus: "Batch status",
   DocType: "Document type", DocAction: "Document action", DocStatus: "Document status", APQRStatus: "APQR status",
-  TrType: "Training type", TrCat: "Training category", LotType: "Lot type", WipStatus: "WIP status", WipSteps: "WIP next steps", WipResp: "WIP responsible", TrMode: "Training delivery", TrPlanRoles: "Training plan — mandatory job titles", TrAudience: "Trained department", TrStatus: "Training status", TrEff: "Training effectiveness", EscSource: "Escalation source",
+  TrType: "Training type", TrCat: "Training category", LotType: "Lot type", AbsType: "Absence type", AbsStatus: "Absence status", AbsPortion: "Absence portion", WipStatus: "WIP status", WipSteps: "WIP next steps", WipResp: "WIP responsible", TrMode: "Training delivery", TrPlanRoles: "Training plan — mandatory job titles", TrAudience: "Trained department", TrStatus: "Training status", TrEff: "Training effectiveness", EscSource: "Escalation source",
   EscStatus: "Escalation status", DayStatus: "Day status", ManualKPI: "Manual KPI status",
   People: "People & functions", Departments: "Departments", Products: "Products", Tier3: "Tier 3 escalation contacts",
   FnTypes: "Finding types", ErrCats: "Error categories", Shifts: "Shifts", Att: "Attendance", RecType: "Record type",

@@ -43,6 +43,7 @@ function seedLists(tier, s) {
     s.activities ??= clone(DEFAULT_ACTIVITIES);
     // a stored demo gets the demo planner; any other board starts with an empty one
     s.tasks ??= /El Kendi/.test(s.setup.site) && s.setup.month === "2026-09-01" ? clone(DEMO_TASKS) : [];
+    s.activities = s.activities.filter((a) => a.reg !== "t1ac"); // Tier 1 actions no longer feed the Tier 2 load
     s.activities = s.activities.concat(DEFAULT_ACTIVITIES.filter((a) => !s.activities.some((x) => x.name === a.name)).map((a) => ({ ...a, role: REAL_ROLES[a.role] ?? a.role })));
     s.act ??= [];
     s.aud ??= []; s.find ??= []; s.rej ??= []; s.t1e ??= []; s.acapa ??= [];
@@ -61,6 +62,10 @@ function seedLists(tier, s) {
     s.lists.WipStatus ??= ["Conform", "Non conform", "Under CAPA — waiting decision", "Under rejection"];
     s.lists.WipSteps ??= ["Dispensing", "Granulation", "Blending", "Compression", "Coating", "Encapsulation", "Packaging"];
     s.lists.WipResp ??= ["Production", "R&D", "QA", "QC"];
+    s.abs ??= [];
+    s.lists.AbsType ??= ["Annual leave", "Sick leave", "Training (off the job)", "Mission / external work", "Absent", "Recovery / compensatory day", "Maternity / long leave", "Public holiday / site closure", "Other"];
+    s.lists.AbsStatus ??= ["Planned", "Approved", "Taken", "Cancelled"];
+    s.lists.AbsPortion ??= ["Full day", "Half day"];
     // the values the WIP master uses are always in the lists
     s.lists.WipSteps = uniq([...s.lists.WipSteps, ...s.rel.map((r) => r.wipStep)]);
     s.lists.WipResp = uniq([...s.lists.WipResp, ...s.rel.map((r) => r.wipResp)]);
@@ -115,7 +120,7 @@ export const demoAllowed = () => !isRealBoard() && EDITION.start === "demo";
 export const DEFAULT_SOURCE = HAS_REAL ? "real" : EDITION.start;
 
 const T1_REGS = ["dl", "br", "fn", "ac", "hd", "tr"];
-const T2_REGS = ["dev", "capa", "cc", "insp", "rel", "doc", "load", "apqr", "trn", "esc", "tasks", "act", "aud", "find", "rej", "t1e", "acapa"];
+const T2_REGS = ["dev", "capa", "cc", "insp", "rel", "doc", "load", "abs", "apqr", "trn", "esc", "tasks", "act", "aud", "find", "rej", "t1e", "acapa"];
 const isoToday = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
 
 /** An empty board for the edition's reporting month: the standard lists,
@@ -327,7 +332,7 @@ export const store = {
       this[tier] = s; this.save(tier); return;
     }
     const s = fresh(tier, "real");
-    const regs = tier === "t1" ? ["dl", "br", "fn", "ac", "hd", "tr"] : ["dev", "capa", "cc", "insp", "rel", "doc", "apqr", "trn", "esc", "tasks", "act", "aud", "find", "rej", "t1e", "acapa"];
+    const regs = tier === "t1" ? ["dl", "br", "fn", "ac", "hd", "tr"] : ["dev", "capa", "cc", "insp", "rel", "doc", "apqr", "trn", "esc", "tasks", "act", "aud", "find", "rej", "t1e", "acapa", "abs"];
     for (const r of regs) s[r] = [];
     s.fill = "off"; // emptied on purpose: never refilled from the site data
     if (tier === "t2") { s.daily = {}; s.trend.rows = s.trend.rows.map(() => Array(12).fill(null)); }

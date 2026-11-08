@@ -10,7 +10,7 @@ import { PRACTICE } from "./learn.js";
 import { saveFile, decorateCharts } from "./export.js";
 import { registerCharts } from "./regcharts.js";
 import { DEMO_T1, DEMO_T2 } from "./demo-data.js";
-import { esc, pill, fmtDate, pct, fmtNum, toast, confirmDialog, promptDialog, drawer, download, toCSV, $, $$, today } from "./ui.js";
+import { esc, pill, fmtDate, fmtMonth, pct, fmtNum, toast, confirmDialog, promptDialog, drawer, download, toCSV, $, $$, today } from "./ui.js";
 import { enhanceCombos } from "./combo.js";
 
 const has = (v) => v !== "" && v != null;
@@ -40,6 +40,12 @@ const FX = {
     { key: "late", label: "Released Late", cell: (c) => pill(c.late, c.late === "Yes" ? "R" : "G") },
     { key: "check", label: "Data Check", cell: (c) => checkCell(c.check) },
   ],
+  abs: [
+    { key: "days", label: "Working Days", num: true, cell: (c) => fmtNum(c.days) },
+    { key: "inMonth", label: "In Month", num: true, cell: (c) => (c.inMonth ? `<b>${fmtNum(c.inMonth)}</b>` : "0") },
+    { key: "live", label: "Live Status", cell: (c) => `${pill(c.live, c.live === "Ongoing" ? "A" : c.live === "Upcoming" ? "info" : c.live === "Cancelled" ? "N" : "G")}${c.team ? ' <span class="pill info">whole team</span>' : ""}` },
+    { key: "check", label: "Data Check", cell: (c) => checkCell(c.check) },
+  ],
   trn2: [
     { key: "completion", label: "Completion %", num: true, cell: (c) => pct(c.completion) },
     { key: "live", label: "Live Status", cell: (c) => pill(c.live) },
@@ -47,7 +53,7 @@ const FX = {
   ],
   load: [
     { key: "workDays", label: "Working Days", num: true, cell: (c) => c.workDays },
-    { key: "absence", label: "Absence (d)", num: true, cell: (c) => `${fmtNum(c.absence)}${c.logged ? ` <span class="muted" title="${c.logged} day(s) from the Tier 1 daily log">(${c.logged} logged)</span>` : ""}` },
+    { key: "absence", label: "Absence (d)", num: true, cell: (c) => `${fmtNum(c.absence)}${c.logged ? ` <span class="muted" title="${esc(Object.entries(c.byType || {}).map(([k, v]) => `${k}: ${fmtNum(v)} d`).join("\n"))}">(${fmtNum(c.logged)} logged)</span>` : ""}` },
     { key: "available", label: "Available Days", num: true, cell: (c) => fmtNum(c.available) },
     { key: "workload", label: "Planned Workload (pd)", num: true, cell: (c) => `<b>${fmtNum(c.workload)}</b>` },
     { key: "util", label: "Utilisation", num: true, cell: (c) => pct(c.util) },
@@ -90,7 +96,7 @@ FX.apqr = [...FX.generic.slice(0, 1), { key: "effPct", label: "Effective %", num
 function fxSpec(tier, reg) {
   if (tier === "t2" && ["dev", "capa", "acapa", "cc", "find"].includes(reg)) return [...FX.generic.slice(0, 3), { key: "actions", label: "Actions", cell: actionsCell }, ...(reg === "find" ? [{ key: "capa", label: "CAPA", cell: (c) => (c.capa ? esc(c.capa.join(", ")) : "") }] : []), ...FX.generic.slice(3)];
   if (tier === "t2" && reg === "aud") return [...FX.generic.slice(0, 3), { key: "findings", label: "Findings", cell: (c) => (c.findings ? `${c.findings.open} open / ${c.findings.total}${c.findings.overdue ? ` · <b style="color:var(--r)">${c.findings.overdue} overdue</b>` : ""}` : "") }, { key: "actions", label: "Actions", cell: actionsCell }, ...FX.generic.slice(3)];
-  if (tier === "t2") return reg === "rel" ? FX.rel : reg === "trn" ? FX.trn2 : reg === "load" ? FX.load : reg === "tasks" ? FX.tasks : reg === "apqr" ? FX.apqr : FX.generic;
+  if (tier === "t2") return reg === "rel" ? FX.rel : reg === "trn" ? FX.trn2 : reg === "load" ? FX.load : reg === "abs" ? FX.abs : reg === "tasks" ? FX.tasks : reg === "apqr" ? FX.apqr : FX.generic;
   return reg === "tr" ? FX.tr1 : FX[reg];
 }
 
@@ -107,7 +113,8 @@ function computeOne(tier, reg, rec, index) {
   if (tier === "t2") {
     if (reg === "rel") return E.t2Release(rec, s.setup);
     if (reg === "trn") return E.t2Training(rec, s.setup);
-    if (reg === "load") return E.t2Load(rec, s, store.t1);
+    if (reg === "load") return E.t2Load(rec, s);
+    if (reg === "abs") return E.t2Absence(rec, s.setup);
     if (reg === "tasks") {
       const act = E.activityFor(s.activities || E.DEFAULT_ACTIVITIES, "tasks", rec);
       const std = act ? +act.effort : "";
@@ -372,7 +379,7 @@ export function openEditor({ tier, reg, index = null, prefill = null, onSaved, p
     $("[data-fx]", el).innerHTML = items ? `<div class="fx-panel">${items}</div>` : "";
     const flag = c.check && c.check !== "OK" ? `<div class="flag-msg">⚠ Data check: ${esc(c.check)}</div>` : c.check === "OK" ? `<div class="ok-msg">✓ Data check: record consistent</div>` : "";
     $("[data-flag]", el).innerHTML = flag;
-    if (reg === "load") $("[data-breakdown]", el).innerHTML = breakdownHTML(c, s.setup);
+    if (reg === "load") $("[data-breakdown]", el).innerHTML = capacityHTML(c, s, draft) + breakdownHTML(c, s.setup);
   };
   wireInputs(el, tier, sc.fields, refresh);
   form.addEventListener("input", refresh);
@@ -507,6 +514,27 @@ function parentLinkHTML(ref) {
   return reg ? `<div style="margin-top:16px"><a class="btn sm" href="#/t2/reg/${reg}?id=${encodeURIComponent(ref)}">Open ${esc(ref)} ›</a></div>` : "";
 }
 
+/** How a team member's available days are reached, and their absences of the month (QA Load form). */
+function capacityHTML(c, s, rec) {
+  const mS = E.monthStart(s.setup.month), mE = E.monthEnd(s.setup.month);
+  const comp = E.t2Computed(s).abs || [];
+  const mine = (s.abs || []).map((r, i) => ({ r, c: comp[i] })).filter(({ r, c }) => (r.member === rec.member || c?.team) && has(r.from) && r.from <= mE && (has(r.to) ? r.to : r.from) >= mS);
+  const logDays = Object.entries(s.daily || {}).filter(([d, l]) => d >= mS && d <= mE && E.splitNames(l.absent).includes(rec.member)).map(([d]) => d).sort();
+  const step = (lbl, v, note = "") => `<div class="cap-step"><small>${esc(lbl)}</small><b>${v}</b>${note ? `<span class="muted">${note}</span>` : ""}</div>`;
+  const pre = { member: rec.member, type: "Annual leave", from: today(), status: "Planned" };
+  return `<div class="card-head" style="margin-top:6px"><h2>ƒx Capacity <span class="sub">${esc(fmtMonth(s.setup.month))} · from Tier 2 only</span></h2>
+      <div class="row"><a class="btn sm" href="#/t2/reg/abs?new=1&prefill=${encodeURIComponent(JSON.stringify(pre))}">＋ Absence</a><a class="btn sm ghost" href="#/t2/reg/abs">Attendance & absence ›</a></div></div>
+    <div class="cap-flow">
+      ${step("Working days", fmtNum(c.workDays), c.closures ? `${fmtNum(c.closures)} closure / outside-team day(s) removed` : "weekends removed")}<i>−</i>
+      ${step("Absence", fmtNum(c.absence), [...Object.entries(c.byType || {}).map(([k, v]) => `${esc(k)} ${fmtNum(v)}`), c.manual ? `other ${fmtNum(c.manual)}` : ""].filter(Boolean).join(" · ") || "none")}<i>×</i>
+      ${step("Time on QA", pct(c.fte))}<i>=</i>
+      ${step("Available", `${fmtNum(c.available)} pd`)}<i>→</i>
+      ${step("Workload", `${fmtNum(c.workload)} pd`, c.util === "" ? "" : `${pct(c.util)} · ${esc(c.status)}`)}
+    </div>
+    ${mine.length || logDays.length ? `<div class="urgent" style="margin:10px 0 16px">${mine.map(({ r, c: x }) => `<a href="#/t2/reg/abs?id=${encodeURIComponent(r.id)}"><span class="ref">${esc(r.id || "")}</span><span class="desc">${esc(r.type || "")}${x?.team ? " · whole team" : ""} · ${fmtDate(r.from)}${has(r.to) && r.to !== r.from ? ` → ${fmtDate(r.to)}` : ""}${r.portion && /half/i.test(r.portion) ? " · half days" : ""} <span class="muted">· ${fmtNum(x?.inMonth || 0)} d this month</span></span>${pill(x?.live || "")}</a>`).join("")}
+      ${logDays.length ? `<a href="#/t2/calendar"><span class="ref">Daily Log</span><span class="desc">Absent today: ${logDays.map(fmtDate).join(", ")}</span>${pill(`${logDays.length} d`, "A")}</a>` : ""}</div>` : `<div class="empty" style="margin:10px 0 16px">No absence this month — add leave with ＋ Absence, or tick the person under “QA team absent today” in the Daily Log.</div>`}`;
+}
+
 /** Where a team member's workload comes from (QA Load form). */
 function breakdownHTML(c, setup) {
   if (!c.items?.length) return `<div class="empty">No record is assigned to this name in ${esc(setup.month.slice(0, 7))}. Assign work in the registers (Owner, Inspector, Trainer, Releasing Officer) or in the Task planner.</div>`;
@@ -522,7 +550,7 @@ function breakdownHTML(c, setup) {
 
 /** Team workload above the QA Load register: one compact row per person — workload against capacity, by source. */
 function loadPanel(comp, setup) {
-  const SLOT = { act: "s1", dev: "s2", capa: "s3", cc: "s4", rel: "s5", apqr: "s6", tasks: "s7", t1ac: "s8" };
+  const SLOT = { act: "s1", dev: "s2", capa: "s3", cc: "s4", rel: "s5", apqr: "s6", tasks: "s7", routine: "s8" };
   const nameOf = (src) => { const k = Object.keys(E.LOAD_SOURCES).find((x) => E.LOAD_SOURCES[x] === src); return SLOT[k] ? src : "Other"; };
   const slotOf = (name) => { const k = Object.keys(E.LOAD_SOURCES).find((x) => E.LOAD_SOURCES[x] === name); return SLOT[k] || "other"; };
   const rows = store.t2.load.map((r, i) => {
@@ -652,7 +680,7 @@ export function renderRegister(root, { tier, reg, query = {} }) {
       ["Delayed tasks", loadTotal("delayed"), loadTotal("delayed") ? "R" : "G"],
     ] : [
       ["Total", total, "", ""], ["Active", active, "", "open"],
-      ...(reg === "load" || reg === "dl" || reg === "hd" ? [] : [["Overdue", overdue, overdue ? "R" : "G", "overdue"]]),
+      ...(reg === "load" || reg === "abs" || reg === "dl" || reg === "hd" ? [] : [["Overdue", overdue, overdue ? "R" : "G", "overdue"]]),
       ...(freshToday != null ? [[`New today · ${fmtDate(ref)}`, freshToday, freshToday ? "new" : "", "today"]] : []),
       ...(fresh != null ? [[tier === "t1" ? "Month to date" : "New this month", fresh, fresh ? "new" : "", "month"]] : []),
     ];

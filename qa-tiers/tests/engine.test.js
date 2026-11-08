@@ -15,25 +15,38 @@ test("Tier 2 KPI actuals match the KPI Engine sheet", () => {
   assert.deepEqual(kpis.map((k) => k.rag).filter((_, i) => i !== 6), ["A", "A", "G", "A", "A", "G", "G", "G"]);
 });
 
-test("QA load: workload, delays and absence come from the data", () => {
-  E.linkTier1(() => DEMO_T1);
+test("QA load: workload, delays and absence come from the Tier 2 data only", () => {
   const state = { ...DEMO_T2, activities: E.DEFAULT_ACTIVITIES, tasks: [
     { id: "T1", member: "Validation Specialist", activity: "Cleaning validation", opened: "2026-09-01", due: "2026-09-30", status: "In Progress" },
     { id: "T2", member: "Validation Specialist", activity: "Supplier audit", opened: "2026-09-21", due: "2026-09-25", status: "In Progress" },
     { id: "T3", member: "Validation Specialist", activity: "Supplier audit", opened: "2026-09-01", due: "2026-09-10", effort: 9, status: "Cancelled" },
-  ] };
+  ], abs: [
+    { id: "A1", member: "QA Officer 1", type: "Annual leave", from: "2026-09-07", to: "2026-09-08", status: "Approved" },      // 2 working days
+    { id: "A2", member: "QA Officer 1", type: "Sick leave", from: "2026-09-15", portion: "Half day", status: "Taken" },         // 0.5
+    { id: "A3", member: "QA Officer 1", type: "Annual leave", from: "2026-09-21", status: "Cancelled" },                         // not counted
+    { id: "A4", type: "Public holiday / site closure", from: "2026-09-16", status: "Approved" },                                  // whole team
+  ], daily: { ...DEMO_T2.daily, "2026-09-22": { ...(DEMO_T2.daily?.["2026-09-22"] || {}), absent: "QA Officer 1" } } };
+  const wd = E.workingDays(state.setup.month, state.setup);
   const comp = E.t2Computed(state);
   const vs = comp.load[state.load.findIndex((r) => r.member === "Validation Specialist")];
   close(vs.workload, 8);               // 5 d cleaning validation + 3 d audit; the cancelled task carries no load
   assert.equal(vs.delayed, 1);         // the audit was due 25-Sep and is still open on 30-Sep
-  const o1 = comp.load[state.load.findIndex((r) => r.member === "QA Officer 1")];
-  assert.equal(o1.logged, 1);          // one Leave/Training/Absent day in the Tier 1 log
-  assert.equal(o1.absence, 3);         // + 2 days typed as planned leave
-  assert.ok(o1.items.some((x) => x.reg === "t1ac") && o1.items.some((x) => x.reg === "dev"));
+  assert.equal(vs.workDays, wd - 1);   // the site closure removes a day for everyone
+  const i1 = state.load.findIndex((r) => r.member === "QA Officer 1"), o1 = comp.load[i1];
+  close(o1.logged, 3.5);               // 2 leave + 0.5 sick + 1 day ticked absent in the Daily Log
+  close(o1.absence, 3.5 + (+state.load[i1].absence || 0));
+  assert.ok(!o1.items.some((x) => x.reg === "t1ac") && o1.items.some((x) => x.reg === "dev"));
   // an item spread over two months only counts its September share
   const apqr = o1.items.find((x) => x.reg === "apqr");
   assert.ok(apqr.share > 0 && apqr.share < 1);
-  E.linkTier1(() => null);
+  // part time, routine floor work and a newcomer
+  const half = E.t2Load({ member: "Nobody", fte: 0.5, routine: 0.4, joined: "2026-09-16" }, state);
+  assert.equal(half.workDays, E.monthDays(state.setup.month).filter((d) => d > "2026-09-16" && !E.isWeekend(d, state.setup)).length);
+  close(half.available, half.workDays * 0.5);
+  close(half.workload, Math.round(half.available * 0.4 * 10) / 10);
+  // the absence register's own ƒx
+  const a1 = comp.abs[0];
+  assert.equal(a1.days, 2); assert.equal(a1.inMonth, 2); assert.equal(comp.abs[2].inMonth, 0); assert.equal(comp.abs[3].team, true);
 });
 
 test("Tier 2 Q-calendar matches the Daily Log display codes (6–30 Sep)", () => {

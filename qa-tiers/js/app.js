@@ -21,7 +21,6 @@ import { renderImport, pendingUpdate } from "./scigeniq.js";
 import { renderStart, renderGuide, initGuides, startTour, tourFor, startProgress, endTour } from "./guides.js";
 
 store.load();
-E.linkTier1(() => (hasTier("t1") ? store.t1 : null)); // a Tier 2 app has no live Tier 1 log
 
 /* ── Theme ─────────────────────────────────────────────── */
 function applyTheme() {

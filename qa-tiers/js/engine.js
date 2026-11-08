@@ -290,7 +290,6 @@ export const DEFAULT_ACTIVITIES = [
   { name: "APQR preparation", reg: "apqr", effort: 8, role: "Senior QA Officer — board owner" },
   { name: "Training session delivery", reg: "trn", effort: 1, role: "Senior QA Officer — board owner" },
   { name: "Tier 3 escalation follow-up", reg: "esc", effort: 0.5, role: "Senior QA Officer — board owner" },
-  { name: "Tier 1 action", reg: "t1ac", effort: 0.25, role: "QA Officer — oncology line" },
   { name: "eQMS action (QE / CAPA / CC)", reg: "act", effort: 0.5, role: "QA Officer — oncology line" },
   { name: "Audit plan management", reg: "aud", field: "kind", value: "Plan", effort: 0.5, role: "Senior QA Officer — board owner" },
   { name: "Audit (lead auditor)", reg: "aud", effort: 3, role: "Senior QA Officer — board owner" },
@@ -315,7 +314,7 @@ export const DEFAULT_ACTIVITIES = [
 
 export const LOAD_SOURCES = {
   dev: "Deviations", capa: "CAPA", acapa: "Audit CAPA", cc: "Change control", insp: "Inspections", rel: "Batch release", doc: "Documentation",
-  apqr: "APQR", trn: "Training", esc: "Escalations", tasks: "Task planner", t1ac: "Tier 1 actions", act: "eQMS actions", aud: "Audits", find: "Audit findings", rej: "Rejections", t1e: "Escalations from Tier 1",
+  apqr: "APQR", trn: "Training", esc: "Escalations", tasks: "Task planner", routine: "Routine floor work", act: "eQMS actions", aud: "Audits", find: "Audit findings", rej: "Rejections", t1e: "Escalations from Tier 1",
 };
 
 /** Who does the QA work on a record, and over which dates. */
@@ -330,7 +329,6 @@ const LOAD_MAP = {
   find: { who: "owner", done: ["Completed"], skip: ["Canceled"] },
   rej: { who: "owner", done: ["Closed"] },
   t1e: { who: "owner", done: ["Resolved", "Escalated to Tier 3"] },
-  t1ac: { who: "officer", done: ["Done"], skip: ["Cancelled"] },
 };
 
 export function activityFor(activities, reg, r) {
@@ -339,11 +337,11 @@ export function activityFor(activities, reg, r) {
 }
 
 /** Every piece of work one team member carries in the reporting month. */
-export function workloadItems(state, member, t1 = null) {
+export function workloadItems(state, member) {
   const s = state.setup;
   const mS = toDay(monthStart(s.month)), mE = toDay(monthEnd(s.month)), now = s.statusDate;
   const acts = state.activities || DEFAULT_ACTIVITIES;
-  const regs = [...Object.keys(LOAD_MAP).filter((k) => k !== "t1ac").map((k) => [k, state[k] || []]), ["t1ac", t1 ? t1.ac : []]];
+  const regs = Object.keys(LOAD_MAP).map((k) => [k, state[k] || []]);
   const out = [];
   for (const [reg, rows] of regs) {
     const m = LOAD_MAP[reg];
@@ -370,30 +368,63 @@ export function workloadItems(state, member, t1 = null) {
   return out.sort((x, y) => y.days - x.days);
 }
 
-/** Absence days logged on the Tier 1 daily log (leave, training, absent) in the month. */
-export function loggedAbsence(state, member, t1) {
-  if (!t1) return 0;
-  const mS = monthStart(state.setup.month), mE = monthEnd(state.setup.month);
-  return t1.dl.filter((r) => r.officer === member && r.date >= mS && r.date <= mE && ["Leave", "Training", "Absent"].includes(r.att)).length;
+/* ── Attendance & absence (Tier 2) ── */
+/** An absence of this type closes the site for the whole team (public holiday, shutdown). */
+export const isTeamClosure = (r) => /holiday|closure|shutdown|f[eé]ri/i.test(r?.type || "");
+const absDays = (r) => { const out = []; if (!has(r.from)) return out; let a = toDay(r.from), b = toDay(has(r.to) ? r.to : r.from); if (b < a) [a, b] = [b, a]; for (let d = a; d <= b && out.length < 370; d++) out.push(fromDay(d)); return out; };
+const absPart = (r) => (/half|demi|½/i.test(r.portion || "") ? 0.5 : 1);
+/** ƒx of an absence record: working days in total and in the reporting month, and where it stands. */
+export function t2Absence(r, s) {
+  const mS = monthStart(s.month), mE = monthEnd(s.month);
+  const days = absDays(r).filter((d) => !isWeekend(d, s));
+  const part = absPart(r);
+  const cancelled = /cancel|annul/i.test(r.status || "");
+  const end = has(r.to) ? r.to : r.from;
+  const live = !has(r.from) ? "" : cancelled ? "Cancelled" : r.from > s.statusDate ? "Upcoming" : end >= s.statusDate ? "Ongoing" : "Taken";
+  const check = !has(r.from) ? "Start date missing" : has(r.to) && r.to < r.from ? "End date before start" : !has(r.member) && !isTeamClosure(r) ? "Team member missing" : "OK";
+  return { days: days.length * part, inMonth: cancelled ? 0 : days.filter((d) => d >= mS && d <= mE).length * part, live, open: live === "Upcoming" || live === "Ongoing", check, team: isTeamClosure(r) };
+}
+/** Working days of the month for one person: weekends, team closures and the dates outside their time in the team removed. */
+function personDays(state, r) {
+  const s = state.setup;
+  const closed = new Set((state.abs || []).filter((a) => isTeamClosure(a) && !/cancel|annul/i.test(a.status || "")).flatMap(absDays));
+  return monthDays(s.month).filter((d) => !isWeekend(d, s) && !closed.has(d) && (!has(r.joined) || d >= r.joined) && (!has(r.left) || d <= r.left));
+}
+/** Absence of one person in the month, day by day: the absence register and the Daily Log ("absent today"). */
+export function absenceOf(state, r, days = personDays(state, r)) {
+  const work = new Set(days), byDay = new Map(), byType = {};
+  for (const a of state.abs || []) {
+    if (a.member !== r.member || isTeamClosure(a) || /cancel|annul/i.test(a.status || "")) continue;
+    const part = absPart(a), type = a.type || "Absence";
+    for (const d of absDays(a)) if (work.has(d) && (byDay.get(d)?.v || 0) < part) byDay.set(d, { v: part, type });
+  }
+  for (const d of work) {
+    const log = state.daily?.[d];
+    if (log && splitNames(log.absent).includes(r.member) && !byDay.has(d)) byDay.set(d, { v: 1, type: "Absent (Daily Log)" });
+  }
+  for (const { v, type } of byDay.values()) byType[type] = (byType[type] || 0) + v;
+  return { logged: [...byDay.values()].reduce((a, x) => a + x.v, 0), byType };
 }
 
-export function t2Load(r, state, t1 = null) {
+export function t2Load(r, state) {
   const s = state.setup;
-  const wd = workingDays(s.month, s);
-  const logged = loggedAbsence(state, r.member, t1);
-  const absence = num(r.absence) + logged;
-  const available = wd - absence;
-  const items = workloadItems(state, r.member, t1);
+  const wdMonth = workingDays(s.month, s);
+  const days = personDays(state, r);
+  const wd = days.length, closures = wdMonth - wd;
+  const { logged, byType } = absenceOf(state, r, days);
+  const absence = Math.min(wd, num(r.absence) + logged);
+  const fte = has(r.fte) ? Math.max(0, Math.min(1, +r.fte)) : 1;
+  const available = Math.round((wd - absence) * fte * 10) / 10;
+  const items = workloadItems(state, r.member);
+  const routine = has(r.routine) ? Math.max(0, Math.min(1, +r.routine)) : 0;
+  if (routine > 0 && available > 0) items.push({ reg: "routine", source: LOAD_SOURCES.routine, ref: "", desc: "Line clearance, IPC, AQL, Gemba and other daily floor duties", activity: `Routine share ${Math.round(routine * 100)} % of available days`, effort: available, share: routine, days: available * routine, start: monthStart(s.month), end: monthEnd(s.month), due: "", overdue: false, done: false });
+  items.sort((x, y) => y.days - x.days);
   const workload = Math.round(items.reduce((a, x) => a + x.days, 0) * 10) / 10;
   const delayed = items.filter((x) => x.overdue).length;
   const util = available > 0 ? workload / available : "";
   const status = util === "" ? "" : util > s.overLoad ? "Overloaded" : util >= s.highLoad ? "High load" : "Normal";
-  return { workDays: wd, logged, absence, available, items, workload, delayed, util, status, count: items.length, check: has(r.member) ? "OK" : "Member missing" };
+  return { workDays: wd, closures, logged, byType, manual: num(r.absence), absence, fte, available, items, workload, delayed, util, status, count: items.length, check: has(r.member) ? "OK" : "Member missing" };
 }
-
-/** The Tier 1 board feeding Tier 2 (its actions and attendance count in QA load). */
-let tier1Source = () => null;
-export function linkTier1(getter) { tier1Source = getter; }
 
 /** All computed columns for every Tier 2 register. */
 /** The registers searched for batch numbers, in the order the links are shown. */
@@ -460,8 +491,8 @@ export function t2Computed(state) {
     return c;
   });
   out.trn = state.trn.map((r) => t2Training(r, s));
-  const t1 = tier1Source();
-  out.load = state.load.map((r) => t2Load(r, state, t1));
+  out.load = state.load.map((r) => t2Load(r, state));
+  out.abs = (state.abs || []).map((r) => t2Absence(r, s));
   out.tasks = (state.tasks || []).map((r, i) => {
     const act = activityFor(state.activities || DEFAULT_ACTIVITIES, "tasks", r);
     const std = act ? num(act.effort) : "";
