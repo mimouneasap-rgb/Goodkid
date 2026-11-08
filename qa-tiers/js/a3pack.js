@@ -94,54 +94,52 @@ async function boardHost(width) {
   return { host, main };
 }
 
-/** Where a page may end: between cards, rows and tiles, never through them. */
-function breakPoints(main) {
-  const top = main.getBoundingClientRect().top;
-  const pts = new Set();
-  main.querySelectorAll(".card, section, .kpi, .sum, .b-stage, .grid > *, .stack > *, .card-head, tr, .b-done, .sum-grid, .kpi-grid").forEach((el) => {
-    const r = el.getBoundingClientRect();
-    if (r.height) { pts.add(Math.round(r.top - top) - 6); pts.add(Math.round(r.bottom - top) + 2); }
-  });
-  return [...pts].filter((y) => y > 0).sort((a, b) => a - b);
-}
-function paginate(total, pageH, pts) {
-  const out = []; let start = 0;
-  while (start < total - 4) {
-    const limit = start + pageH;
-    if (limit >= total) { out.push([start, total]); break; }
-    const ok = pts.filter((y) => y > start + pageH * 0.4 && y <= limit);
-    const end = ok.length ? ok[ok.length - 1] : limit;
-    out.push([start, end]); start = end;
-  }
-  return out;
+/** The dashboard pages: each part of the board on its own A3 sheet. */
+const GROUPS = [
+  ["Global board — Quality Pulse and KPIs", (el) => el.matches(".hero, .split-pulse")],
+  ["Q-calendar, priorities, escalations and process registers", (el) => el.matches(".split-wide, .grid.g4")],
+  ["Batches, daily and monthly — batch pipeline, new records, monthly summary", (el) => el.matches(".b-panel, .nw-panel, .sum-grid")],
+];
+function groupsOf(main) {
+  const kids = [...main.children];
+  const at = kids.map((el) => GROUPS.findIndex(([, m]) => m(el)));
+  // a heading or note belongs with the panel after it; the last notes with the panel before
+  for (let i = 0; i < at.length; i++) if (at[i] < 0) { const next = at.slice(i + 1).find((g) => g >= 0); at[i] = next ?? [...at.slice(0, i)].reverse().find((g) => g >= 0) ?? 0; }
+  return GROUPS.map(([title], g) => ({ title, els: kids.filter((_, i) => at[i] === g) })).filter((x) => x.els.length);
 }
 
-/** The dashboard as A3 page canvases. mode: "portrait" | "landscape" | "fit". */
-export async function dashboardPages({ mode = "portrait", dpi = 300, onStep = () => {} } = {}) {
+/** The dashboard as A3 page canvases. mode: "auto" (best orientation per page) | "portrait" | "landscape" | "fit" (all on one sheet). */
+export async function dashboardPages({ mode = "auto", dpi = 300, onStep = () => {} } = {}) {
   const W = 1280;
   onStep("Drawing the dashboard…");
   const { host, main } = await boardHost(W);
   try {
-    const H = Math.ceil(main.getBoundingClientRect().height);
-    const pts = breakPoints(main);
     onStep("Embedding the fonts…");
     const css = pageCSS() + (await embeddedFonts());
     const bodyCs = getComputedStyle(document.body);
-    const html = new XMLSerializer().serializeToString(host.querySelector(".shell"));
-    const page = mode === "landscape" ? PAGE.landscape : PAGE.portrait;
     const px = (mm) => Math.round((mm / 25.4) * dpi);
-    const areaW = page.w - 2 * M, areaH = page.h - 2 * M - HEAD - FOOT;
-    let k = areaW / W; // mm per css px
-    let slices;
-    if (mode === "fit") { k = Math.min(areaW / W, areaH / H); slices = [[0, H]]; }
-    else slices = paginate(H, areaH / k, pts);
     const st = store.t2.setup;
-    const canvases = [];
-    for (let n = 0; n < slices.length; n++) {
-      const [y0, y1] = slices[n];
-      onStep(`Rendering page ${n + 1} of ${slices.length} at ${dpi} dpi…`);
-      const vw = Math.max(window.innerWidth, W), sh = y1 - y0;
-      const svg = `<svg xmlns="http://www.w3.org/2000/svg" data-theme="light" width="${vw}" height="${sh}"><style>${css.replace(/<\/?style/gi, "")}</style><foreignObject x="0" y="0" width="${vw}" height="${sh}"><div xmlns="http://www.w3.org/1999/xhtml" style="width:${W}px;margin-top:-${y0}px;font-family:${bodyCs.fontFamily.replace(/"/g, "'")};font-size:${bodyCs.fontSize};line-height:${bodyCs.lineHeight};color:#0e1a2b;background:#ffffff">${html}</div></foreignObject></svg>`;
+    const kids = [...main.children];
+    const parts = mode === "fit" ? [{ title: "The whole dashboard", els: kids }] : groupsOf(main);
+    // picture each part on its own: the other parts are hidden while it is measured and serialised
+    const shots = parts.map((part) => {
+      kids.forEach((el) => { el.style.display = part.els.includes(el) ? "" : "none"; });
+      const first = part.els[0]; const mt = first.style.marginTop; first.style.marginTop = "0";
+      const H = Math.ceil(main.getBoundingClientRect().height) + 12;
+      const html = new XMLSerializer().serializeToString(host.querySelector(".shell"));
+      first.style.marginTop = mt;
+      return { ...part, H, html };
+    });
+    kids.forEach((el) => { el.style.display = ""; });
+    const canvases = [], pages = [];
+    for (let n = 0; n < shots.length; n++) {
+      const { title, H, html } = shots[n];
+      onStep(`Rendering page ${n + 1} of ${shots.length} at ${dpi} dpi…`);
+      const fitK = (pg) => Math.min((pg.w - 2 * M) / W, (pg.h - 2 * M - HEAD - FOOT - 4) / H);
+      const page = mode === "landscape" ? PAGE.landscape : mode === "portrait" ? PAGE.portrait : fitK(PAGE.landscape) >= fitK(PAGE.portrait) ? PAGE.landscape : PAGE.portrait;
+      const k = fitK(page); // mm per css px: the whole part fits on the sheet
+      const vw = Math.max(window.innerWidth, W);
+      const svg = `<svg xmlns="http://www.w3.org/2000/svg" data-theme="light" width="${vw}" height="${H}"><style>${css.replace(/<\/?style/gi, "")}</style><foreignObject x="0" y="0" width="${vw}" height="${H}"><div xmlns="http://www.w3.org/1999/xhtml" style="width:${W}px;font-family:${bodyCs.fontFamily.replace(/"/g, "'")};font-size:${bodyCs.fontSize};line-height:${bodyCs.lineHeight};color:#0e1a2b;background:#ffffff">${html}</div></foreignObject></svg>`;
       const img = new Image();
       const done = new Promise((res, rej) => { img.onload = res; img.onerror = () => rej(new Error("The page could not be rendered")); });
       img.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
@@ -151,30 +149,36 @@ export async function dashboardPages({ mode = "portrait", dpi = 300, onStep = ()
       const ctx = c.getContext("2d");
       ctx.fillStyle = "#ffffff"; ctx.fillRect(0, 0, c.width, c.height);
       const mm = c.width / page.w;
-      // header band and footer
+      // header band: the part's title, the board and the date
       ctx.fillStyle = "#0f2340"; ctx.fillRect(M * mm, M * mm, (page.w - 2 * M) * mm, (HEAD - 2) * mm);
-      ctx.fillStyle = "#ffffff"; ctx.font = `700 ${3.2 * mm}px "Archivo", Arial, sans-serif`; ctx.textBaseline = "middle";
-      ctx.fillText(`QA Tier 2 · Daily management dashboard — ${siteName(st)}`, (M + 3) * mm, (M + (HEAD - 2) / 2) * mm);
+      ctx.fillStyle = "#7fe3dc"; ctx.font = `800 ${3.2 * mm}px "Archivo", Arial, sans-serif`; ctx.textBaseline = "middle";
+      const lead = `${n + 1} / ${shots.length}`;
+      ctx.fillText(lead, (M + 3) * mm, (M + (HEAD - 2) / 2) * mm);
+      const lw = ctx.measureText(lead).width;
+      ctx.fillStyle = "#ffffff"; ctx.font = `700 ${3.2 * mm}px "Archivo", Arial, sans-serif`;
+      ctx.fillText(`${title}`, (M + 3) * mm + lw + 3 * mm, (M + (HEAD - 2) / 2) * mm);
       ctx.textAlign = "right"; ctx.font = `600 ${2.8 * mm}px "Source Sans 3", Arial, sans-serif`;
-      ctx.fillText(`As of ${fmtLong(st.statusDate)} · ${fmtMonth(st.month)}`, (page.w - M - 3) * mm, (M + (HEAD - 2) / 2) * mm);
+      ctx.fillText(`QA Tier 2 · ${siteName(st)} · as of ${fmtLong(st.statusDate)}`, (page.w - M - 3) * mm, (M + (HEAD - 2) / 2) * mm);
       ctx.textAlign = "left";
-      const dx = M * mm + (mode === "fit" ? ((areaW - W * k) / 2) * mm : 0), dy = (M + HEAD) * mm;
-      ctx.drawImage(img, 0, 0, W, sh, dx, dy, W * k * mm, sh * k * mm);
+      const dw = W * k, room = page.h - 2 * M - HEAD - FOOT - 4 - H * k;
+      const dx = (M + ((page.w - 2 * M) - dw) / 2) * mm, dy = (M + HEAD + 2 + Math.max(0, room / 2)) * mm; // centred on the sheet
+      ctx.drawImage(img, 0, 0, W, H, dx, dy, dw * mm, H * k * mm);
       ctx.fillStyle = "#5e6a7e"; ctx.font = `400 ${2.4 * mm}px "Source Sans 3", Arial, sans-serif`;
-      ctx.fillText(`${st.site || ""} · printed ${fmtDate(new Date().toISOString().slice(0, 10))} · A3 ${mode === "landscape" ? "landscape" : "portrait"}, ${dpi} dpi`, M * mm, (page.h - M - 1.5) * mm);
-      ctx.textAlign = "right"; ctx.fillText(`Page ${n + 1} / ${slices.length}`, (page.w - M) * mm, (page.h - M - 1.5) * mm); ctx.textAlign = "left";
-      canvases.push(c);
+      ctx.fillText(`${st.site || ""} · printed ${fmtDate(new Date().toISOString().slice(0, 10))} · A3 ${page.w > page.h ? "landscape" : "portrait"}, ${dpi} dpi`, M * mm, (page.h - M - 1.5) * mm);
+      ctx.textAlign = "right"; ctx.fillText(`Page ${n + 1} / ${shots.length}`, (page.w - M) * mm, (page.h - M - 1.5) * mm); ctx.textAlign = "left";
+      canvases.push(c); pages.push(page);
     }
-    return { canvases, page, mode, dpi };
+    return { canvases, pages, mode, dpi };
   } finally { host.remove(); }
 }
 
 async function dashboardPDF(res) {
   const lib = await loadScript(JSPDF_URL, "jspdf");
   const st = store.t2.setup;
-  const doc = new lib.jsPDF({ orientation: res.page.w > res.page.h ? "landscape" : "portrait", unit: "mm", format: "a3", compress: true });
+  const ori = (pg) => (pg.w > pg.h ? "landscape" : "portrait");
+  const doc = new lib.jsPDF({ orientation: ori(res.pages[0]), unit: "mm", format: "a3", compress: true });
   doc.setProperties({ title: `QA Tier 2 dashboard — ${fmtLong(st.statusDate)}`, subject: "Tier 2 dashboard page, A3", author: st.owner || "", creator: "QA Tier Boards" });
-  res.canvases.forEach((c, i) => { if (i) doc.addPage("a3", res.page.w > res.page.h ? "landscape" : "portrait"); doc.addImage(c.toDataURL("image/jpeg", 0.94), "JPEG", 0, 0, res.page.w, res.page.h, undefined, "FAST"); });
+  res.canvases.forEach((c, i) => { const pg = res.pages[i]; if (i) doc.addPage("a3", ori(pg)); doc.addImage(c.toDataURL("image/jpeg", 0.94), "JPEG", 0, 0, pg.w, pg.h, undefined, "FAST"); });
   return doc.output("blob");
 }
 async function dashboardZip(res) {
@@ -429,8 +433,8 @@ export async function openA3Center() {
       </section>
       <section class="a3c-card">
         <div class="a3c-ic">⎙</div><h3>Full dashboard page</h3>
-        <p class="muted">Everything on the dashboard page as it looks in the app — batch pipeline, new records, Q-calendar, registers, monthly summary — in high resolution.</p>
-        <label class="fctl"><span>Layout</span><select data-dmode><option value="portrait" selected>A3 portrait — pages break between panels</option><option value="landscape">A3 landscape — pages break between panels</option><option value="fit">One A3 sheet — the whole page scaled to fit</option></select></label>
+        <p class="muted">Every part of the dashboard on its own A3 sheet, scaled to fit — nothing cut: ① the global board (Quality Pulse, KPIs) ② the Q-calendar, priorities, escalations and process registers ③ batches, new records today and this month, the monthly summary.</p>
+        <label class="fctl"><span>Layout</span><select data-dmode><option value="auto" selected>One part per A3 page — best orientation for each (3 pages)</option><option value="portrait">One part per A3 page — all portrait</option><option value="landscape">One part per A3 page — all landscape</option><option value="fit">The whole dashboard on one A3 sheet</option></select></label>
         <label class="fctl"><span>Resolution</span><select data-ddpi><option value="300" selected>300 dpi — print</option><option value="400">400 dpi — fine print</option><option value="200">200 dpi — screen & e-mail</option></select></label>
         <div class="row"><button class="btn primary" data-dpdf>⤓ A3 PDF</button><button class="btn" data-dzip>⤓ PNG pages (ZIP)</button></div>
       </section>
