@@ -93,7 +93,7 @@ const FX = {
 FX.ac = FX.fn;
 FX.apqr = [...FX.generic.slice(0, 1), { key: "effPct", label: "Effective %", num: true, cell: (c) => pct(c.effPct) }, ...FX.generic.slice(1)];
 
-function fxSpec(tier, reg) {
+export function fxSpec(tier, reg) {
   if (tier === "t2" && ["dev", "capa", "acapa", "cc", "find"].includes(reg)) return [...FX.generic.slice(0, 3), { key: "actions", label: "Actions", cell: actionsCell }, ...(reg === "find" ? [{ key: "capa", label: "CAPA", cell: (c) => (c.capa ? esc(c.capa.join(", ")) : "") }] : []), ...FX.generic.slice(3)];
   if (tier === "t2" && reg === "aud") return [...FX.generic.slice(0, 3), { key: "findings", label: "Findings", cell: (c) => (c.findings ? `${c.findings.open} open / ${c.findings.total}${c.findings.overdue ? ` · <b style="color:var(--r)">${c.findings.overdue} overdue</b>` : ""}` : "") }, { key: "actions", label: "Actions", cell: actionsCell }, ...FX.generic.slice(3)];
   if (tier === "t2") return reg === "rel" ? FX.rel : reg === "trn" ? FX.trn2 : reg === "load" ? FX.load : reg === "abs" ? FX.abs : reg === "tasks" ? FX.tasks : reg === "apqr" ? FX.apqr : FX.generic;

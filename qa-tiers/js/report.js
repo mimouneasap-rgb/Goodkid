@@ -800,9 +800,9 @@ export function renderReportPage(root, { type: forced } = {}) {
           <button class="btn primary" data-make style="font-size:15px;padding:10px 18px;width:100%">⤓ Create the ${esc(T.label.toLowerCase())}</button>
           <div data-progress class="callout" style="margin-top:10px" hidden></div>
           <p class="muted" style="margin:10px 0 0;font-size:12px">File name: <span class="mono">${esc(fileName(per))}</span></p></div>
-        ${type === "daily" && MAIN_TIER === "t2" ? `<div class="card card-pad"><div class="card-head"><h2>A3 daily board <span class="sub">print & present</span></h2></div>
-          <p class="muted" style="margin:0 0 10px;font-size:13px">Today's dashboard on one A3 landscape page at 300 dpi — for the board wall, the stand-up screen or the Tier 3 meeting.</p>
-          <button class="btn" data-a3 style="width:100%">⎙ A3 board — PDF or PNG</button></div>` : ""}
+        ${MAIN_TIER === "t2" ? `<div class="card card-pad"><div class="card-head"><h2>A3 downloads <span class="sub">print & present</span></h2></div>
+          <p class="muted" style="margin:0 0 10px;font-size:13px">The board poster, the full dashboard page in high resolution (300 dpi) and the complete A3 data report of every Tier 2 page.</p>
+          <button class="btn" data-a3 style="width:100%">⎙ A3 downloads — board, full dashboard, data report</button></div>` : ""}
         <div class="card card-pad"><div class="card-head"><h2>Sections</h2><div class="row"><button class="btn sm" data-all>All</button><button class="btn sm" data-none>None</button></div></div>
           <div class="check-list">${sectionsOf(T).map(([key, l, hint]) => `<label class="check-item ${p.sections[type].includes(key) ? "on" : ""}"><input type="checkbox" data-sec="${key}" ${p.sections[type].includes(key) ? "checked" : ""}><span><b>${esc(l)}</b><small>${esc(hint)}</small></span></label>`).join("")}</div>
           <label class="field" style="margin-top:10px"><span>Rows per table</span><select data-limit>${[[15, "15 most urgent"], [40, "40 most urgent"], [100, "100"], [0, "All records"]].map(([v, l]) => `<option value="${v}" ${+p.limit === v ? "selected" : ""}>${l}</option>`).join("")}</select></label></div>
@@ -849,7 +849,7 @@ export function renderReportPage(root, { type: forced } = {}) {
   };
   $("[data-savetext]", root).onclick = () => saveFile(fileName(per).replace(/\.docx$/, ".txt"), new Blob([$("[data-summary]", root).value], { type: "text/plain" }));
   $("[data-make]", root).onclick = () => makeReport(root, { type, per });
-  $("[data-a3]", root)?.addEventListener("click", () => import("./poster.js").then((m) => m.openA3Export()).catch(() => toast("The A3 export could not be loaded — check the connection")));
+  $("[data-a3]", root)?.addEventListener("click", () => import("./a3pack.js").then((m) => m.openA3Center()).catch(() => toast("The A3 export could not be loaded — check the connection")));
 }
 
 /** The "at a glance" figures of a Tier 1 app. */
