@@ -1,0 +1,795 @@
+<title>Change Control Tracker</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;600;700;800&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+/* Layout: a control-room desk — sticky toolbar, a stage rail that reads left to right like the CC life cycle, then panels. */
+:root {
+  --bg: #eceff1; --surface: #ffffff; --surface-2: #f4f6f7; --surface-3: #e5e9ec;
+  --ink: #16212b; --ink-2: #3b4855; --muted: #687582; --line: #d6dce1; --line-2: #bfc8d0;
+  --accent: #b9500e; --accent-ink: #ffffff; --accent-soft: #fae6d8;
+  --steel: #27465f; --steel-2: #5f84a3; --steel-soft: #dfe8f0;
+  --ok: #1d7f47; --ok-soft: #dcf1e4; --warn: #9a6512; --warn-soft: #fbedd0; --bad: #b8322a; --bad-soft: #f9dedb; --none: #8a96a2; --none-soft: #e8ecef;
+  --shadow: 0 1px 2px rgba(18, 30, 42, .06), 0 8px 24px -14px rgba(18, 30, 42, .25);
+  --f-display: "Barlow Semi Condensed", "Arial Narrow", Arial, sans-serif;
+  --f-body: "IBM Plex Sans", "Segoe UI", Arial, sans-serif;
+  --f-mono: "IBM Plex Mono", Consolas, "Courier New", monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0f151b; --surface: #161f28; --surface-2: #1b2631; --surface-3: #22303d;
+  --ink: #e6ecf1; --ink-2: #b9c4ce; --muted: #8796a4; --line: #2a3846; --line-2: #3a4a5a;
+  --accent: #f08c4a; --accent-ink: #1b0d03; --accent-soft: #3b2415;
+  --steel: #8fb3d2; --steel-2: #5e86a8; --steel-soft: #1e3142;
+  --ok: #4fc283; --ok-soft: #133224; --warn: #e3a94b; --warn-soft: #362810; --bad: #f0705f; --bad-soft: #3a1a17; --none: #7c8a97; --none-soft: #222e39;
+  --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 10px 26px -14px rgba(0, 0, 0, .6); color-scheme: dark; } }
+:root[data-theme="dark"] {
+  --bg: #0f151b; --surface: #161f28; --surface-2: #1b2631; --surface-3: #22303d;
+  --ink: #e6ecf1; --ink-2: #b9c4ce; --muted: #8796a4; --line: #2a3846; --line-2: #3a4a5a;
+  --accent: #f08c4a; --accent-ink: #1b0d03; --accent-soft: #3b2415;
+  --steel: #8fb3d2; --steel-2: #5e86a8; --steel-soft: #1e3142;
+  --ok: #4fc283; --ok-soft: #133224; --warn: #e3a94b; --warn-soft: #362810; --bad: #f0705f; --bad-soft: #3a1a17; --none: #7c8a97; --none-soft: #222e39;
+  --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 10px 26px -14px rgba(0, 0, 0, .6); color-scheme: dark; }
+
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font: 14.5px/1.5 var(--f-body); }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 30; background: var(--surface); }
+h1, h2, h3 { font-family: var(--f-display); letter-spacing: .01em; text-wrap: balance; margin: 0; line-height: 1.15; }
+button, input, select, textarea { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.mono { font-family: var(--f-mono); font-size: .92em; }
+.muted { color: var(--muted); }
+.num { text-align: right; font-variant-numeric: tabular-nums; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+
+/* top bar */
+.top { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 20; background: var(--surface); border-bottom: 1px solid var(--line); }
+.top-in { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; padding-block: 10px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); max-width: 1440px; margin: 0 auto; }
+.brand { display: flex; align-items: center; gap: 10px; }
+.brand-mark { width: 34px; height: 34px; border-radius: 8px; background: var(--steel); display: grid; place-items: center; }
+.brand-mark svg { width: 20px; height: 20px; }
+.brand b { font: 800 19px/1 var(--f-display); letter-spacing: .02em; display: block; }
+.brand small { font-size: 11.5px; color: var(--muted); letter-spacing: .04em; }
+.tabs { display: flex; gap: 2px; flex-wrap: wrap; }
+.tabs a { text-decoration: none; color: var(--ink-2); font: 600 15px var(--f-display); letter-spacing: .03em; padding: 7px 13px; border-radius: 7px; }
+.tabs a:hover { background: var(--surface-2); }
+.tabs a[aria-current="page"] { background: var(--ink); color: var(--surface); }
+.top .spacer { flex: 1; }
+.fresh { font-size: 12px; color: var(--muted); text-align: right; line-height: 1.35; }
+.fresh b { color: var(--ink-2); font-weight: 600; }
+
+main { max-width: 1440px; margin: 0 auto; padding-block: 20px 60px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: grid; gap: 16px; }
+.btn { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line-2); background: var(--surface); border-radius: 8px; padding: 7px 13px; font-weight: 600; font-size: 13.5px; cursor: pointer; text-decoration: none; color: var(--ink); white-space: nowrap; }
+.btn:hover { border-color: var(--ink-2); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.btn.primary:hover { filter: brightness(1.06); }
+.btn.ghost { background: transparent; border-color: transparent; }
+.btn.ghost:hover { background: var(--surface-2); }
+.btn.sm { padding: 4px 9px; font-size: 12.5px; border-radius: 7px; }
+.btn.danger { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 45%, var(--line)); }
+.btn:disabled { opacity: .5; cursor: not-allowed; }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; min-width: 0; }
+.panel-h { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+.panel-h h2 { font-size: 18px; font-weight: 700; }
+.panel-h .sub { color: var(--muted); font-size: 12.5px; }
+.panel-h .spacer { flex: 1; }
+.grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.grid3 { display: grid; grid-template-columns: 1.3fr 1fr 1fr; gap: 16px; }
+@media (max-width: 1000px) { .grid2, .grid3 { grid-template-columns: 1fr; } }
+.empty { padding: 22px; text-align: center; color: var(--muted); border: 1px dashed var(--line-2); border-radius: 10px; font-size: 13.5px; }
+.note { padding: 10px 14px; border-radius: 10px; background: var(--steel-soft); color: var(--ink); font-size: 13.5px; }
+.note.warn { background: var(--warn-soft); }
+.note.bad { background: var(--bad-soft); }
+
+/* KPI strip */
+.kpis { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px; }
+@media (max-width: 1100px) { .kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 520px) { .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.kpi { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; display: grid; gap: 2px; text-decoration: none; color: inherit; min-width: 0; }
+.kpi:hover { border-color: var(--line-2); }
+.kpi small { font: 600 11px var(--f-display); letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+.kpi b { font: 800 34px/1.05 var(--f-display); font-variant-numeric: tabular-nums; }
+.kpi span { font-size: 12.5px; color: var(--muted); }
+.kpi.bad b { color: var(--bad); } .kpi.ok b { color: var(--ok); } .kpi.warn b { color: var(--warn); }
+
+/* stage rail */
+.rail { display: flex; gap: 0; overflow-x: auto; padding-bottom: 4px; }
+.stage { flex: 1 0 118px; position: relative; text-align: left; border: 0; background: var(--surface-2); padding: 12px 12px 12px 22px; cursor: pointer; clip-path: polygon(0 0, calc(100% - 14px) 0, 100% 50%, calc(100% - 14px) 100%, 0 100%, 14px 50%); margin-right: -8px; display: grid; gap: 2px; min-height: 84px; }
+.stage:first-child { clip-path: polygon(0 0, calc(100% - 14px) 0, 100% 50%, calc(100% - 14px) 100%, 0 100%); padding-left: 14px; border-radius: 10px 0 0 10px; }
+.stage:hover { background: var(--surface-3); }
+.stage b { font: 800 28px/1 var(--f-display); font-variant-numeric: tabular-nums; }
+.stage span { font: 600 12.5px/1.2 var(--f-display); letter-spacing: .03em; color: var(--ink-2); }
+.stage i { font-style: normal; font-size: 11.5px; color: var(--bad); font-weight: 600; }
+.stage.s-open b { color: var(--steel); }
+.stage.s-closed { background: var(--ok-soft); } .stage.s-closed b { color: var(--ok); }
+.stage.s-canceled b { color: var(--none); }
+.stage.sel { background: var(--steel); } .stage.sel b, .stage.sel span { color: #fff; }
+.rail-note { font-size: 12px; color: var(--muted); margin-top: 8px; }
+
+/* bars */
+.bars { display: grid; gap: 7px; }
+.bar-row { display: grid; grid-template-columns: minmax(110px, 38%) 1fr 64px; gap: 10px; align-items: center; font-size: 13px; }
+.bar-row .lbl { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bar-track { display: flex; height: 14px; border-radius: 4px; overflow: hidden; background: var(--surface-2); gap: 2px; }
+.bar-track i { display: block; height: 100%; }
+.bar-row .v { text-align: right; font-variant-numeric: tabular-nums; color: var(--ink-2); }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12px; color: var(--muted); margin-top: 10px; }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
+.c-open { background: var(--steel-2); } .c-done { background: var(--ok); } .c-late { background: var(--bad); } .c-cancel { background: var(--none); } .c-accent { background: var(--accent); }
+svg.chart text { fill: var(--muted); font: 11px var(--f-body); }
+svg.chart .gl { stroke: var(--line); stroke-width: 1; }
+svg.chart .b-open { fill: var(--steel-2); } svg.chart .b-closed { fill: var(--ok); }
+svg.chart .val { fill: var(--ink-2); font-weight: 600; }
+
+/* lists */
+.list { display: grid; gap: 6px; }
+.li { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 8px 10px; border-radius: 9px; background: var(--surface-2); border: 1px solid transparent; cursor: pointer; text-align: left; width: 100%; }
+.li:hover { border-color: var(--line-2); }
+.li .id { font: 600 12px var(--f-mono); color: var(--steel); white-space: nowrap; }
+.li .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13.5px; }
+.li .t small { color: var(--muted); }
+
+/* chips */
+.chip { display: inline-flex; align-items: center; gap: 5px; padding: 2px 9px; border-radius: 999px; font-size: 12px; font-weight: 600; white-space: nowrap; background: var(--surface-3); color: var(--ink-2); }
+.chip.open { background: var(--steel-soft); color: var(--steel); }
+.chip.ok { background: var(--ok-soft); color: var(--ok); }
+.chip.bad { background: var(--bad-soft); color: var(--bad); }
+.chip.warn { background: var(--warn-soft); color: var(--warn); }
+.chip.none { background: var(--none-soft); color: var(--muted); }
+.chip.major { background: var(--accent-soft); color: var(--accent); }
+
+/* filters + tables */
+.filters { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 12px; }
+.filters input[type=search] { flex: 1 1 240px; min-width: 0; }
+.filters input, .filters select { border: 1px solid var(--line-2); background: var(--surface); border-radius: 8px; padding: 7px 10px; font-size: 13.5px; max-width: 100%; }
+.filters label.tg { display: inline-flex; gap: 6px; align-items: center; font-size: 13px; color: var(--ink-2); cursor: pointer; }
+.count { font-size: 12.5px; color: var(--muted); margin-left: auto; }
+.tw { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; }
+table.t { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+table.t th { position: sticky; top: 0; background: var(--surface-2); text-align: left; font: 600 11.5px var(--f-display); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); padding: 9px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; cursor: pointer; user-select: none; }
+table.t th.nosort { cursor: default; }
+table.t td { padding: 9px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+table.t td.mono { white-space: nowrap; }
+table.t tbody tr { cursor: pointer; }
+table.t tbody tr:hover td { background: var(--surface-2); }
+table.t tr.late td:first-child { box-shadow: inset 3px 0 0 var(--bad); }
+.ttl { font-weight: 600; } .ttl small { display: block; font-weight: 400; color: var(--muted); font-size: 12.5px; }
+.prog { display: grid; gap: 3px; min-width: 96px; }
+.prog-bar { height: 6px; border-radius: 3px; background: var(--surface-3); overflow: hidden; display: flex; }
+.prog-bar i { display: block; height: 100%; background: var(--ok); }
+.prog-bar i.late { background: var(--bad); }
+.prog small { font-size: 11.5px; color: var(--muted); }
+.more { text-align: center; padding: 10px; }
+
+/* modal */
+.ov { position: fixed; inset: 0; background: rgba(10, 16, 22, .55); z-index: 40; }
+.modal { position: fixed; z-index: 41; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(1080px, calc(100vw - 24px)); max-height: min(92vh, 1000px); background: var(--surface); border-radius: 14px; box-shadow: 0 30px 80px rgba(0, 0, 0, .35); display: flex; flex-direction: column; overflow: hidden; }
+.modal.narrow { width: min(640px, calc(100vw - 24px)); }
+.m-head { padding: 16px 20px 12px; border-bottom: 1px solid var(--line); display: grid; gap: 6px; }
+.m-head .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.m-head h2 { font-size: 22px; }
+.m-body { padding: 16px 20px 20px; overflow-y: auto; display: grid; gap: 16px; }
+.m-foot { padding: 12px 20px; border-top: 1px solid var(--line); display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.m-foot .spacer { flex: 1; }
+.x { margin-left: auto; }
+.meta { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 8px 16px; }
+.meta div { min-width: 0; } .meta dt { font: 600 11px var(--f-display); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); } .meta dd { margin: 0; font-size: 13.5px; overflow-wrap: anywhere; }
+.meta { margin: 0; }
+.fromto { display: grid; grid-template-columns: minmax(0, 1fr) 36px minmax(0, 1fr); gap: 0; align-items: stretch; }
+@media (max-width: 700px) { .fromto { grid-template-columns: 1fr; } .fromto .arrow { transform: rotate(90deg); height: 30px; } }
+.ft { border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; background: var(--surface-2); min-width: 0; }
+.ft h3 { font-size: 13px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
+.ft.to { background: var(--accent-soft); border-color: color-mix(in srgb, var(--accent) 30%, var(--line)); }
+.ft p { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 13.5px; }
+.arrow { display: grid; place-items: center; color: var(--accent); font: 800 22px var(--f-display); }
+.blk h3 { font-size: 15px; margin-bottom: 6px; }
+.blk p { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 13.5px; color: var(--ink-2); }
+.form { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px 14px; }
+@media (max-width: 760px) { .form { grid-template-columns: 1fr; } }
+.form label { display: grid; gap: 4px; font-size: 12.5px; color: var(--muted); font-weight: 600; min-width: 0; }
+.form label.full { grid-column: 1 / -1; }
+.form input, .form select, .form textarea { border: 1px solid var(--line-2); border-radius: 8px; background: var(--surface); padding: 8px 10px; font-size: 14px; color: var(--ink); font-weight: 400; width: 100%; }
+.form textarea { min-height: 70px; resize: vertical; }
+
+/* import */
+.drop { display: grid; place-items: center; gap: 8px; text-align: center; padding: 30px 16px; border: 2px dashed var(--line-2); border-radius: 12px; background: var(--surface-2); cursor: pointer; }
+.drop.over { border-color: var(--accent); background: var(--accent-soft); }
+.drop b { font: 700 18px var(--f-display); }
+.files { display: grid; gap: 8px; }
+.file { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+.file .ic { width: 34px; height: 34px; border-radius: 8px; display: grid; place-items: center; font: 800 12px var(--f-display); background: var(--steel-soft); color: var(--steel); }
+.file .ic.act { background: var(--accent-soft); color: var(--accent); }
+.file .ic.bad { background: var(--bad-soft); color: var(--bad); }
+.plan { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+@media (max-width: 700px) { .plan { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.plan div { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; background: var(--surface-2); }
+.plan b { display: block; font: 800 26px var(--f-display); }
+.plan small { color: var(--muted); font-size: 12px; }
+.progress { height: 8px; border-radius: 4px; background: var(--surface-3); overflow: hidden; }
+.progress i { display: block; height: 100%; background: var(--accent); transition: width .2s; }
+.toast { position: fixed; z-index: 60; left: 50%; bottom: calc(18px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: var(--ink); color: var(--surface); padding: 10px 16px; border-radius: 10px; font-size: 13.5px; box-shadow: var(--shadow); max-width: calc(100vw - 32px); }
+details.changes summary { cursor: pointer; font-weight: 600; font-size: 13.5px; }
+details.changes ul { margin: 8px 0 0; padding-left: 18px; font-size: 13px; max-height: 260px; overflow-y: auto; }
+.hist { font-size: 13px; display: grid; gap: 6px; }
+.hist div { display: flex; gap: 10px; flex-wrap: wrap; padding: 8px 10px; background: var(--surface-2); border-radius: 8px; }
+</style>
+
+<header class="top"><div class="top-in">
+  <div class="brand"><div class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h11"/><path d="M12 3l4 4-4 4"/><path d="M20 17H9"/><path d="M12 13l-4 4 4 4"/></svg></div>
+    <div><b>Change Control Tracker</b><small>Change controls · CC actions · from Scigeniq</small></div></div>
+  <nav class="tabs" aria-label="Views">
+    <a href="#overview" data-tab="overview">Overview</a><a href="#register" data-tab="register">Change controls</a><a href="#actions" data-tab="actions">CC actions</a><a href="#import" data-tab="import">Import</a>
+  </nav>
+  <span class="spacer"></span>
+  <div class="fresh" id="fresh"></div>
+  <button class="btn primary" id="newcc" type="button">＋ New change control</button>
+</div></header>
+<main id="main"><div class="empty">Loading the change controls…</div></main>
+
+<script>
+"use strict";
+// <map> — the Scigeniq exports ("allTasks" .xlsx) → change control documents with their actions
+const CC_STAGES = ["Open", "QA Initial Approval", "Under Assessment", "In Review", "Pending Approvals", "Action Implementation", "Closed", "Canceled"];
+const ACT_STAGES = ["Open", "In Progress", "QA Approval", "Completed", "Canceled"];
+const CC_FIELDS = ["title", "stage", "xStatus", "closedOn", "created", "start", "due", "location", "zone", "asset", "owner", "assoc", "createdBy", "cls", "scope", "productCode", "products", "packaging", "category", "subject", "current", "proposed", "justification", "article", "depts", "actionsDone", "tags"];
+const ACT_FIELDS = ["title", "desc", "stage", "xStatus", "closedOn", "created", "start", "due", "owner", "dept", "location", "parentTitle"];
+const cl = (v) => {
+  if (v == null) return null;
+  const s = String(v).replace(/[﻿​]/g, "").replace(/\r/g, "").replace(/[ \t]+/g, " ").trim();
+  return !s || /^-{3,}$/.test(s) || s === "Invalid date" || s.startsWith("${table:") ? null : s;
+};
+const pad2 = (n) => String(n).padStart(2, "0");
+function sdate(v) {
+  if (v instanceof Date && !Number.isNaN(+v)) return `${v.getFullYear()}-${pad2(v.getMonth() + 1)}-${pad2(v.getDate())}`;
+  const s = String(v || "");
+  let m = /(\d\d)\/(\d\d)\/(\d{4})/.exec(s);
+  if (m) return `${m[3]}-${m[2]}-${m[1]}`;
+  m = /(\d{4})-(\d\d)-(\d\d)/.exec(s);
+  return m ? `${m[1]}-${m[2]}-${m[3]}` : null;
+}
+const normT = (s) => String(s || "").normalize("NFKD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+const pruned = (o) => Object.fromEntries(Object.entries(o).filter(([, v]) => v != null && v !== ""));
+/** One workbook → { rows, generated } (the "Data" sheet with a Reference Id column). */
+function sheetRows(XLSX, wb) {
+  const name = wb.SheetNames.find((n) => n === "Data") || wb.SheetNames.find((n) => (XLSX.utils.sheet_to_json(wb.Sheets[n], { header: 1, raw: false, defval: null })[0] || []).some((h) => String(h || "").trim() === "Reference Id"));
+  if (!name) return { rows: [], generated: null };
+  const grid = XLSX.utils.sheet_to_json(wb.Sheets[name], { header: 1, raw: false, defval: null, blankrows: false });
+  const head = (grid[0] || []).map((h) => (h == null ? "" : String(h).trim()));
+  const rows = grid.slice(1).filter((r) => r.some((c) => cl(c) != null)).map((r) => Object.fromEntries(head.map((h, i) => [h, r[i]]).filter(([h]) => h)));
+  let generated = null;
+  const over = wb.Sheets["Over All"];
+  if (over) for (const l of XLSX.utils.sheet_to_json(over, { header: 1, raw: false, defval: null }).flat()) { const m = /Generation Date\s*:\s*(.+)/i.exec(String(l || "")); if (m) generated = m[1].trim(); }
+  return { rows, generated };
+}
+/** "cc" (a change control), "act" (an action of a change control) or null. */
+function rowKind(r) {
+  const id = String(cl(r["Reference Id"]) || ""), type = cl(r.Type) || "";
+  if (type === "Change Control" || /^CC-/.test(id)) return "cc";
+  if (/^ACTION-/.test(id) || /action/i.test(type)) {
+    const p = String(cl(r["Parent ID Reference"]) || "");
+    if (/^CC-/.test(p) || /change control/i.test(String(cl(r["Parent Type"]) || cl(r.Source) || ""))) return "act";
+    if (!p && cl(r["Parent action"])) return "act?"; // parent known by title only
+  }
+  return null;
+}
+function mapCC(r) {
+  const closed = cl(r.Closed) === "Closed" || /^(closed|canceled|cancelled)$/i.test(cl(r.Stage) || "");
+  return pruned({
+    id: cl(r["Reference Id"]), title: cl(r.Title), stage: cl(r.Stage), xStatus: cl(r.Status), closedOn: closed ? sdate(r["Closing date"]) : null,
+    created: sdate(r["Creation Date"]), start: sdate(r["Start Date"]), due: sdate(r["End Date"]), location: cl(r.Location), zone: cl(r.Zone), asset: cl(r.Asset),
+    owner: cl(r["Assigned User"]) || cl(r.Role), assoc: cl(r["Associated Users"]), createdBy: cl(r["Created By"]), cls: cl(r["CC Classification"]), scope: cl(r["Change Scope"]),
+    productCode: cl(String(cl(r["Product Code"]) || "").replace(/,?\s*ELKENDI Oncology\s*$/i, "")), products: cl(r.Products), packaging: cl(r["Packaging Material"]),
+    category: cl(r["CC Category"]), subject: cl(r.Subject), current: cl(r["Current State"]), proposed: cl(r["Proposed State"]), justification: cl(r.Justification),
+    article: cl(r["Article Code"]), depts: cl(r.Department), actionsDone: cl(r["Actions Completed ?"]), tags: cl(r.Tags),
+  });
+}
+function mapAct(r) {
+  const closed = cl(r.Closed) === "Closed" || /^(completed|closed|canceled|cancelled)$/i.test(cl(r.Stage) || "");
+  const title = cl(r.Title), desc = cl(r.Description);
+  return pruned({
+    id: cl(r["Reference Id"]), cc: cl(r["Parent ID Reference"]), parentTitle: cl(String(cl(r["Parent action"]) || "").replace(/^(Task|Row)\s*-\s*/i, "")),
+    title, desc: desc && desc !== title ? desc : null, stage: cl(r.Stage), xStatus: cl(r.Status), closedOn: closed ? sdate(r["Closing date"]) : null,
+    created: sdate(r["Creation Date"]), start: sdate(r["Start Date"]), due: sdate(r["End Date"]), owner: cl(r["Assigned User"]) || cl(r.Role), dept: cl(r.Department), location: cl(r.Location),
+  });
+}
+/** What an import would change: existing = Map(id → CC document). */
+function planImport(existing, files) {
+  const docs = new Map([...existing].map(([k, v]) => [k, JSON.parse(JSON.stringify(v))]));
+  const touched = new Set(), created = new Set(), out = { ccNew: 0, ccUpd: 0, ccSame: 0, actNew: 0, actUpd: 0, actSame: 0, placeholders: 0, unmatched: 0, ignored: 0, changes: [], files: [] };
+  const all = files.flatMap((f) => f.rows.map((r) => ({ r, k: rowKind(r), f })));
+  for (const f of files) { const ks = all.filter((x) => x.f === f); out.files.push({ name: f.name, generated: f.generated, cc: ks.filter((x) => x.k === "cc").length, act: ks.filter((x) => x.k === "act" || x.k === "act?").length, other: ks.filter((x) => !x.k).length }); }
+  const seenCC = new Set();
+  for (const { r } of all.filter((x) => x.k === "cc")) {
+    const m = mapCC(r);
+    if (!m.id || seenCC.has(m.id)) continue;
+    seenCC.add(m.id);
+    const prev = docs.get(m.id);
+    const next = { ...(prev || { actions: [] }), ...m };
+    delete next.placeholder;
+    const ch = CC_FIELDS.filter((k) => String(prev?.[k] ?? "") !== String(next[k] ?? ""));
+    if (!prev) { out.ccNew++; created.add(m.id); docs.set(m.id, next); touched.add(m.id); out.changes.push(`${m.id} — new change control`); }
+    else if (ch.length || prev.placeholder) { out.ccUpd++; docs.set(m.id, next); touched.add(m.id); out.changes.push(`${m.id} — ${ch.join(", ") || "now in a CC export"}`); }
+    else out.ccSame++;
+  }
+  const byTitle = new Map();
+  for (const [id, d] of docs) if (d.title) byTitle.set(normT(d.title), id);
+  const seenA = new Set();
+  for (const { r, k } of all.filter((x) => x.k === "act" || x.k === "act?")) {
+    const a = mapAct(r);
+    if (!a.id || seenA.has(a.id)) continue;
+    seenA.add(a.id);
+    let cc = a.cc;
+    if (!cc && a.parentTitle) { const t = normT(a.parentTitle); cc = byTitle.get(t) || [...byTitle].find(([x]) => t.length >= 20 && (x.startsWith(t) || t.startsWith(x)))?.[1]; }
+    if (!cc) { if (k === "act") out.unmatched++; else out.ignored++; continue; }
+    a.cc = cc;
+    let d = docs.get(cc);
+    if (!d) { d = { id: cc, placeholder: true, title: a.parentTitle || null, actions: [] }; docs.set(cc, d); out.placeholders++; created.add(cc); }
+    const acts = d.actions || (d.actions = []);
+    const i = acts.findIndex((x) => x.id === a.id);
+    if (i < 0) { acts.push({ ...a }); out.actNew++; touched.add(cc); continue; }
+    const next = { ...acts[i], ...a };
+    const ch = ACT_FIELDS.filter((f) => String(acts[i][f] ?? "") !== String(next[f] ?? ""));
+    if (ch.length) { acts[i] = next; out.actUpd++; touched.add(cc); out.changes.push(`${a.id} (${cc}) — ${ch.join(", ")}`); } else out.actSame++;
+  }
+  out.writes = [...touched].map((id) => [id, docs.get(id)]);
+  out.created = created;
+  return out;
+}
+// </map>
+
+/* ── state ─────────────────────────────────────────────── */
+const S = { ccs: new Map(), meta: null, ready: false, stale: false, mode: "db", canWrite: true, uid: null };
+const UI = { tab: "overview", q: "", stage: "", cls: "", scope: "", owner: "", open: true, late: false, sort: ["created", -1], limit: 120,
+  aq: "", ast: "open", adept: "", aowner: "", asort: ["due", 1], alimit: 150, files: [], plan: null };
+let db = null, downloads = null, XLSXlib = null;
+const $ = (s, r = document) => r.querySelector(s);
+const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const fd = (iso) => (iso ? `${iso.slice(8, 10)}-${MON[+iso.slice(5, 7) - 1]}-${iso.slice(2, 4)}` : "");
+const todayIso = () => { const d = new Date(); return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`; };
+const dayN = (iso) => Math.round(Date.UTC(+iso.slice(0, 4), +iso.slice(5, 7) - 1, +iso.slice(8, 10)) / 864e5);
+const days = (a, b) => dayN(a) - dayN(b);
+const TODAY = todayIso();
+const initials = (n) => String(n || "?").split(/[\s,]+/).filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join("");
+
+/** Live status of a change control and of an action. */
+function ccState(d) {
+  const st = d.stage || "", closed = /^(closed)$/i.test(st) || (!!d.closedOn && !/cancel/i.test(st)), canceled = /cancel/i.test(st);
+  const acts = (d.actions || []).map(actState);
+  const aDone = acts.filter((a) => a.done).length, aLate = acts.filter((a) => a.late).length;
+  const done = closed || canceled;
+  const late = !done && !!d.due && d.due < TODAY;
+  return { closed, canceled, done, late, acts, aTotal: acts.length, aDone, aOpen: acts.length - aDone, aLate, ready: !done && acts.length > 0 && aDone === acts.length && /implement/i.test(st) };
+}
+function actState(a) {
+  const done = /^(completed|closed|canceled|cancelled)$/i.test(a.stage || "") || !!a.closedOn;
+  return { a, done, canceled: /cancel/i.test(a.stage || ""), late: !done && !!a.due && a.due < TODAY, soon: !done && !!a.due && a.due >= TODAY && days(a.due, TODAY) <= 30 };
+}
+const ccChip = (d, s = ccState(d)) => s.canceled ? `<span class="chip none">Canceled</span>` : s.closed ? `<span class="chip ok">Closed</span>` : s.late ? `<span class="chip bad">Overdue</span>` : s.ready ? `<span class="chip warn">Ready to close</span>` : `<span class="chip open">Open</span>`;
+const actChip = (s) => s.canceled ? `<span class="chip none">Canceled</span>` : s.done ? `<span class="chip ok">Done</span>` : s.late ? `<span class="chip bad">Overdue</span>` : s.soon ? `<span class="chip warn">Due ≤ 30 d</span>` : `<span class="chip open">Open</span>`;
+const clsChip = (c) => (!c ? `<span class="chip none">Unclassified</span>` : /major|critical/i.test(c) ? `<span class="chip major">${esc(c)}</span>` : `<span class="chip">${esc(c)}</span>`);
+
+/* ── data store ────────────────────────────────────────── */
+const queue = new Map();
+function saveDoc(id, data) {
+  const run = async () => {
+    const body = { ...data, updatedAt: new Date().toISOString() };
+    if (S.mode === "db") await db.collection("ccs").doc(id).set(body);
+    else { S.ccs.set(id, body); localSave(); render(); }
+  };
+  const p = (queue.get(id) || Promise.resolve()).then(run, run);
+  queue.set(id, p.catch(() => {}));
+  return p;
+}
+async function deleteDoc(id) {
+  if (S.mode === "db") await db.collection("ccs").doc(id).delete();
+  else { S.ccs.delete(id); localSave(); render(); }
+}
+function localSave() { try { localStorage.setItem("cct.local", JSON.stringify({ ccs: [...S.ccs], meta: S.meta })); } catch {} }
+function localLoad() { try { const o = JSON.parse(localStorage.getItem("cct.local") || "null"); if (o) { S.ccs = new Map(o.ccs); S.meta = o.meta; } } catch {} }
+
+async function start() {
+  route();
+  db = window.claude ? await window.claude.use("db").catch(() => null) : null;
+  downloads = window.claude ? await window.claude.use("downloads").catch(() => null) : null;
+  const user = window.claude ? await window.claude.use("user").catch(() => null) : null;
+  if (user) { try { const w = await user.can("data.write"); S.canWrite = w !== false; } catch {} try { S.uid = await user.id(); } catch {} }
+  if (!db) { S.mode = "local"; localLoad(); S.ready = true; render(); return; }
+  const timer = setTimeout(() => { S.stale = true; render(); }, 10000);
+  db.collection("ccs").limit(1000).onSnapshot((snap) => {
+    S.ccs = new Map(snap.docs.map((d) => [d.id, d.data()]));
+    if (!snap.metadata.fromCache) { clearTimeout(timer); S.stale = false; }
+    S.ready = true; render();
+  }, (e) => { clearTimeout(timer); S.ready = true; S.error = e.code; render(); });
+  db.doc("meta/imports").onSnapshot((d) => { S.meta = d.exists ? d.data() : null; renderFresh(); }, () => {});
+}
+
+/* ── routing ───────────────────────────────────────────── */
+const TABS = ["overview", "register", "actions", "import"];
+function route() { const h = location.hash.replace(/^#/, ""); UI.tab = TABS.includes(h) ? h : "overview"; render(); }
+window.addEventListener("hashchange", route);
+function go(tab, set = {}) { Object.assign(UI, set); if (location.hash !== `#${tab}`) location.hash = tab; else route(); }
+
+function renderFresh() {
+  const last = S.meta?.log?.[0];
+  $("#fresh").innerHTML = `${S.mode === "local" ? "<b>On this device only</b> — the shared database is not available here<br>" : ""}${last ? `Last import <b>${fd(last.at.slice(0, 10))}</b>${last.generated ? ` · Scigeniq export of ${esc(last.generated.slice(0, 10))}` : ""}` : S.ready ? "No Scigeniq import yet" : ""}`;
+  $("#newcc").hidden = !S.canWrite;
+}
+
+function render() {
+  document.querySelectorAll(".tabs a").forEach((a) => a.setAttribute("aria-current", a.dataset.tab === UI.tab ? "page" : "false"));
+  renderFresh();
+  const main = $("#main");
+  if (!S.ready) { main.innerHTML = `<div class="empty">Loading the change controls…</div>`; return; }
+  const banner = S.error ? `<div class="note bad">The shared change controls could not be loaded (${esc(S.error)}). Reload the page later.</div>` : S.stale ? `<div class="note warn">The shared database is slow to answer — what you see may be out of date.</div>` : "";
+  const all = [...S.ccs.values()].map((d) => ({ d, s: ccState(d) }));
+  if (UI.tab === "import") main.innerHTML = banner + importView(all);
+  else if (!all.length) main.innerHTML = banner + `<section class="panel"><div class="empty" style="padding:40px"><h2 style="margin-bottom:8px">No change control yet</h2>Import the Scigeniq exports <b>“Change Control”</b> and <b>“Change control actions”</b> (allTasks .xlsx) — or add a change control by hand with ＋ New change control.<div style="margin-top:14px"><a class="btn primary" href="#import">Import Scigeniq exports</a></div></div></section>`;
+  else if (UI.tab === "register") main.innerHTML = banner + registerView(all);
+  else if (UI.tab === "actions") main.innerHTML = banner + actionsView(all);
+  else main.innerHTML = banner + overview(all);
+  if (UI.tab === "import") wireImport();
+}
+
+/* ── overview ──────────────────────────────────────────── */
+function overview(all) {
+  const open = all.filter((x) => !x.s.done), late = open.filter((x) => x.s.late);
+  const acts = all.flatMap((x) => x.s.acts.map((a) => ({ ...a, cc: x.d })));
+  const aOpen = acts.filter((a) => !a.done), aLate = aOpen.filter((a) => a.late), aSoon = aOpen.filter((a) => a.soon);
+  const closed30 = all.filter((x) => x.s.closed && x.d.closedOn && days(TODAY, x.d.closedOn) <= 30);
+  const cyc = all.filter((x) => x.s.closed && x.d.closedOn && x.d.created && days(TODAY, x.d.closedOn) <= 365).map((x) => days(x.d.closedOn, x.d.created)).sort((a, b) => a - b);
+  const med = cyc.length ? cyc[Math.floor(cyc.length / 2)] : null;
+  const ready = open.filter((x) => x.s.ready);
+  const kpi = (lbl, v, sub, cls = "", href = "") => `<a class="kpi ${cls}" ${href ? `href="${href}"` : ""} ${href ? "" : 'role="group"'}><small>${lbl}</small><b>${v}</b><span>${sub}</span></a>`;
+  // stage rail
+  const stages = [...CC_STAGES, ...[...new Set(all.map((x) => x.d.stage).filter((s) => s && !CC_STAGES.includes(s)))]];
+  const rail = stages.map((st) => {
+    const xs = all.filter((x) => (x.d.stage || "") === st);
+    const cls = /closed/i.test(st) ? "s-closed" : /cancel/i.test(st) ? "s-canceled" : "s-open";
+    return `<button type="button" class="stage ${cls}" data-stage="${esc(st)}"><b>${xs.length}</b><span>${esc(st)}</span>${xs.filter((x) => x.s.late).length ? `<i>${xs.filter((x) => x.s.late).length} overdue</i>` : ""}</button>`;
+  }).join("");
+  // months
+  const months = []; { const d = new Date(); d.setDate(1); for (let i = 11; i >= 0; i--) { const x = new Date(d.getFullYear(), d.getMonth() - i, 1); months.push(`${x.getFullYear()}-${pad2(x.getMonth() + 1)}`); } }
+  const opened = months.map((m) => all.filter((x) => String(x.d.created || "").startsWith(m)).length);
+  const closedM = months.map((m) => all.filter((x) => x.s.closed && String(x.d.closedOn || "").startsWith(m)).length);
+  const W = 640, H = 210, pl = 28, pb = 24, max = Math.max(1, ...opened, ...closedM), step = Math.max(1, Math.ceil(max / 4)), top = step * 4, cw = (W - pl) / months.length, bw = Math.min(16, cw / 2 - 3);
+  const y = (v) => H - pb - (v / top) * (H - pb - 10);
+  const chart = `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Change controls opened and closed per month">${[0, 1, 2, 3, 4].map((k) => `<line class="gl" x1="${pl}" x2="${W}" y1="${y(k * step)}" y2="${y(k * step)}"/><text x="${pl - 6}" y="${y(k * step) + 4}" text-anchor="end">${k * step}</text>`).join("")}
+    ${months.map((m, i) => { const cx = pl + i * cw + cw / 2; return `<rect class="b-open" x="${cx - bw - 1}" y="${y(opened[i])}" width="${bw}" height="${H - pb - y(opened[i])}" rx="2"><title>${MON[+m.slice(5) - 1]} ${m.slice(0, 4)}: ${opened[i]} opened</title></rect><rect class="b-closed" x="${cx + 1}" y="${y(closedM[i])}" width="${bw}" height="${H - pb - y(closedM[i])}" rx="2"><title>${MON[+m.slice(5) - 1]} ${m.slice(0, 4)}: ${closedM[i]} closed</title></rect>${opened[i] ? `<text class="val" x="${cx - bw / 2 - 1}" y="${y(opened[i]) - 4}" text-anchor="middle">${opened[i]}</text>` : ""}<text x="${cx}" y="${H - 7}" text-anchor="middle">${MON[+m.slice(5) - 1]}</text>`; }).join("")}</svg>`;
+  // by scope
+  const grp = (key, list) => { const m = new Map(); for (const x of list) { const k = (key(x) || "Not given").split(",")[0].trim(); m.set(k, [...(m.get(k) || []), x]); } return [...m].sort((a, b) => b[1].length - a[1].length); };
+  const scopes = grp((x) => x.d.scope, all).slice(0, 10);
+  const smax = Math.max(1, ...scopes.map(([, xs]) => xs.length));
+  const scopeBars = scopes.map(([k, xs]) => { const o = xs.filter((x) => !x.s.done && !x.s.late).length, l = xs.filter((x) => x.s.late).length, c = xs.filter((x) => x.s.closed).length, n = xs.filter((x) => x.s.canceled).length;
+    return `<div class="bar-row"><span class="lbl" title="${esc(k)}">${esc(k)}</span><span class="bar-track" style="width:${(xs.length / smax) * 100}%">${[["c-late", l], ["c-open", o], ["c-done", c], ["c-cancel", n]].filter(([, v]) => v).map(([c2, v]) => `<i class="${c2}" style="flex:${v}" title="${v}"></i>`).join("")}</span><span class="v">${xs.length}</span></div>`; }).join("");
+  // actions by department (open)
+  const deps = grp((a) => a.a.dept, aOpen).slice(0, 10);
+  const dmax = Math.max(1, ...deps.map(([, xs]) => xs.length));
+  const depBars = deps.map(([k, xs]) => { const l = xs.filter((a) => a.late).length; return `<div class="bar-row"><span class="lbl" title="${esc(k)}">${esc(k)}</span><span class="bar-track" style="width:${(xs.length / dmax) * 100}%">${l ? `<i class="c-late" style="flex:${l}"></i>` : ""}${xs.length - l ? `<i class="c-open" style="flex:${xs.length - l}"></i>` : ""}</span><span class="v">${xs.length}${l ? ` · <b style="color:var(--bad)">${l}</b>` : ""}</span></div>`; }).join("");
+  const cls = grp((x) => x.d.cls || "Unclassified", open);
+  const cats = grp((x) => x.d.category || "Not given", open);
+  const li = (x, sub) => `<button type="button" class="li" data-cc="${esc(x.d.id)}"><span class="id">${esc(x.d.id)}</span><span class="t">${esc(x.d.title || "")} <small>· ${sub}</small></span>${ccChip(x.d, x.s)}</button>`;
+  const lateActs = aLate.sort((a, b) => a.a.due.localeCompare(b.a.due)).slice(0, 12);
+  return `
+  <section class="kpis">
+    ${kpi("Open change controls", open.length, `of ${all.length} in the tracker`, "", "#register")}
+    ${kpi("Overdue change controls", late.length, "past their target date", late.length ? "bad" : "ok", "#register")}
+    ${kpi("Open CC actions", aOpen.length, `of ${acts.length} actions`, "", "#actions")}
+    ${kpi("Overdue actions", aLate.length, `${aSoon.length} more due ≤ 30 days`, aLate.length ? "bad" : "ok", "#actions")}
+    ${kpi("Closed last 30 days", closed30.length, "change controls", closed30.length ? "ok" : "")}
+    ${kpi("Median cycle time", med == null ? "—" : `${med} d`, "raised → closed, last 12 months")}
+  </section>
+  <section class="panel"><div class="panel-h"><h2>Where the change controls stand</h2><span class="sub">Scigeniq stage · click a stage to list its change controls</span></div>
+    <div class="rail">${rail}</div><div class="rail-note">${ready.length ? `<b>${ready.length}</b> change control${ready.length > 1 ? "s" : ""} in action implementation with every action done — ready for closure. ` : ""}Overdue = open past the target (end) date.</div></section>
+  <section class="grid2">
+    <div class="panel"><div class="panel-h"><h2>Opened and closed per month</h2><span class="sub">last 12 months</span></div>${chart}
+      <div class="legend"><span><i class="c-open"></i>Opened</span><span><i class="c-done"></i>Closed</span></div></div>
+    <div class="panel"><div class="panel-h"><h2>Change scope</h2><span class="sub">all change controls · top 10</span></div><div class="bars">${scopeBars}</div>
+      <div class="legend"><span><i class="c-late"></i>Overdue</span><span><i class="c-open"></i>Open</span><span><i class="c-done"></i>Closed</span><span><i class="c-cancel"></i>Canceled</span></div></div>
+  </section>
+  <section class="grid3">
+    <div class="panel"><div class="panel-h"><h2>Open actions by department</h2><span class="sub">red = overdue</span></div><div class="bars">${depBars || `<div class="empty">No open action</div>`}</div></div>
+    <div class="panel"><div class="panel-h"><h2>Open CCs by classification</h2></div><div class="bars">${cls.map(([k, xs]) => `<div class="bar-row"><span class="lbl">${esc(k)}</span><span class="bar-track" style="width:${(xs.length / Math.max(1, open.length)) * 100}%"><i class="${/major|critical/i.test(k) ? "c-accent" : "c-open"}" style="flex:1"></i></span><span class="v">${xs.length}</span></div>`).join("") || `<div class="empty">None open</div>`}</div></div>
+    <div class="panel"><div class="panel-h"><h2>Open CCs by category</h2></div><div class="bars">${cats.map(([k, xs]) => `<div class="bar-row"><span class="lbl">${esc(k)}</span><span class="bar-track" style="width:${(xs.length / Math.max(1, open.length)) * 100}%"><i class="c-open" style="flex:1"></i></span><span class="v">${xs.length}</span></div>`).join("") || `<div class="empty">None open</div>`}</div></div>
+  </section>
+  <section class="grid2">
+    <div class="panel"><div class="panel-h"><h2>Needs attention</h2><span class="sub">overdue change controls, then those ready to close</span></div>
+      <div class="list">${[...late.sort((a, b) => a.d.due.localeCompare(b.d.due)).map((x) => li(x, `target ${fd(x.d.due)} · ${days(TODAY, x.d.due)} d late · ${esc(x.d.owner || "no owner")}`)), ...ready.map((x) => li(x, `${x.s.aTotal} actions done · ${esc(x.d.stage)}`))].slice(0, 14).join("") || `<div class="empty">Nothing overdue, nothing waiting for closure.</div>`}</div></div>
+    <div class="panel"><div class="panel-h"><h2>Overdue actions</h2><span class="sub">${aLate.length} · oldest first</span><span class="spacer"></span><a class="btn sm" href="#actions">All actions ›</a></div>
+      <div class="list">${lateActs.map((a) => `<button type="button" class="li" data-act="${esc(a.a.id)}" data-of="${esc(a.cc.id)}"><span class="id">${esc(a.a.id)}</span><span class="t">${esc(a.a.title || "")} <small>· ${esc(a.cc.id)} · ${esc(a.a.dept || "")} · ${esc(a.a.owner || "")}</small></span><span class="chip bad">${days(TODAY, a.a.due)} d late</span></button>`).join("") || `<div class="empty">No overdue action.</div>`}</div></div>
+  </section>`;
+}
+
+/* ── register ──────────────────────────────────────────── */
+function filterCCs(all) {
+  const q = normT(UI.q);
+  return all.filter(({ d, s }) => (!UI.open || !s.done) && (!UI.late || s.late) && (!UI.stage || d.stage === UI.stage) && (!UI.cls || (d.cls || "Unclassified") === UI.cls)
+    && (!UI.scope || String(d.scope || "").split(",")[0].trim() === UI.scope) && (!UI.owner || d.owner === UI.owner)
+    && (!q || normT([d.id, d.title, d.subject, d.current, d.proposed, d.justification, d.products, d.productCode, d.article, d.depts, d.owner, d.createdBy, d.asset].join(" ")).includes(q)));
+}
+const SORTS = { id: (x) => +String(x.d.id).replace(/\D+/g, "") || 0, title: (x) => String(x.d.title || "").toLowerCase(), stage: (x) => CC_STAGES.indexOf(x.d.stage), cls: (x) => x.d.cls || "", scope: (x) => x.d.scope || "", owner: (x) => x.d.owner || "", created: (x) => x.d.created || "", due: (x) => x.d.due || "9999", acts: (x) => x.s.aOpen, state: (x) => (x.s.late ? 0 : x.s.ready ? 1 : !x.s.done ? 2 : x.s.closed ? 3 : 4) };
+function sorted(list, [k, dir], sorts) { const f = sorts[k]; return list.slice().sort((a, b) => { const x = f(a), y = f(b); return (x < y ? -1 : x > y ? 1 : 0) * dir; }); }
+function registerView(all) {
+  const opts = (vals, cur, lbl) => `<option value="">${lbl}</option>${vals.map((v) => `<option ${v === cur ? "selected" : ""}>${esc(v)}</option>`).join("")}`;
+  const uniq = (f) => [...new Set(all.map(f).filter(Boolean))].sort();
+  const list = sorted(filterCCs(all), UI.sort, SORTS);
+  const th = (k, l) => `<th data-sort="${k}">${l}${UI.sort[0] === k ? (UI.sort[1] > 0 ? " ▲" : " ▼") : ""}</th>`;
+  return `<section class="panel">
+    <div class="panel-h"><h2>Change controls</h2><span class="sub">every change control with its actions · click one to open it</span><span class="spacer"></span>${downloads ? `<button class="btn sm" type="button" data-export>⤓ Excel (change controls + actions)</button>` : ""}</div>
+    <div class="filters" role="search">
+      <input type="search" id="f-q" placeholder="Search number, title, subject, product, current / proposed state…" value="${esc(UI.q)}" aria-label="Search">
+      <select id="f-stage" aria-label="Stage">${opts([...CC_STAGES, ...uniq((x) => x.d.stage).filter((s) => !CC_STAGES.includes(s))], UI.stage, "All stages")}</select>
+      <select id="f-cls" aria-label="Classification">${opts(uniq((x) => x.d.cls || "Unclassified"), UI.cls, "All classifications")}</select>
+      <select id="f-scope" aria-label="Change scope">${opts(uniq((x) => String(x.d.scope || "").split(",")[0].trim()), UI.scope, "All scopes")}</select>
+      <select id="f-owner" aria-label="Owner">${opts(uniq((x) => x.d.owner), UI.owner, "All owners")}</select>
+      <label class="tg"><input type="checkbox" id="f-open" ${UI.open ? "checked" : ""}> Open only</label>
+      <label class="tg"><input type="checkbox" id="f-late" ${UI.late ? "checked" : ""}> Overdue only</label>
+      <span class="count">${list.length} of ${all.length}</span>
+    </div>
+    <div class="tw"><table class="t"><thead><tr>${th("id", "CC No.")}${th("title", "Title / subject")}${th("stage", "Stage")}${th("cls", "Class")}${th("scope", "Scope")}${th("owner", "Owner")}${th("created", "Raised")}${th("due", "Target")}${th("acts", "Actions")}${th("state", "Status")}</tr></thead>
+      <tbody>${list.slice(0, UI.limit).map(({ d, s }) => `<tr data-cc="${esc(d.id)}" class="${s.late ? "late" : ""}"><td class="mono"><b>${esc(d.id)}</b>${d.placeholder ? `<br><span class="chip warn" title="Known from its actions only — import the Change Control export">actions only</span>` : ""}</td>
+        <td class="ttl" style="min-width:240px">${esc(d.title || "—")}<small>${esc(d.subject || "")}${d.category === "Temporary" ? " · temporary" : ""}</small></td>
+        <td>${esc(d.stage || "")}</td><td>${clsChip(d.cls)}</td><td style="min-width:110px">${esc(String(d.scope || "").split(",")[0])}</td><td>${esc(d.owner || "")}</td><td>${fd(d.created)}</td>
+        <td>${fd(d.due)}${s.late ? `<br><small style="color:var(--bad);font-weight:600">${days(TODAY, d.due)} d late</small>` : ""}</td>
+        <td>${s.aTotal ? `<div class="prog"><div class="prog-bar"><i style="width:${(s.aDone / s.aTotal) * 100}%"></i>${s.aLate ? `<i class="late" style="width:${(s.aLate / s.aTotal) * 100}%"></i>` : ""}</div><small>${s.aDone}/${s.aTotal} done${s.aLate ? ` · <b style="color:var(--bad)">${s.aLate} late</b>` : ""}</small></div>` : `<span class="muted">—</span>`}</td>
+        <td>${ccChip(d, s)}</td></tr>`).join("") || `<tr><td colspan="10"><div class="empty">No change control matches.</div></td></tr>`}</tbody></table></div>
+    ${list.length > UI.limit ? `<div class="more"><button class="btn" type="button" data-more="cc">Show ${Math.min(120, list.length - UI.limit)} more</button></div>` : ""}
+  </section>`;
+}
+
+/* ── actions ───────────────────────────────────────────── */
+const ASORTS = { id: (x) => +String(x.a.id).replace(/\D+/g, "") || 0, title: (x) => String(x.a.title || "").toLowerCase(), cc: (x) => +String(x.cc.id).replace(/\D+/g, "") || 0, dept: (x) => x.a.dept || "", owner: (x) => x.a.owner || "", due: (x) => x.a.due || "9999", stage: (x) => ACT_STAGES.indexOf(x.a.stage) };
+function actionsView(all) {
+  const acts = all.flatMap((x) => x.s.acts.map((s) => ({ ...s, cc: x.d })));
+  const q = normT(UI.aq);
+  const f = acts.filter((x) => (UI.ast === "all" || (UI.ast === "open" && !x.done) || (UI.ast === "late" && x.late) || (UI.ast === "soon" && x.soon) || (UI.ast === "done" && x.done))
+    && (!UI.adept || x.a.dept === UI.adept) && (!UI.aowner || x.a.owner === UI.aowner) && (!q || normT([x.a.id, x.a.title, x.a.desc, x.cc.id, x.cc.title, x.a.owner, x.a.dept].join(" ")).includes(q)));
+  const list = sorted(f, UI.asort, ASORTS);
+  const uniq = (fn) => [...new Set(acts.map(fn).filter(Boolean))].sort();
+  const opts = (vals, cur, lbl) => `<option value="">${lbl}</option>${vals.map((v) => `<option ${v === cur ? "selected" : ""}>${esc(v)}</option>`).join("")}`;
+  const th = (k, l) => `<th data-asort="${k}">${l}${UI.asort[0] === k ? (UI.asort[1] > 0 ? " ▲" : " ▼") : ""}</th>`;
+  const cnt = (fn) => acts.filter(fn).length;
+  return `<section class="panel">
+    <div class="panel-h"><h2>Change control actions</h2><span class="sub">${cnt((x) => !x.done)} open · ${cnt((x) => x.late)} overdue · ${cnt((x) => x.soon)} due within 30 days · ${acts.length} in total</span><span class="spacer"></span>${downloads ? `<button class="btn sm" type="button" data-export>⤓ Excel</button>` : ""}</div>
+    <div class="filters" role="search">
+      <input type="search" id="a-q" placeholder="Search action, CC number or title, assignee…" value="${esc(UI.aq)}" aria-label="Search actions">
+      <select id="a-st" aria-label="Status">${[["open", "Open"], ["late", "Overdue"], ["soon", "Due ≤ 30 days"], ["done", "Done"], ["all", "All"]].map(([v, l]) => `<option value="${v}" ${UI.ast === v ? "selected" : ""}>${l}</option>`).join("")}</select>
+      <select id="a-dept" aria-label="Department">${opts(uniq((x) => x.a.dept), UI.adept, "All departments")}</select>
+      <select id="a-owner" aria-label="Assignee">${opts(uniq((x) => x.a.owner), UI.aowner, "All assignees")}</select>
+      <span class="count">${list.length} actions</span>
+    </div>
+    <div class="tw"><table class="t"><thead><tr>${th("id", "Action")}${th("title", "What")}${th("cc", "Change control")}${th("dept", "Department")}${th("owner", "Assignee")}${th("due", "Due")}${th("stage", "Stage")}<th class="nosort">Status</th></tr></thead>
+      <tbody>${list.slice(0, UI.alimit).map((x) => `<tr data-act="${esc(x.a.id)}" data-of="${esc(x.cc.id)}" class="${x.late ? "late" : ""}"><td class="mono"><b>${esc(x.a.id)}</b></td><td class="ttl" style="min-width:260px">${esc(x.a.title || "")}${x.a.desc ? `<small>${esc(x.a.desc.slice(0, 160))}${x.a.desc.length > 160 ? "…" : ""}</small>` : ""}</td>
+        <td style="min-width:180px"><span class="mono" style="color:var(--steel)">${esc(x.cc.id)}</span><br><small class="muted">${esc(String(x.cc.title || "").slice(0, 70))}</small></td><td>${esc(x.a.dept || "")}</td><td>${esc(x.a.owner || "")}</td>
+        <td>${fd(x.a.due)}${x.late ? `<br><small style="color:var(--bad);font-weight:600">${days(TODAY, x.a.due)} d late</small>` : ""}</td><td>${esc(x.a.stage || "")}</td><td>${actChip(x)}</td></tr>`).join("") || `<tr><td colspan="8"><div class="empty">No action matches.</div></td></tr>`}</tbody></table></div>
+    ${list.length > UI.alimit ? `<div class="more"><button class="btn" type="button" data-more="act">Show ${Math.min(150, list.length - UI.alimit)} more</button></div>` : ""}
+  </section>`;
+}
+
+/* ── detail and editing ────────────────────────────────── */
+let modalEl = null;
+function openModal(html, { narrow = false } = {}) {
+  closeModal();
+  const ov = document.createElement("div"); ov.className = "ov";
+  const m = document.createElement("div"); m.className = `modal${narrow ? " narrow" : ""}`; m.setAttribute("role", "dialog"); m.setAttribute("aria-modal", "true");
+  m.innerHTML = html;
+  ov.onclick = closeModal;
+  document.body.append(ov, m);
+  modalEl = { ov, m };
+  m.querySelector("[data-close]")?.addEventListener("click", closeModal);
+  setTimeout(() => m.querySelector("input, select, textarea, button")?.focus(), 30);
+  return m;
+}
+function closeModal() { if (modalEl) { modalEl.ov.remove(); modalEl.m.remove(); modalEl = null; } }
+document.addEventListener("keydown", (e) => { if (e.key === "Escape" && modalEl) closeModal(); });
+function toast(t) { const n = document.createElement("div"); n.className = "toast"; n.textContent = t; document.body.append(n); setTimeout(() => n.remove(), 3200); }
+
+function showCC(id) {
+  const d = S.ccs.get(id);
+  if (!d) return;
+  const s = ccState(d);
+  const meta = [["Stage", d.stage], ["Classification", d.cls], ["Category", d.category], ["Change scope", d.scope], ["Owner", d.owner], ["Raised by", d.createdBy], ["Raised", fd(d.created)], ["Target (end)", fd(d.due)], ["Closed", fd(d.closedOn)],
+    ["Departments", d.depts], ["Associated users", d.assoc], ["Location", [d.location, d.zone].filter(Boolean).join(" · ")], ["Asset", d.asset], ["Product code", d.productCode], ["Products", d.products], ["Packaging material", d.packaging], ["Article code", d.article], ["Old reference", d.tags], ["Actions completed (Scigeniq)", d.actionsDone]]
+    .filter(([, v]) => v).map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join("");
+  const acts = s.acts.slice().sort((a, b) => (a.done - b.done) || String(a.a.due || "9").localeCompare(String(b.a.due || "9")));
+  const m = openModal(`<div class="m-head"><div class="row"><span class="mono" style="color:var(--steel);font-weight:600">${esc(d.id)}</span>${ccChip(d, s)}${clsChip(d.cls)}${d.category ? `<span class="chip">${esc(d.category)}</span>` : ""}${d.placeholder ? `<span class="chip warn">known from its actions only</span>` : ""}<button class="btn ghost x" type="button" data-close aria-label="Close">✕</button></div>
+      <h2>${esc(d.title || "Untitled change control")}</h2>${d.subject ? `<div class="muted">${esc(d.subject)}</div>` : ""}</div>
+    <div class="m-body">
+      <dl class="meta">${meta}</dl>
+      ${d.current || d.proposed ? `<div class="fromto"><div class="ft"><h3>Current state</h3><p>${esc(d.current || "—")}</p></div><div class="arrow" aria-hidden="true">→</div><div class="ft to"><h3>Proposed state</h3><p>${esc(d.proposed || "—")}</p></div></div>` : ""}
+      ${d.justification ? `<div class="blk"><h3>Justification</h3><p>${esc(d.justification)}</p></div>` : ""}
+      <div class="blk"><div class="panel-h" style="margin-bottom:8px"><h3 style="margin:0">Actions · ${s.aDone}/${s.aTotal} done${s.aLate ? ` · <span style="color:var(--bad)">${s.aLate} overdue</span>` : ""}</h3><span class="spacer"></span>${S.canWrite ? `<button class="btn sm" type="button" data-addact>＋ Add action</button>` : ""}</div>
+        ${acts.length ? `<div class="tw"><table class="t"><thead><tr><th class="nosort">Action</th><th class="nosort">What</th><th class="nosort">Department</th><th class="nosort">Assignee</th><th class="nosort">Due</th><th class="nosort">Status</th></tr></thead><tbody>${acts.map((x) => `<tr data-act="${esc(x.a.id)}" data-of="${esc(d.id)}" class="${x.late ? "late" : ""}"><td class="mono">${esc(x.a.id)}</td><td class="ttl">${esc(x.a.title || "")}${x.a.desc ? `<small>${esc(x.a.desc.slice(0, 200))}</small>` : ""}</td><td>${esc(x.a.dept || "")}</td><td>${esc(x.a.owner || "")}</td><td>${fd(x.a.due)}</td><td>${actChip(x)}</td></tr>`).join("")}</tbody></table></div>` : `<div class="empty">No action recorded for this change control.</div>`}</div>
+      <div class="blk"><h3>Tracker notes</h3>${S.canWrite ? `<div class="form"><label class="full"><textarea id="cc-notes" placeholder="Follow-up notes kept in this tracker (not in Scigeniq)">${esc(d.notes || "")}</textarea></label></div>` : `<p>${esc(d.notes || "—")}</p>`}</div>
+    </div>
+    <div class="m-foot"><span class="muted" style="font-size:12px">${d.updatedAt ? `Updated ${fd(d.updatedAt.slice(0, 10))}` : ""}${d.src === "app" ? " · created in the tracker" : ""}</span><span class="spacer"></span>${S.canWrite ? `<button class="btn" type="button" data-edit>Edit change control</button>` : ""}<button class="btn primary" type="button" data-close>Done</button></div>`);
+  m.querySelectorAll("[data-close]").forEach((b) => b.addEventListener("click", closeModal));
+  m.querySelector("[data-edit]")?.addEventListener("click", () => editCC(id));
+  m.querySelector("[data-addact]")?.addEventListener("click", () => editAct(id, null));
+  m.querySelectorAll("tr[data-act]").forEach((tr) => tr.addEventListener("click", () => editAct(id, tr.dataset.act)));
+  const notes = m.querySelector("#cc-notes");
+  notes?.addEventListener("change", async () => { const cur = S.ccs.get(id); if (!cur || (cur.notes || "") === notes.value) return; try { await saveDoc(id, { ...cur, notes: notes.value }); toast("Notes saved"); } catch (e) { toast(`Not saved: ${e.message || e.code}`); } });
+}
+
+const field = (k, label, v, { type = "text", opts = null, full = false, rows = 3 } = {}) => `<label class="${full ? "full" : ""}">${esc(label)}${opts ? `<select id="e-${k}"><option value=""></option>${[...new Set([...opts, ...(v && !opts.includes(v) ? [v] : [])])].map((o) => `<option ${o === v ? "selected" : ""}>${esc(o)}</option>`).join("")}</select>` : type === "area" ? `<textarea id="e-${k}" rows="${rows}">${esc(v || "")}</textarea>` : `<input id="e-${k}" type="${type}" value="${esc(v || "")}" autocomplete="off">`}</label>`;
+const val = (m, k) => { const el = m.querySelector(`#e-${k}`); const v = el ? el.value.trim() : ""; return v || null; };
+function names() { const s = new Set(); for (const d of S.ccs.values()) { if (d.owner) s.add(d.owner); for (const a of d.actions || []) if (a.owner) s.add(a.owner); } return [...s].sort(); }
+function depts() { const s = new Set(); for (const d of S.ccs.values()) for (const a of d.actions || []) if (a.dept) s.add(a.dept); return [...s].sort(); }
+
+function editCC(id) {
+  const d = id ? S.ccs.get(id) : null;
+  const nextId = () => { const n = Math.max(0, ...[...S.ccs.keys()].map((k) => +(/^CC-KO-(\d+)$/.exec(k)?.[1] || 0))); return `CC-KO-${n + 1}`; };
+  const scopes = [...new Set([...S.ccs.values()].map((x) => String(x.scope || "").split(",")[0].trim()).filter(Boolean))].sort();
+  const m = openModal(`<div class="m-head"><div class="row"><h2>${d ? `Edit ${esc(d.id)}` : "New change control"}</h2><button class="btn ghost x" type="button" data-close aria-label="Close">✕</button></div>
+      <div class="muted" style="font-size:12.5px">${d && d.src !== "app" ? "Fields that come from Scigeniq are replaced by the next import; your notes stay." : "A change control raised here is kept until a Scigeniq import brings the same number."}</div></div>
+    <form class="m-body" id="ccform"><div class="form">
+      ${field("id", "CC No.", d?.id || nextId())}${field("stage", "Stage", d?.stage || "Open", { opts: CC_STAGES })}${field("cls", "Classification", d?.cls, { opts: ["Minor", "Major", "Critical"] })}
+      ${field("title", "Title", d?.title, { full: true })}${field("subject", "Subject", d?.subject, { full: true })}
+      ${field("category", "Category", d?.category, { opts: ["Permanent", "Temporary"] })}${field("scope", "Change scope", String(d?.scope || "").split(",")[0].trim(), { opts: scopes })}${field("owner", "Owner", d?.owner)}
+      ${field("created", "Raised", d?.created || TODAY, { type: "date" })}${field("due", "Target (end) date", d?.due, { type: "date" })}${field("closedOn", "Closed on", d?.closedOn, { type: "date" })}
+      ${field("depts", "Departments", d?.depts)}${field("productCode", "Product code", d?.productCode)}${field("article", "Article code", d?.article)}
+      ${field("current", "Current state", d?.current, { type: "area", full: true })}${field("proposed", "Proposed state", d?.proposed, { type: "area", full: true })}${field("justification", "Justification", d?.justification, { type: "area", full: true })}
+    </div><datalist id="dl-names">${names().map((n) => `<option value="${esc(n)}">`).join("")}</datalist></form>
+    <div class="m-foot">${d && d.src === "app" ? `<button class="btn danger" type="button" data-del>Delete</button>` : ""}<span class="spacer"></span><span class="muted" id="e-msg" style="font-size:12.5px"></span><button class="btn" type="button" data-close>Cancel</button><button class="btn primary" type="button" data-save>Save</button></div>`);
+  m.querySelectorAll("[data-close]").forEach((b) => b.addEventListener("click", closeModal));
+  m.querySelector("#e-owner").setAttribute("list", "dl-names");
+  if (d) m.querySelector("#e-id").readOnly = true;
+  let armed = false;
+  m.querySelector("[data-del]")?.addEventListener("click", async (e) => {
+    if (!armed) { armed = true; e.currentTarget.textContent = "Click again to delete"; return; }
+    try { await deleteDoc(id); closeModal(); toast(`${id} deleted`); } catch (err) { toast(`Not deleted: ${err.message || err.code}`); }
+  });
+  m.querySelector("[data-save]").addEventListener("click", async () => {
+    const nid = val(m, "id"), msg = m.querySelector("#e-msg");
+    if (!nid || !/^[A-Za-z0-9_.~:@+-]+$/.test(nid)) { msg.textContent = "Give a CC number made of letters, digits and dashes."; return; }
+    if (!d && S.ccs.has(nid)) { msg.textContent = `${nid} already exists.`; return; }
+    if (!val(m, "title")) { msg.textContent = "Give a title."; return; }
+    const body = { ...(d || { actions: [], src: "app" }), id: nid };
+    for (const k of ["stage", "cls", "title", "subject", "category", "scope", "owner", "created", "due", "closedOn", "depts", "productCode", "article", "current", "proposed", "justification"]) { const v = val(m, k); if (v) body[k] = v; else delete body[k]; }
+    if (d && d.scope && String(d.scope).split(",")[0].trim() === body.scope) body.scope = d.scope; // keep Scigeniq's full scope text when unchanged
+    try { await saveDoc(nid, body); closeModal(); toast(`${nid} saved`); setTimeout(() => showCC(nid), 60); } catch (err) { msg.textContent = `Not saved: ${err.message || err.code}`; }
+  });
+}
+
+function editAct(ccId, actId) {
+  const d = S.ccs.get(ccId);
+  if (!d) return;
+  const a = actId ? (d.actions || []).find((x) => x.id === actId) : null;
+  if (!S.canWrite) { if (a) openModal(`<div class="m-head"><div class="row"><span class="mono">${esc(a.id)}</span>${actChip(actState(a))}<button class="btn ghost x" type="button" data-close>✕</button></div><h2>${esc(a.title || "")}</h2></div><div class="m-body"><p>${esc(a.desc || "")}</p><dl class="meta">${[["Change control", ccId], ["Department", a.dept], ["Assignee", a.owner], ["Due", fd(a.due)], ["Stage", a.stage], ["Closed", fd(a.closedOn)]].filter(([, v]) => v).map(([k, v]) => `<div><dt>${k}</dt><dd>${esc(v)}</dd></div>`).join("")}</dl></div>`, { narrow: true }); return; }
+  const nextA = () => { let n = 0; for (const x of S.ccs.values()) for (const y of x.actions || []) n = Math.max(n, +(/^ACTION-KO-(\d+)$/.exec(y.id)?.[1] || 0)); return `ACTION-KO-${n + 1}`; };
+  const m = openModal(`<div class="m-head"><div class="row"><h2>${a ? `Action ${esc(a.id)}` : "New action"}</h2><span class="chip open">${esc(ccId)}</span><button class="btn ghost x" type="button" data-close aria-label="Close">✕</button></div><div class="muted" style="font-size:12.5px">${esc(d.title || "")}</div></div>
+    <form class="m-body"><div class="form">
+      ${field("aid", "Action No.", a?.id || nextA())}${field("stage", "Stage", a?.stage || "Open", { opts: ACT_STAGES })}${field("due", "Due date", a?.due, { type: "date" })}
+      ${field("title", "Action", a?.title, { full: true })}${field("desc", "Description", a?.desc, { type: "area", full: true })}
+      ${field("dept", "Department", a?.dept)}${field("owner", "Assignee", a?.owner)}${field("closedOn", "Closed on", a?.closedOn, { type: "date" })}
+    </div><datalist id="dl-n">${names().map((n) => `<option value="${esc(n)}">`).join("")}</datalist><datalist id="dl-d">${depts().map((n) => `<option value="${esc(n)}">`).join("")}</datalist></form>
+    <div class="m-foot">${a ? `<button class="btn danger" type="button" data-del>Remove action</button>` : ""}<span class="spacer"></span><span class="muted" id="e-msg" style="font-size:12.5px"></span><button class="btn" type="button" data-close>Cancel</button><button class="btn primary" type="button" data-save>Save</button></div>`, { narrow: true });
+  m.querySelectorAll("[data-close]").forEach((b) => b.addEventListener("click", () => { closeModal(); showCC(ccId); }));
+  m.querySelector("#e-owner").setAttribute("list", "dl-n"); m.querySelector("#e-dept").setAttribute("list", "dl-d");
+  if (a) m.querySelector("#e-aid").readOnly = true;
+  m.querySelector("#e-stage").addEventListener("change", (e) => { const c = m.querySelector("#e-closedOn"); if (/completed|canceled/i.test(e.target.value) && !c.value) c.value = TODAY; });
+  let armed = false;
+  m.querySelector("[data-del]")?.addEventListener("click", async (e) => {
+    if (!armed) { armed = true; e.currentTarget.textContent = "Click again to remove"; return; }
+    const cur = S.ccs.get(ccId);
+    try { await saveDoc(ccId, { ...cur, actions: (cur.actions || []).filter((x) => x.id !== a.id) }); closeModal(); toast(`${a.id} removed`); setTimeout(() => showCC(ccId), 60); } catch (err) { toast(`Not saved: ${err.message || err.code}`); }
+  });
+  m.querySelector("[data-save]").addEventListener("click", async () => {
+    const msg = m.querySelector("#e-msg"), aid = val(m, "aid");
+    if (!aid) { msg.textContent = "Give an action number."; return; }
+    if (!val(m, "title")) { msg.textContent = "Say what the action is."; return; }
+    const cur = S.ccs.get(ccId);
+    const list = (cur.actions || []).slice();
+    if (!a && list.some((x) => x.id === aid)) { msg.textContent = `${aid} already exists.`; return; }
+    const body = { ...(a || { cc: ccId, src: "app", created: TODAY }), id: aid };
+    for (const k of ["stage", "due", "title", "desc", "dept", "owner", "closedOn"]) { const v = val(m, k); if (v) body[k] = v; else delete body[k]; }
+    const i = list.findIndex((x) => x.id === aid);
+    if (i >= 0) list[i] = body; else list.push(body);
+    try { await saveDoc(ccId, { ...cur, actions: list }); closeModal(); toast(`${aid} saved`); setTimeout(() => showCC(ccId), 60); } catch (err) { msg.textContent = `Not saved: ${err.message || err.code}`; }
+  });
+}
+
+/* ── import ────────────────────────────────────────────── */
+async function xlsx() {
+  if (XLSXlib) return XLSXlib;
+  if (window.XLSX) return (XLSXlib = window.XLSX);
+  await new Promise((res, rej) => { const s = document.createElement("script"); s.src = "https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"; s.onload = res; s.onerror = () => rej(new Error("The Excel reader could not be loaded — check the connection.")); document.head.append(s); });
+  return (XLSXlib = window.XLSX);
+}
+function importView() {
+  const p = UI.plan;
+  const hist = S.meta?.log || [];
+  return `<section class="panel"><div class="panel-h"><h2>Import from Scigeniq</h2><span class="sub">the allTasks exports “Change Control” and “Change control actions” (.xlsx) — one or several files at once</span></div>
+    ${S.canWrite ? `<label class="drop" id="drop"><input type="file" id="files" accept=".xlsx,.xls" multiple hidden><b>Drop the exports here, or choose them</b><span class="muted">Each file is recognised by its content. Nothing changes until you apply the import.</span></label>` : `<div class="note warn">You can view this tracker but not change it — ask its owner for edit access to import.</div>`}
+    ${UI.files.length ? `<div class="files" style="margin-top:12px">${UI.files.map((f) => `<div class="file"><span class="ic ${f.err ? "bad" : f.kind === "act" ? "act" : ""}">${f.err ? "!" : f.kind === "act" ? "ACT" : f.kind === "cc" ? "CC" : "?"}</span><div style="min-width:0"><b>${esc(f.name)}</b><div class="muted" style="font-size:12.5px">${f.err ? esc(f.err) : `${f.cc ? `${f.cc} change controls` : ""}${f.cc && f.act ? " · " : ""}${f.act ? `${f.act} CC actions` : ""}${!f.cc && !f.act ? "no change control or CC action found" : ""}${f.other ? ` · ${f.other} other rows ignored` : ""}${f.generated ? ` · exported ${esc(f.generated)}` : ""}`}</div></div><button class="btn sm ghost" type="button" data-rm="${esc(f.name)}" aria-label="Remove ${esc(f.name)}">✕</button></div>`).join("")}</div>` : ""}
+    ${p ? `<div style="margin-top:14px;display:grid;gap:12px">
+      <div class="plan"><div><b>${p.ccNew}</b><small>new change controls</small></div><div><b>${p.ccUpd}</b><small>change controls updated</small></div><div><b>${p.actNew}</b><small>new actions</small></div><div><b>${p.actUpd}</b><small>actions updated</small></div></div>
+      <div class="muted" style="font-size:13px">${p.ccSame} change controls and ${p.actSame} actions unchanged${p.placeholders ? ` · ${p.placeholders} change controls known only from their actions (added; the Change Control export completes them)` : ""}${p.unmatched ? ` · ${p.unmatched} actions without a parent change control left out` : ""}. Records of the tracker missing from the files are kept. Your notes and actions added in the tracker are kept.</div>
+      ${p.changes.length ? `<details class="changes"><summary>See the ${p.changes.length} changes</summary><ul>${p.changes.slice(0, 400).map((c) => `<li>${esc(c)}</li>`).join("")}${p.changes.length > 400 ? `<li>… and ${p.changes.length - 400} more</li>` : ""}</ul></details>` : ""}
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><button class="btn primary" type="button" id="apply" ${p.writes.length ? "" : "disabled"}>${p.writes.length ? `Apply — write ${p.writes.length} change control${p.writes.length > 1 ? "s" : ""}` : "Already up to date"}</button><div class="progress" style="flex:1;min-width:160px" hidden id="prog"><i style="width:0"></i></div><span class="muted" id="progt" style="font-size:12.5px"></span></div>
+    </div>` : ""}
+  </section>
+  <section class="panel"><div class="panel-h"><h2>Import history</h2></div>${hist.length ? `<div class="hist">${hist.slice(0, 15).map((h) => `<div><b>${fd(h.at.slice(0, 10))} ${esc(h.at.slice(11, 16))}</b><span>${esc((h.files || []).join(", "))}</span><span class="muted">${h.ccNew || 0} new · ${h.ccUpd || 0} updated CCs · ${h.actNew || 0} new · ${h.actUpd || 0} updated actions${h.generated ? ` · export of ${esc(h.generated)}` : ""}</span></div>`).join("")}</div>` : `<div class="empty">No import yet.</div>`}
+    <p class="muted" style="font-size:12.5px;margin:10px 0 0">How to export from Scigeniq: All tasks → filter Type = Change Control → Export Excel; then the actions whose parent is a change control → Export Excel. Import both files together.</p></section>`;
+}
+function replan() { UI.plan = UI.files.some((f) => f.rows?.length) ? planImport(S.ccs, UI.files.filter((f) => f.rows)) : null; }
+function wireImport() {
+  const inp = $("#files"), drop = $("#drop");
+  const take = async (list) => {
+    try { await xlsx(); } catch (e) { toast(e.message); return; }
+    for (const file of list) {
+      const rec = { name: file.name };
+      try { const wb = XLSXlib.read(await file.arrayBuffer(), { type: "array" }); const { rows, generated } = sheetRows(XLSXlib, wb); rec.rows = rows; rec.generated = generated; rec.cc = rows.filter((r) => rowKind(r) === "cc").length; rec.act = rows.filter((r) => /^act/.test(rowKind(r) || "")).length; rec.other = rows.length - rec.cc - rec.act; rec.kind = rec.cc >= rec.act ? (rec.cc ? "cc" : null) : "act"; if (!rows.length) rec.err = "No “Data” sheet with a Reference Id column — is it a Scigeniq allTasks export?"; }
+      catch (e) { rec.err = `Could not read the file (${e.message || e})`; }
+      UI.files = [...UI.files.filter((f) => f.name !== rec.name), rec];
+    }
+    replan(); render();
+  };
+  inp?.addEventListener("change", () => take([...inp.files]));
+  if (drop) {
+    drop.addEventListener("dragover", (e) => { e.preventDefault(); drop.classList.add("over"); });
+    drop.addEventListener("dragleave", () => drop.classList.remove("over"));
+    drop.addEventListener("drop", (e) => { e.preventDefault(); drop.classList.remove("over"); take([...e.dataTransfer.files]); });
+  }
+  document.querySelectorAll("[data-rm]").forEach((b) => b.addEventListener("click", () => { UI.files = UI.files.filter((f) => f.name !== b.dataset.rm); replan(); render(); }));
+  $("#apply")?.addEventListener("click", async (e) => {
+    const p = UI.plan, btn = e.currentTarget;
+    btn.disabled = true;
+    const bar = $("#prog"), t = $("#progt"); bar.hidden = false;
+    let n = 0, failed = 0;
+    const work = p.writes.slice();
+    const runOne = async () => { while (work.length) { const [id, doc] = work.shift(); try { await saveDoc(id, { ...doc, ...(p.created.has(id) && !doc.src ? { src: "scigeniq" } : {}), importedAt: new Date().toISOString() }); } catch { failed++; } n++; bar.firstElementChild.style.width = `${(n / p.writes.length) * 100}%`; t.textContent = `${n} / ${p.writes.length}`; } };
+    S.mode === "db" ? await Promise.all([runOne(), runOne(), runOne()]) : await runOne();
+    const gen = UI.files.map((f) => f.generated).filter(Boolean).sort((a, b) => String(sdate(a)).localeCompare(String(sdate(b)))).pop() || null; // the newest export
+    const entry = { at: new Date().toISOString(), files: UI.files.filter((f) => f.rows).map((f) => f.name), generated: gen, ccNew: p.ccNew, ccUpd: p.ccUpd, actNew: p.actNew, actUpd: p.actUpd, failed, by: S.uid || null };
+    const log = [entry, ...(S.meta?.log || [])].slice(0, 40);
+    try { if (S.mode === "db") await db.doc("meta/imports").set({ log }); else { S.meta = { log }; localSave(); } } catch {}
+    toast(failed ? `Import done with ${failed} write(s) refused — check your access` : `Import applied: ${p.writes.length} change controls written`);
+    UI.files = []; UI.plan = null; render();
+  });
+}
+
+/* ── Excel export ──────────────────────────────────────── */
+async function exportXlsx() {
+  const X = await xlsx();
+  const wb = X.utils.book_new();
+  const all = [...S.ccs.values()].sort((a, b) => (+String(b.id).replace(/\D+/g, "") || 0) - (+String(a.id).replace(/\D+/g, "") || 0));
+  const dt = (iso) => (iso ? new Date(`${iso}T00:00:00Z`) : "");
+  const st = (d, s = ccState(d)) => (s.canceled ? "Canceled" : s.closed ? "Closed" : s.late ? "Overdue" : s.ready ? "Ready to close" : "Open");
+  const ws1 = X.utils.aoa_to_sheet([["CC No.", "Title", "Subject", "Stage", "Status", "Classification", "Category", "Change scope", "Owner", "Raised by", "Raised", "Target", "Closed", "Departments", "Product code", "Article code", "Current state", "Proposed state", "Justification", "Actions", "Actions done", "Actions overdue", "Tracker notes"],
+    ...all.map((d) => { const s = ccState(d); return [d.id, d.title || "", d.subject || "", d.stage || "", st(d, s), d.cls || "", d.category || "", d.scope || "", d.owner || "", d.createdBy || "", dt(d.created), dt(d.due), dt(d.closedOn), d.depts || "", d.productCode || "", d.article || "", d.current || "", d.proposed || "", d.justification || "", s.aTotal, s.aDone, s.aLate, d.notes || ""]; })], { cellDates: true, dateNF: "dd/mm/yyyy" });
+  ws1["!cols"] = [14, 50, 36, 20, 14, 12, 12, 22, 22, 22, 11, 11, 11, 30, 16, 16, 50, 50, 50, 8, 8, 8, 30].map((w) => ({ wch: w }));
+  const ws2 = X.utils.aoa_to_sheet([["Action No.", "Change control", "CC title", "Action", "Description", "Department", "Assignee", "Stage", "Status", "Created", "Due", "Closed"],
+    ...all.flatMap((d) => (d.actions || []).map((a) => { const s = actState(a); return [a.id, d.id, d.title || "", a.title || "", a.desc || "", a.dept || "", a.owner || "", a.stage || "", s.canceled ? "Canceled" : s.done ? "Done" : s.late ? "Overdue" : "Open", dt(a.created), dt(a.due), dt(a.closedOn)]; }))], { cellDates: true, dateNF: "dd/mm/yyyy" });
+  ws2["!cols"] = [16, 14, 40, 50, 50, 24, 22, 14, 10, 11, 11, 11].map((w) => ({ wch: w }));
+  X.utils.book_append_sheet(wb, ws1, "Change controls");
+  X.utils.book_append_sheet(wb, ws2, "CC actions");
+  const out = X.write(wb, { type: "array", bookType: "xlsx" });
+  try { await downloads.save({ filename: `Change_Controls_${TODAY}.xlsx`, data: new Blob([out]) }); } catch (e) { if (e?.code && e.code !== "declined") toast(`Export not saved (${e.code})`); }
+}
+
+/* ── events ────────────────────────────────────────────── */
+document.addEventListener("click", (e) => {
+  const st = e.target.closest("[data-stage]"); if (st) { go("register", { stage: st.dataset.stage, open: false, late: false }); return; }
+  const cc = e.target.closest("[data-cc]"); if (cc && !modalEl) { showCC(cc.dataset.cc); return; }
+  const ac = e.target.closest("tr[data-act], .li[data-act]"); if (ac && !modalEl) { editAct(ac.dataset.of, ac.dataset.act); return; }
+  const so = e.target.closest("th[data-sort]"); if (so) { UI.sort = [so.dataset.sort, UI.sort[0] === so.dataset.sort ? -UI.sort[1] : 1]; render(); return; }
+  const as = e.target.closest("th[data-asort]"); if (as) { UI.asort = [as.dataset.asort, UI.asort[0] === as.dataset.asort ? -UI.asort[1] : 1]; render(); return; }
+  const mo = e.target.closest("[data-more]"); if (mo) { if (mo.dataset.more === "cc") UI.limit += 120; else UI.alimit += 150; render(); return; }
+  if (e.target.closest("[data-export]")) { exportXlsx().catch((err) => toast(err.message || "Export failed")); }
+});
+document.addEventListener("input", (e) => {
+  const id = e.target.id;
+  const map = { "f-q": "q", "a-q": "aq" };
+  if (map[id]) { UI[map[id]] = e.target.value; clearTimeout(UI._t); UI._t = setTimeout(() => { const pos = e.target.selectionStart; render(); const n = $(`#${id}`); if (n) { n.focus(); try { n.setSelectionRange(pos, pos); } catch {} } }, 180); }
+});
+document.addEventListener("change", (e) => {
+  const id = e.target.id;
+  const sel = { "f-stage": "stage", "f-cls": "cls", "f-scope": "scope", "f-owner": "owner", "a-st": "ast", "a-dept": "adept", "a-owner": "aowner" };
+  if (sel[id]) { UI[sel[id]] = e.target.value; UI.limit = 120; UI.alimit = 150; render(); }
+  if (id === "f-open") { UI.open = e.target.checked; render(); }
+  if (id === "f-late") { UI.late = e.target.checked; render(); }
+});
+$("#newcc").addEventListener("click", () => editCC(null));
+start();
+</script>
