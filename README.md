@@ -71,3 +71,44 @@ Data is stored only in the browser it was entered in, so export a CSV regularly 
 backup. To use this for regulated (GxP) records, add user authentication,
 audit trails and electronic signatures (21 CFR Part 11 / EU Annex 11). This
 app does not provide those.
+
+# Batch Release Desk
+
+A second app in this repository, in [`release/`](release/): a dashboard for the
+**CLL received vs AX** workbook. It shows how long batches wait between the CLL
+arriving and release in AX, and checks each batch against ERP 365 and AX.
+
+- **Overview.** The share of batches released the same day as their CLL, the
+  full lead-time spread, monthly received vs released, a daily CLL calendar and a
+  "Needs attention" list.
+- **Batches.** Every tracked batch with search (batch, product, remark, QE/CAPA
+  reference), filters and sorting. Click a batch for its timeline, its status in
+  each system, its issues and every other sheet it appears on.
+- **Lead time.** Distribution, median days by remark type (deviation, stability,
+  CAPA, OF/OC posting) and the spread for the 20 busiest products.
+- **Reconcile.** A flow from tracker status to ERP 365 to AX, counts of
+  mismatches and data errors (duplicates, release before CLL, unreadable dates),
+  and ERP 365 quarantine batches that have no CLL yet.
+- **Blocked stock.** The Statut PF sheet on an expiry timeline, sized by quantity
+  and grouped by reason (rejected, investigation, missing CLL/COA, decision).
+- **Follow-up.** ERP posting, QA release requests and physical vs system release,
+  each checked against today's ERP 365 status.
+
+Sheets are found by their column headings, so renamed tabs still load.
+
+## Loading the workbook
+
+The repository is public, so the workbook data is **not committed**. Either:
+
+- open the app and use **Load workbook** (or drag the .xlsx onto the page). The
+  file is read in the browser and kept in that browser only; or
+- generate `release/data.js` locally so the app opens with the data already
+  loaded (requires `pip install openpyxl`):
+
+  ```bash
+  python3 release/extract-data.py path/to/CLL_Recieved_vs_AX.xlsx
+  npm start   # then open http://localhost:8080/release/index.html
+  ```
+
+`node release/build-artifact.mjs out.html` bundles the app and `data.js` into
+one self-contained HTML file.
