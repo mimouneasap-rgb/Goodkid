@@ -97,10 +97,11 @@ async function boardHost(width) {
 
 /* ── detailed task tables: high priority, today, this month ── */
 const TASK_OWNER = { insp: "inspector", rel: "officer", tasks: "member", trn: "trainer" };
-/** Every open item of the board (QA registers, not the audit tracking group) with its owner, dates and why it matters. */
+/** The quality records of the board — deviations, CAPA, change control, inspections, batches, documents, APQR, training,
+ * escalations, rejections — with owner, dates and why they matter. Not eQMS actions, not planner tasks, not the audit tracking group. */
 export function boardTasks(s, comp) {
   const st = s.setup, today = st.statusDate, mS = E.monthStart(st.month), mE = E.monthEnd(st.month);
-  const regs = T2_ORDER.filter((r) => !AUDIT_GROUP.includes(r) && !["load", "abs", "sop"].includes(r) && s[r] && comp[r]);
+  const regs = T2_ORDER.filter((r) => !AUDIT_GROUP.includes(r) && !["load", "abs", "sop", "act", "tasks"].includes(r) && s[r] && comp[r]);
   const out = [];
   for (const reg of regs) {
     const sc = T2_REGISTERS[reg], dk = sc.dateKey || (sc.fields.some((f) => f.key === "opened") ? "opened" : null);
@@ -127,17 +128,20 @@ function taskSections(main) {
   const s = applyFilters("t2", store.t2, pageFilters("board")), st = s.setup, today = st.statusDate;
   const comp = E.t2Computed(s);
   const all = boardTasks(s, comp);
+  const regOrder = (a, b) => T2_ORDER.indexOf(a.reg) - T2_ORDER.indexOf(b.reg);
   const why = (t) => [t.late ? `${t.late} d overdue` : "", t.sev ? `${t.sev}` : "", t.esc ? "escalation" : "", t.toDue != null && t.toDue <= 3 ? (t.toDue === 0 ? "due today" : `due in ${t.toDue} d`) : ""].filter(Boolean).join(" · ");
   const high = all.filter((t) => t.open && (t.late || t.sev || t.esc || (t.toDue != null && t.toDue <= 3)))
-    .sort((a, b) => b.late - a.late || (a.toDue ?? 99) - (b.toDue ?? 99) || a.reg.localeCompare(b.reg));
-  const daily = all.filter((t) => t.today).sort((a, b) => (b.due === today) - (a.due === today) || a.reg.localeCompare(b.reg));
-  const monthly = all.filter((t) => t.month).sort((a, b) => a.due.localeCompare(b.due) || a.reg.localeCompare(b.reg));
+    .sort((a, b) => regOrder(a, b) || b.late - a.late || (a.toDue ?? 99) - (b.toDue ?? 99));
+  const daily = all.filter((t) => t.today).sort((a, b) => regOrder(a, b) || (b.due === today) - (a.due === today));
+  const monthly = all.filter((t) => t.month).sort((a, b) => regOrder(a, b) || a.due.localeCompare(b.due));
   const log = s.daily[today] || {};
-  const row = (t, extra) => `<tr class="${t.late ? "late" : ""}"><td class="mono"><b>${esc(t.id)}</b></td><td><span class="a3t-reg">${esc(t.no)}</span> ${esc(t.short)}</td><td class="a3t-what" title="${esc(t.what)}">${esc(t.what.slice(0, 110))}${t.what.length > 110 ? "…" : ""}</td><td>${esc(t.owner)}</td><td>${fmtDate(t.raised)}</td><td>${fmtDate(t.due)}</td><td>${pill(t.status)}</td><td class="a3t-why">${esc(extra(t))}</td></tr>`;
-  const table = (list, extraHead, extra) => `<table class="data a3t"><thead><tr><th>No.</th><th>Register</th><th>What</th><th>Owner</th><th>Raised</th><th>Due</th><th>Status</th><th>${extraHead}</th></tr></thead><tbody>${list.map((t) => row(t, extra)).join("")}</tbody></table>`;
+  const row = (t, extra) => `<tr class="${t.late ? "late" : ""}"><td class="mono"><b>${esc(t.id)}</b></td><td><span class="a3t-reg">${esc(t.no)}</span> ${esc(t.short)}</td><td class="a3t-what" title="${esc(t.what)}">${esc(t.what.slice(0, 110))}${t.what.length > 110 ? "…" : ""}</td><td>${esc(t.owner)}</td><td>${fmtDate(t.raised)}</td><td>${fmtDate(t.due)}</td><td>${pill(t.status)}</td><td class="a3t-why ${/overdue/.test(extra(t)) ? "" : "calm"}">${esc(extra(t))}</td></tr>`;
+  const table = (list, extraHead, extra) => `<table class="data a3t"><thead><tr><th>No.</th><th>Register</th><th>What</th><th>Owner</th><th>Raised</th><th>Due</th><th>Status</th><th>${extraHead}</th></tr></thead><tbody>${list.map((t, k) => `${k === 0 || list[k - 1].reg !== t.reg ? `<tr class="a3t-grp"><td colspan="8"><span class="a3t-reg">${esc(t.no)}</span> ${esc(T2_REGISTERS[t.reg].title)} <span class="muted">· ${counts[t.reg] || 0}</span></td></tr>` : ""}${row(t, extra)}`).join("")}</tbody></table>`;
+  let counts = {};
   const by = (list) => { const m = {}; for (const t of list) m[t.short] = (m[t.short] || 0) + 1; return Object.entries(m).sort((a, b) => b[1] - a[1]).map(([k, v]) => `<span class="a3t-chip">${esc(k)} <b>${v}</b></span>`).join(""); };
   const sections = [];
   const add = (key, title, sub, list, extraHead, extra, intro = "") => {
+    counts = {}; for (const t of list) counts[t.reg] = (counts[t.reg] || 0) + 1;
     const pages = Math.max(1, Math.ceil(list.length / TASKS_PER_PAGE));
     for (let p = 0; p < pages; p++) {
       const part = list.slice(p * TASKS_PER_PAGE, (p + 1) * TASKS_PER_PAGE);
@@ -151,10 +155,10 @@ function taskSections(main) {
       sections.push(sec);
     }
   };
-  add("high", "High-priority tasks", `open items overdue, due within 3 days, critical / major, or escalated — as of ${fmtDate(today)}`, high, "Why it is high priority", why);
-  add("daily", `Today's tasks · ${fmtLong(today)}`, "open items due today and records raised today", daily, "Today", (t) => [t.due === today ? "due today" : "", t.raised === today ? "raised today" : "", t.late ? `${t.late} d overdue` : ""].filter(Boolean).join(" · "),
+  add("high", "Top priority", `deviations, CAPA, change controls, inspections, batches, documents, APQR, training, escalations, rejections — overdue, due within 3 days, critical / major or escalated — as of ${fmtDate(today)}`, high, "Why it is top priority", why);
+  add("daily", `Today · ${fmtLong(today)}`, "quality records due today or raised today, by register", daily, "Today", (t) => [t.due === today ? "due today" : "", t.raised === today ? "raised today" : "", t.late ? `${t.late} d overdue` : ""].filter(Boolean).join(" · "),
     `<div class="a3t-prio"><b>Top 3 priorities of the stand-up</b>${[log.p1, log.p2, log.p3].filter(Boolean).map((p, i) => `<span>${i + 1}. ${esc(p)}</span>`).join("") || `<span class="muted">none logged for the day</span>`}${log.absent ? `<span class="muted">Absent today: ${esc(log.absent)}</span>` : ""}</div>`);
-  add("monthly", `This month's tasks · ${fmtMonth(st.month)}`, `open items due between ${fmtDate(E.monthStart(st.month))} and ${fmtDate(E.monthEnd(st.month))}, by due date`, monthly, "Days to due", (t) => (t.late ? `${t.late} d overdue` : t.toDue != null ? `${t.toDue} d` : ""));
+  add("monthly", `This month · ${fmtMonth(st.month)}`, `open quality records due between ${fmtDate(E.monthStart(st.month))} and ${fmtDate(E.monthEnd(st.month))}, by register and due date`, monthly, "Days to due", (t) => (t.late ? `${t.late} d overdue` : t.toDue != null ? `${t.toDue} d` : ""));
   return sections;
 }
 
@@ -501,7 +505,7 @@ export async function openA3Center() {
         <div class="a3c-ic">⎙</div><h3>Full dashboard page</h3>
         <p class="muted">Every part of the dashboard on its own A3 sheet, scaled to fit — nothing cut: ① the global board (Quality Pulse, KPIs) ② the Q-calendar, priorities, escalations and process registers ③ batches, new records today and this month, the monthly summary.</p>
         <label class="fctl"><span>Layout</span><select data-dmode><option value="auto" selected>One part per A3 page — best orientation for each (3 pages)</option><option value="portrait">One part per A3 page — all portrait</option><option value="landscape">One part per A3 page — all landscape</option><option value="fit">The whole dashboard on one A3 sheet</option></select></label>
-        <label class="a3c-tg"><input type="checkbox" data-dtables checked> Add detailed tables — high-priority tasks, today's tasks, this month's tasks</label>
+        <label class="a3c-tg"><input type="checkbox" data-dtables checked> Add detailed tables — top priority, today, this month (deviations, CAPA, change controls, inspections, batches, documents, APQR, training, escalations)</label>
         <label class="fctl"><span>Resolution</span><select data-ddpi><option value="300" selected>300 dpi — print</option><option value="400">400 dpi — fine print</option><option value="200">200 dpi — screen & e-mail</option></select></label>
         <div class="row"><button class="btn primary" data-dpdf>⤓ A3 PDF</button><button class="btn" data-dzip>⤓ PNG pages (ZIP)</button></div>
       </section>

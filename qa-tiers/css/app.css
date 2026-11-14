@@ -1355,3 +1355,5 @@ table.a3t td.a3t-what { white-space: nowrap; overflow: hidden; text-overflow: el
 .a3t-chip { padding: 2px 9px; border-radius: 999px; background: var(--surface-2); border: 1px solid var(--line); font-size: 12px; }
 .a3t-prio { display: grid; gap: 3px; margin: 0 0 10px; padding: 10px 12px; border-radius: 10px; background: var(--accent-soft); font-size: 13px; }
 .a3c-tg { display: flex; gap: 8px; align-items: flex-start; font-size: 13px; }
+.a3t tr.a3t-grp td { background: var(--surface-3); font: 700 13px var(--font-display); letter-spacing: .03em; padding: 6px 10px; height: 30px; }
+.a3t-why.calm { color: var(--ink-2); font-weight: 500; }
