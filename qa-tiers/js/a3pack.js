@@ -12,7 +12,8 @@ import { T2_REGISTERS, T2_ORDER, AUDIT_GROUP } from "./schema.js";
 import { fxSpec } from "./registers.js";
 import { renderBoard, newCounts } from "./views-t2.js";
 import { monthlyReport, missingTraining } from "./training.js";
-import { esc, fmtDate, fmtLong, fmtMonth, fmtKpi, pct, modal, toast } from "./ui.js";
+import { esc, fmtDate, fmtLong, fmtMonth, fmtKpi, pct, pill, modal, toast } from "./ui.js";
+import { applyFilters, pageFilters } from "./filters.js";
 import { saveFile, loadScript, loadZip, slug } from "./export.js";
 import { JSPDF_URL } from "./poster.js";
 
@@ -94,6 +95,69 @@ async function boardHost(width) {
   return { host, main };
 }
 
+/* ── detailed task tables: high priority, today, this month ── */
+const TASK_OWNER = { insp: "inspector", rel: "officer", tasks: "member", trn: "trainer" };
+/** Every open item of the board (QA registers, not the audit tracking group) with its owner, dates and why it matters. */
+export function boardTasks(s, comp) {
+  const st = s.setup, today = st.statusDate, mS = E.monthStart(st.month), mE = E.monthEnd(st.month);
+  const regs = T2_ORDER.filter((r) => !AUDIT_GROUP.includes(r) && !["load", "abs", "sop"].includes(r) && s[r] && comp[r]);
+  const out = [];
+  for (const reg of regs) {
+    const sc = T2_REGISTERS[reg], dk = sc.dateKey || (sc.fields.some((f) => f.key === "opened") ? "opened" : null);
+    s[reg].forEach((r, i) => {
+      const c = comp[reg][i] || {};
+      if (reg === "rel" && E.lotTracking(r)) return;
+      const id = r[sc.idKey || "id"];
+      if (id == null || id === "") return;
+      const due = reg === "rel" ? c.target || "" : reg === "trn" ? r.date || "" : r.due || "";
+      const raised = dk ? r[dk] || "" : "";
+      const open = c.open !== false && !(reg === "trn" && E.trnDone(r)) && !/^(closed|completed|done|released|rejected|cancel)/i.test(String(r.status || ""));
+      const late = open && due && due < today ? E.diffDays(today, due) : 0;
+      const sev = reg === "dev" && /critical|major/i.test(r.cls || "") ? r.cls : reg === "cc" && /critical/i.test(r.cat || "") ? r.cat : reg === "insp" && /high|critical/i.test(r.sev || "") ? r.sev : "";
+      out.push({ reg, short: sc.short, no: sc.no, id: String(id), what: String(r.desc || r.title || r.topic || r.product || r.activity || "").replace(/\s+/g, " "), owner: r[TASK_OWNER[reg] || "owner"] || "",
+        raised, due, status: c.live || r.status || "", open, late, sev, toDue: open && due && due >= today ? E.diffDays(due, today) : null,
+        today: open && (due === today) || raised === today, month: open && due && due >= mS && due <= mE, esc: open && ["esc", "t1e"].includes(reg) });
+    });
+  }
+  return out;
+}
+const TASKS_PER_PAGE = 32;
+/** The three tables as page sections, appended to the off-screen dashboard (long tables continue on further pages). */
+function taskSections(main) {
+  const s = applyFilters("t2", store.t2, pageFilters("board")), st = s.setup, today = st.statusDate;
+  const comp = E.t2Computed(s);
+  const all = boardTasks(s, comp);
+  const why = (t) => [t.late ? `${t.late} d overdue` : "", t.sev ? `${t.sev}` : "", t.esc ? "escalation" : "", t.toDue != null && t.toDue <= 3 ? (t.toDue === 0 ? "due today" : `due in ${t.toDue} d`) : ""].filter(Boolean).join(" · ");
+  const high = all.filter((t) => t.open && (t.late || t.sev || t.esc || (t.toDue != null && t.toDue <= 3)))
+    .sort((a, b) => b.late - a.late || (a.toDue ?? 99) - (b.toDue ?? 99) || a.reg.localeCompare(b.reg));
+  const daily = all.filter((t) => t.today).sort((a, b) => (b.due === today) - (a.due === today) || a.reg.localeCompare(b.reg));
+  const monthly = all.filter((t) => t.month).sort((a, b) => a.due.localeCompare(b.due) || a.reg.localeCompare(b.reg));
+  const log = s.daily[today] || {};
+  const row = (t, extra) => `<tr class="${t.late ? "late" : ""}"><td class="mono"><b>${esc(t.id)}</b></td><td><span class="a3t-reg">${esc(t.no)}</span> ${esc(t.short)}</td><td class="a3t-what" title="${esc(t.what)}">${esc(t.what.slice(0, 110))}${t.what.length > 110 ? "…" : ""}</td><td>${esc(t.owner)}</td><td>${fmtDate(t.raised)}</td><td>${fmtDate(t.due)}</td><td>${pill(t.status)}</td><td class="a3t-why">${esc(extra(t))}</td></tr>`;
+  const table = (list, extraHead, extra) => `<table class="data a3t"><thead><tr><th>No.</th><th>Register</th><th>What</th><th>Owner</th><th>Raised</th><th>Due</th><th>Status</th><th>${extraHead}</th></tr></thead><tbody>${list.map((t) => row(t, extra)).join("")}</tbody></table>`;
+  const by = (list) => { const m = {}; for (const t of list) m[t.short] = (m[t.short] || 0) + 1; return Object.entries(m).sort((a, b) => b[1] - a[1]).map(([k, v]) => `<span class="a3t-chip">${esc(k)} <b>${v}</b></span>`).join(""); };
+  const sections = [];
+  const add = (key, title, sub, list, extraHead, extra, intro = "") => {
+    const pages = Math.max(1, Math.ceil(list.length / TASKS_PER_PAGE));
+    for (let p = 0; p < pages; p++) {
+      const part = list.slice(p * TASKS_PER_PAGE, (p + 1) * TASKS_PER_PAGE);
+      const sec = document.createElement("section");
+      sec.className = "card card-pad a3t-card";
+      sec.dataset.a3part = `${title}${pages > 1 ? ` (${p + 1}/${pages})` : ""}`;
+      sec.innerHTML = `<div class="card-head"><h2>${esc(title)} <span class="sub">${esc(sub)}${pages > 1 ? ` · page ${p + 1} of ${pages}` : ""}</span></h2><span class="a3t-total">${list.length}</span></div>
+        ${p === 0 ? `${intro}<div class="a3t-chips">${by(list)}</div>` : ""}
+        ${list.length ? table(part, extraHead, extra) : `<div class="empty">Nothing in this table.</div>`}`;
+      main.append(sec);
+      sections.push(sec);
+    }
+  };
+  add("high", "High-priority tasks", `open items overdue, due within 3 days, critical / major, or escalated — as of ${fmtDate(today)}`, high, "Why it is high priority", why);
+  add("daily", `Today's tasks · ${fmtLong(today)}`, "open items due today and records raised today", daily, "Today", (t) => [t.due === today ? "due today" : "", t.raised === today ? "raised today" : "", t.late ? `${t.late} d overdue` : ""].filter(Boolean).join(" · "),
+    `<div class="a3t-prio"><b>Top 3 priorities of the stand-up</b>${[log.p1, log.p2, log.p3].filter(Boolean).map((p, i) => `<span>${i + 1}. ${esc(p)}</span>`).join("") || `<span class="muted">none logged for the day</span>`}${log.absent ? `<span class="muted">Absent today: ${esc(log.absent)}</span>` : ""}</div>`);
+  add("monthly", `This month's tasks · ${fmtMonth(st.month)}`, `open items due between ${fmtDate(E.monthStart(st.month))} and ${fmtDate(E.monthEnd(st.month))}, by due date`, monthly, "Days to due", (t) => (t.late ? `${t.late} d overdue` : t.toDue != null ? `${t.toDue} d` : ""));
+  return sections;
+}
+
 /** The dashboard pages: each part of the board on its own A3 sheet. */
 const GROUPS = [
   ["Global board — Quality Pulse and KPIs", (el) => el.matches(".hero, .split-pulse")],
@@ -109,7 +173,7 @@ function groupsOf(main) {
 }
 
 /** The dashboard as A3 page canvases. mode: "auto" (best orientation per page) | "portrait" | "landscape" | "fit" (all on one sheet). */
-export async function dashboardPages({ mode = "auto", dpi = 300, onStep = () => {} } = {}) {
+export async function dashboardPages({ mode = "auto", dpi = 300, tables = true, onStep = () => {} } = {}) {
   const W = 1280;
   onStep("Drawing the dashboard…");
   const { host, main } = await boardHost(W);
@@ -119,13 +183,15 @@ export async function dashboardPages({ mode = "auto", dpi = 300, onStep = () => 
     const bodyCs = getComputedStyle(document.body);
     const px = (mm) => Math.round((mm / 25.4) * dpi);
     const st = store.t2.setup;
+    const boardKids = [...main.children];
+    const extra = tables ? taskSections(main) : [];
     const kids = [...main.children];
-    const parts = mode === "fit" ? [{ title: "The whole dashboard", els: kids }] : groupsOf(main);
+    const parts = [...(mode === "fit" ? [{ title: "The whole dashboard", els: boardKids }] : groupsOf({ children: boardKids })), ...extra.map((el) => ({ title: el.dataset.a3part, els: [el] }))];
     // picture each part on its own: the other parts are hidden while it is measured and serialised
     const shots = parts.map((part) => {
       kids.forEach((el) => { el.style.display = part.els.includes(el) ? "" : "none"; });
       const first = part.els[0]; const mt = first.style.marginTop; first.style.marginTop = "0";
-      const H = Math.ceil(main.getBoundingClientRect().height) + 12;
+      const H = Math.ceil(main.getBoundingClientRect().height) + 40; // a margin so nothing can be cut at the bottom
       const html = new XMLSerializer().serializeToString(host.querySelector(".shell"));
       first.style.marginTop = mt;
       return { ...part, H, html };
@@ -178,7 +244,7 @@ async function dashboardPDF(res) {
   const ori = (pg) => (pg.w > pg.h ? "landscape" : "portrait");
   const doc = new lib.jsPDF({ orientation: ori(res.pages[0]), unit: "mm", format: "a3", compress: true });
   doc.setProperties({ title: `QA Tier 2 dashboard — ${fmtLong(st.statusDate)}`, subject: "Tier 2 dashboard page, A3", author: st.owner || "", creator: "QA Tier Boards" });
-  res.canvases.forEach((c, i) => { const pg = res.pages[i]; if (i) doc.addPage("a3", ori(pg)); doc.addImage(c.toDataURL("image/jpeg", 0.94), "JPEG", 0, 0, pg.w, pg.h, undefined, "FAST"); });
+  res.canvases.forEach((c, i) => { const pg = res.pages[i]; if (i) doc.addPage("a3", ori(pg)); doc.addImage(c.toDataURL("image/jpeg", 0.9), "JPEG", 0, 0, pg.w, pg.h, undefined, "FAST"); });
   return doc.output("blob");
 }
 async function dashboardZip(res) {
@@ -435,6 +501,7 @@ export async function openA3Center() {
         <div class="a3c-ic">⎙</div><h3>Full dashboard page</h3>
         <p class="muted">Every part of the dashboard on its own A3 sheet, scaled to fit — nothing cut: ① the global board (Quality Pulse, KPIs) ② the Q-calendar, priorities, escalations and process registers ③ batches, new records today and this month, the monthly summary.</p>
         <label class="fctl"><span>Layout</span><select data-dmode><option value="auto" selected>One part per A3 page — best orientation for each (3 pages)</option><option value="portrait">One part per A3 page — all portrait</option><option value="landscape">One part per A3 page — all landscape</option><option value="fit">The whole dashboard on one A3 sheet</option></select></label>
+        <label class="a3c-tg"><input type="checkbox" data-dtables checked> Add detailed tables — high-priority tasks, today's tasks, this month's tasks</label>
         <label class="fctl"><span>Resolution</span><select data-ddpi><option value="300" selected>300 dpi — print</option><option value="400">400 dpi — fine print</option><option value="200">200 dpi — screen & e-mail</option></select></label>
         <div class="row"><button class="btn primary" data-dpdf>⤓ A3 PDF</button><button class="btn" data-dzip>⤓ PNG pages (ZIP)</button></div>
       </section>
@@ -458,7 +525,7 @@ export async function openA3Center() {
   el.querySelector("[data-poster]").onclick = () => { close(); import("./poster.js").then((m) => m.openA3Export()); };
   const dash = async (kind) => {
     const mode = el.querySelector("[data-dmode]").value, dpi = +el.querySelector("[data-ddpi]").value;
-    const res = await dashboardPages({ mode, dpi, onStep: status });
+    const res = await dashboardPages({ mode, dpi, tables: el.querySelector("[data-dtables]").checked, onStep: status });
     status(`Saving ${res.canvases.length} page${res.canvases.length > 1 ? "s" : ""}…`);
     if (kind === "pdf") await saveFile(`${base("Dashboard_A3")}.pdf`, await dashboardPDF(res));
     else await saveFile(`${base("Dashboard_A3")}_PNG.zip`, await dashboardZip(res));

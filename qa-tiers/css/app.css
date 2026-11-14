@@ -1340,3 +1340,18 @@ a.cc-chip:hover { border-color: var(--accent); }
 .own-card > .btn { justify-self: start; }
 label.drop { display: flex; align-items: center; gap: 10px; padding: 14px; border: 2px dashed var(--line-strong); border-radius: 12px; background: var(--surface-2); cursor: pointer; font-weight: 600; }
 label.drop:hover { border-color: var(--accent); }
+
+/* ── A3 dashboard: detailed task tables ── */
+.a3t-card .card-head { align-items: center; }
+.a3t-total { font: 800 30px var(--font-display); color: var(--ink); }
+table.a3t { width: 100%; font-size: 13px; }
+table.a3t th { white-space: nowrap; }
+table.a3t td { vertical-align: middle; padding: 6px 8px; white-space: nowrap; height: 32px; }
+table.a3t tr.late td:first-child { box-shadow: inset 3px 0 0 var(--r); }
+table.a3t td.a3t-what { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 470px; width: 470px; }
+.a3t-why { color: var(--r-ink); font-weight: 600; white-space: nowrap; }
+.a3t-reg { font: 600 11px var(--font-mono); color: var(--accent); }
+.a3t-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 10px; }
+.a3t-chip { padding: 2px 9px; border-radius: 999px; background: var(--surface-2); border: 1px solid var(--line); font-size: 12px; }
+.a3t-prio { display: grid; gap: 3px; margin: 0 0 10px; padding: 10px 12px; border-radius: 10px; background: var(--accent-soft); font-size: 13px; }
+.a3c-tg { display: flex; gap: 8px; align-items: flex-start; font-size: 13px; }
