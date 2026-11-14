@@ -6,7 +6,7 @@
 const norm = (v) => String(v ?? "").replace(/\s+/g, " ").trim();
 const fold = (v) => norm(v).normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
 
-/** "ayman.salem@x.com (Ayman Salem-QA Senior Officer)" → "Ayman Salem"; "AMICHI AMINE" → "Amichi Amine". */
+/** "first.last@x.com (First Last-QA Officer)" → "First Last"; "LAST FIRST" → "Last First". */
 export function personName(v) {
   let s = norm(v);
   const at = s.indexOf("@"), open = s.indexOf("(");
@@ -27,7 +27,7 @@ const dist1 = (a, b) => {
   }
   return e + (a.length - i) + (b.length - j) <= 1;
 };
-/** The board's own spelling of a name: same words in any order, one letter of difference allowed (Ayman / Aymen). */
+/** The board's own spelling of a name: same words in any order, one letter of difference allowed (e.g. Yasin / Yassin). */
 export function matchPerson(name, team = [], others = []) {
   const t = fold(name).split(/[\s-]+/).filter(Boolean).sort();
   if (!t.length) return "";
