@@ -406,6 +406,13 @@ export function absenceOf(state, r, days = personDays(state, r)) {
   return { logged: [...byDay.values()].reduce((a, x) => a + x.v, 0), byType };
 }
 
+/** The people counted in the team's utilisation and load (Setup › Lists): empty = everyone in register 07. */
+const nameKey = (v) => String(v || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().split(/[\s-]+/).filter(Boolean).sort().join(" ");
+export function loadCounted(state, member) {
+  const team = (state.lists?.LoadTeam || []).filter(Boolean);
+  return !team.length || team.some((n) => nameKey(n) === nameKey(member));
+}
+
 export function t2Load(r, state) {
   const s = state.setup;
   const wdMonth = workingDays(s.month, s);
@@ -423,7 +430,7 @@ export function t2Load(r, state) {
   const delayed = items.filter((x) => x.overdue).length;
   const util = available > 0 ? workload / available : "";
   const status = util === "" ? "" : util > s.overLoad ? "Overloaded" : util >= s.highLoad ? "High load" : "Normal";
-  return { workDays: wd, closures, logged, byType, manual: num(r.absence), absence, fte, available, items, workload, delayed, util, status, count: items.length, check: has(r.member) ? "OK" : "Member missing" };
+  return { workDays: wd, closures, logged, byType, manual: num(r.absence), absence, fte, available, items, workload, delayed, util, status, count: items.length, counted: loadCounted(state, r.member), check: has(r.member) ? "OK" : "Member missing" };
 }
 
 /** All computed columns for every Tier 2 register. */
@@ -524,7 +531,8 @@ export function t2Kpis(state, comp = t2Computed(state)) {
   const onTimeRate = (reg) => ratio(count(comp[reg], (c) => c.onTime === "Yes"),
     count(state[reg], (r) => r.status === "Closed") + overdue(reg));
   const released = count(state.rel, (r) => r.status === "Released" && !lotTracking(r));
-  const loadAvail = sum(comp.load, (c) => c.available);
+  const teamLoad = comp.load.filter((c) => c.counted); // only the people counted in the team's load
+  const loadAvail = sum(teamLoad, (c) => c.available);
   // the KPI follows the annual department plan: unplanned and external training are tracked, not targeted
   const trnRows = state.trn.filter((r) => trnCat(r) === "Planned" && trnQA(r) && has(r.date) && r.date <= s.statusDate && r.status !== "Cancelled");
   const actuals = [
@@ -534,7 +542,7 @@ export function t2Kpis(state, comp = t2Computed(state)) {
     onTimeRate("insp"),
     ratio(count(comp.rel, (c) => c.late === "No"), released),
     overdue("doc") + count(comp.sop || [], (c) => c.live === "Overdue"), // actions past due + SOPs past their periodic review
-    ratio(sum(comp.load, (c) => c.workload), loadAvail),
+    ratio(sum(teamLoad, (c) => c.workload), loadAvail),
     overdue("apqr"),
     ratio(sum(trnRows, (r) => trnFigures(r, state).trained), sum(trnRows, (r) => trnFigures(r, state).planned)),
   ];
@@ -615,7 +623,7 @@ export function t2Summary(state, comp = t2Computed(state)) {
       return { total: q.length, new: count(q, (r) => inMonth(r.mfg)), lines: [["Waiting / review", stq("Waiting", "Under Review", "On Hold")], ["Released", stq("Released")], ["Released late", count(comp.rel, (c) => c.late === "Yes")], ["Overdue", od("rel")]] };
     })(),
     doc: { total: (state.sop || []).length, newLabel: "actions new", new: count(state.doc, (r) => inMonth(r.opened)), lines: [["SOPs in force", count(comp.sop || [], (c) => c.inForce)], ["Review due ≤ 6 months", count(comp.sop || [], (c) => c.live === "Review due")], ["Review overdue", count(comp.sop || [], (c) => c.live === "Overdue")], ["Actions open", st("doc", "Open", "In Course", "In Approval")]] },
-    load: { total: state.load.length, new: workingDays(s.month, s), newLabel: "working days", lines: [["Absence (days)", sum(comp.load, (c) => c.absence)], ["High load (n)", count(comp.load, (c) => c.status === "High load" || c.status === "Overloaded")], ["Delayed tasks", sum(comp.load, (c) => c.delayed)], ["Utilisation", ratio(sum(comp.load, (c) => c.workload), sum(comp.load, (c) => c.available))]] },
+    load: (() => { const teamC = comp.load.filter((c) => c.counted); return { total: count(teamC, (c) => c.counted), new: workingDays(s.month, s), newLabel: "working days", lines: [["Absence (days)", sum(teamC, (c) => c.absence)], ["High load (n)", count(teamC, (c) => c.status === "High load" || c.status === "Overloaded")], ["Delayed tasks", sum(teamC, (c) => c.delayed)], ["Utilisation", ratio(sum(teamC, (c) => c.workload), sum(teamC, (c) => c.available))]] }; })(),
     apqr: { total: state.apqr.length, new: count(state.apqr, (r) => inMonth(r.opened)), lines: [["Not started", st("apqr", "Not Started")], ["In progress", st("apqr", "In Progress", "In Review")], ["Closed", st("apqr", "Closed")], ["Completion", avg(comp.apqr.map((c) => c.effPct))]] },
     trn: (() => {
       const due = state.trn.filter((r) => trnCat(r) === "Planned" && trnQA(r) && has(r.date) && r.date <= s.statusDate && r.status !== "Cancelled");

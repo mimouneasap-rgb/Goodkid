@@ -172,7 +172,7 @@ export function facts(per, F = {}) {
   const t1open = E.t1OpenActions(ctx).open;
   const esc3 = s2.esc.map((r, i) => ({ reg: "esc", r, c: comp.esc[i] })).filter((x) => x.c.open);
   const flags = Object.entries(comp).reduce((a, [reg, c]) => a + (T2_REGISTERS[reg] && !T2_REGISTERS[reg].trackOnly ? E.flagged(c) : 0), 0);
-  const util = (() => { const w = comp.load.reduce((a, c) => a + c.workload, 0), av = comp.load.reduce((a, c) => a + c.available, 0); return av ? w / av : ""; })();
+  const util = (() => { const team = comp.load.filter((c) => c.counted), w = team.reduce((a, c) => a + c.workload, 0), av = team.reduce((a, c) => a + c.available, 0); return av ? w / av : ""; })();
   return { per, F, s2, s1, comp, kpis, other, pulse, cal, ctx, k1, raised, closed, raisedPrev, closedPrev, open, overdueN, overdue, dueToday: dueWithin(0, 1), dueNext: dueWithin(0, 7), raisedList, t1days, t1esc, esc3, flags, flags1, t1open, util, dueOf, officer };
 }
 
@@ -498,7 +498,7 @@ export async function buildReport(opts, onStep = () => {}) {
         ...(reds.length ? [k.P([new k.TextRun({ text: "Off target: ", bold: true }), new k.TextRun({ text: reds.map((x) => `${x.name} ${fmtKpi(x.actual, x.unit)} (target ${x.targetText})`).join("; ") + "." })])] : []),
         k.H("Overdue as of the report date", 2),
         ...REGS.filter((r) => f.s2[r]?.length).map((r) => k.B(`${f.overdueN[r]} ${label(r)} overdue (of ${f.open[r]} open)`)),
-        k.B(`QA team utilisation ${f.util === "" ? "—" : pct(f.util)} — ${f.comp.load.reduce((a, c) => a + c.delayed, 0)} delayed tasks.`),
+        k.B(`QA team utilisation ${f.util === "" ? "—" : pct(f.util)} — ${f.comp.load.filter((c) => c.counted).reduce((a, c) => a + c.delayed, 0)} delayed tasks.`),
         k.B(`${f.flags} record${f.flags === 1 ? "" : "s"} flagged by the data check.`),
         ...(st.remarks ? [k.H("Monthly remarks", 2), k.P(st.remarks)] : []));
     }
@@ -630,7 +630,7 @@ export async function buildReport(opts, onStep = () => {}) {
 function loadTable(k, f) {
   if (!f.s2.load.length) return k.P(new k.TextRun({ text: "No team member in register 07 · QA load yet.", italics: true, color: C.muted }));
   return k.T(["Team member", "Position", "Available (d)", "Workload (pd)", "Utilisation", "Delayed", "Status"],
-    f.s2.load.map((r, i) => { const c = f.comp.load[i]; return [{ v: r.member, bold: true }, r.role, fmtNum(c.available), fmtNum(c.workload), pct(c.util), c.delayed, { v: c.status || "—", rag: c.status === "Overloaded" ? "R" : c.status === "High load" ? "A" : c.status ? "G" : "N" }]; }), { right: [2, 3, 4, 5] });
+    f.s2.load.map((r, i) => ({ r, i })).filter(({ i }) => f.comp.load[i].counted).map(({ r, i }) => { const c = f.comp.load[i]; return [{ v: r.member, bold: true }, r.role, fmtNum(c.available), fmtNum(c.workload), pct(c.util), c.delayed, { v: c.status || "—", rag: c.status === "Overloaded" ? "R" : c.status === "High load" ? "A" : c.status ? "G" : "N" }]; }), { right: [2, 3, 4, 5] });
 }
 
 /* ── plain-text summary (e-mail, Teams, WhatsApp) ────────── */

@@ -62,6 +62,8 @@ function seedLists(tier, s) {
     s.lists.WipStatus ??= ["Conform", "Non conform", "Under CAPA — waiting decision", "Under rejection"];
     s.lists.WipSteps ??= ["Dispensing", "Granulation", "Blending", "Compression", "Coating", "Encapsulation", "Packaging"];
     s.lists.WipResp ??= ["Production", "R&D", "QA", "QC"];
+    // the people counted in the team's utilisation and load: the site's choice when it has one, else everyone (empty)
+    s.lists.LoadTeam ??= s.dataset === REAL_INFO.dataset ? clone(REAL_T2?.lists?.LoadTeam || []) : [];
     s.abs ??= [];
     s.sop ??= [];
     s.lists.SopState ??= ["Effective", "Released", "Draft", "Rejected", "Obsolete"];

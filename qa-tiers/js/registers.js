@@ -563,7 +563,8 @@ function loadPanel(comp, setup) {
     const c = comp[i], by = {};
     for (const it of c.items) by[nameOf(it.source)] = (by[nameOf(it.source)] || 0) + it.days;
     return { i, r, c, by };
-  }).filter((x) => x.r.member).sort((a, b) => (+b.c.util || 0) - (+a.c.util || 0) || a.r.member.localeCompare(b.r.member));
+  }).filter((x) => x.r.member && x.c.counted).sort((a, b) => (+b.c.util || 0) - (+a.c.util || 0) || a.r.member.localeCompare(b.r.member));
+  const notCounted = store.t2.load.filter((r, i) => r.member && !comp[i].counted).map((r) => r.member);
   const used = [...new Set(rows.flatMap((x) => Object.keys(x.by).filter((k) => x.by[k] > 0)))].sort((a, b) => (a === "Other") - (b === "Other"));
   const maxUtil = Math.max(1.2, ...rows.map((x) => +x.c.util || 0));
   const scale = (v) => `${Math.min(100, (v / maxUtil) * 100)}%`;
@@ -582,6 +583,7 @@ function loadPanel(comp, setup) {
         <span class="pill ${k}">${c.util === "" ? "—" : pct(u)}</span>
         <span class="ld-del">${c.delayed ? `<b>${c.delayed}</b> delayed` : ""}</span></button>`;
     }).join("")}</div>
+    ${notCounted.length ? `<p class="muted" style="font-size:12.5px;margin:8px 0 0">Counted in the team's utilisation and load: the ${rows.length} people above. Not counted: ${esc(notCounted.join(", "))} — change it in Setup › Lists › “QA load — people counted”.</p>` : ""}
     <div class="chart-legend">${used.map((n) => `<span><i class="bg-${slotOf(n)}"></i>${esc(n === "Other" ? "Other (inspections, documentation, training, escalations…)" : n)}</span>`).join("")}<span><i class="ld-key hi"></i>${pct(setup.highLoad)} high load</span><span><i class="ld-key ov"></i>${pct(setup.overLoad)} overloaded</span></div>
   </div>`;
 }

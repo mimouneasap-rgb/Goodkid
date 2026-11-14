@@ -627,7 +627,7 @@ export const LIST_LABELS = {
   CCType: "Change type", CCCat: "Change category", CCStatus: "Change status", YesNoTBD: "Yes / No / TBD", YesNo: "Yes / No",
   InspCat: "Inspection category", Severity: "Severity", InspStatus: "Inspection status", BRStatus: "Batch status",
   DocType: "Document type", DocAction: "Document action", DocStatus: "Document status", APQRStatus: "APQR status",
-  TrType: "Training type", TrCat: "Training category", LotType: "Lot type", SopState: "SOP DMS status", AbsType: "Absence type", AbsStatus: "Absence status", AbsPortion: "Absence portion", WipStatus: "WIP status", WipSteps: "WIP next steps", WipResp: "WIP responsible", TrMode: "Training delivery", TrPlanRoles: "Training plan — mandatory job titles", TrAudience: "Trained department", TrStatus: "Training status", TrEff: "Training effectiveness", EscSource: "Escalation source",
+  TrType: "Training type", TrCat: "Training category", LotType: "Lot type", LoadTeam: "QA load — people counted in team utilisation (empty = everyone)", SopState: "SOP DMS status", AbsType: "Absence type", AbsStatus: "Absence status", AbsPortion: "Absence portion", WipStatus: "WIP status", WipSteps: "WIP next steps", WipResp: "WIP responsible", TrMode: "Training delivery", TrPlanRoles: "Training plan — mandatory job titles", TrAudience: "Trained department", TrStatus: "Training status", TrEff: "Training effectiveness", EscSource: "Escalation source",
   EscStatus: "Escalation status", DayStatus: "Day status", ManualKPI: "Manual KPI status",
   People: "People & functions", Departments: "Departments", Products: "Products", Tier3: "Tier 3 escalation contacts",
   FnTypes: "Finding types", ErrCats: "Error categories", Shifts: "Shifts", Att: "Attendance", RecType: "Record type",

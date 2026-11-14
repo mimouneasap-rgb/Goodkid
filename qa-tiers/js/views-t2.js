@@ -399,7 +399,7 @@ function standup(onDone) {
         <h3 style="margin:14px 0 6px;font-size:14px">Documents overdue or due within 7 days</h3>${list(open("doc").filter((x) => within(x.r.due, 7)), [(x) => ref("doc", x.r), (x) => esc(x.r.title), (x) => pill(x.c.live)])}`;
       default: {
         const log = s.daily[st.statusDate] || {};
-        const load = s.load.map((r, i) => ({ r, c: comp().load[i] })).filter((x) => x.c.status !== "Normal");
+        const load = s.load.map((r, i) => ({ r, c: comp().load[i] })).filter((x) => x.c.counted && x.c.status !== "Normal");
         return `<form class="form-grid" data-prio>${["p1", "p2", "p3"].map((k, i) => `<label class="field full"><span>Priority ${i + 1}</span><input name="${k}" value="${esc(log[k] || "")}" placeholder="Verb + object + owner"></label>`).join("")}
           <label class="field"><span>Escalated to Tier 3</span><select name="escalated"><option></option>${["Yes", "No"].map((v) => `<option ${log.escalated === v ? "selected" : ""}>${v}</option>`).join("")}</select></label>
           <div class="field" style="align-self:end"><button type="submit" class="btn primary">Save to today's Daily Log</button></div></form>
@@ -575,10 +575,11 @@ export const CHARTS = [
     } },
   { id: "util", title: "QA team utilisation", q: "Who is above the load threshold?", dims: ["owner"],
     build({ s, comp }) {
-      const load = s.load.map((r, i) => ({ label: r.member, value: comp.load[i].util || 0, cls: comp.load[i].status === "Overloaded" ? "f-R" : comp.load[i].status === "High load" ? "f-A" : "f-G", tip: `**${r.member}**\n${fmtNum(comp.load[i].workload)} planned (calculated) ÷ ${comp.load[i].available} available = ${pct(comp.load[i].util)}\n${comp.load[i].status}` }));
+      const idx = s.load.map((r, i) => i).filter((i) => comp.load[i].counted); // only the people counted in the team's load
+      const load = idx.map((i) => s.load[i]).map((r, j) => ({ i: idx[j], r })).map(({ i, r }) => ({ label: r.member, value: comp.load[i].util || 0, cls: comp.load[i].status === "Overloaded" ? "f-R" : comp.load[i].status === "High load" ? "f-A" : "f-G", tip: `**${r.member}**\n${fmtNum(comp.load[i].workload)} planned (calculated) ÷ ${comp.load[i].available} available = ${pct(comp.load[i].util)}\n${comp.load[i].status}` }));
       return {
         body: s.load.length ? hbars(load, { fmt: (v) => pct(v), max: Math.max(1.1, ...load.map((l) => l.value)), marks: [{ v: s.setup.highLoad, cls: "thr-a", label: pct(s.setup.highLoad) }, { v: s.setup.overLoad, cls: "thr-r", label: pct(s.setup.overLoad) }] }) : `<div class="empty">Add the team in register 07 · QA load</div>`,
-        data: { head: ["Team member", "Role", "Workload (pd)", "Available (d)", "Utilisation", "Delayed", "Status"], rows: s.load.map((r, i) => [r.member, r.role || "", fmtNum(comp.load[i].workload), comp.load[i].available, pct(comp.load[i].util), comp.load[i].delayed, comp.load[i].status]) },
+        data: { head: ["Team member", "Role", "Workload (pd)", "Available (d)", "Utilisation", "Delayed", "Status"], rows: idx.map((i) => [s.load[i].member, s.load[i].role || "", fmtNum(comp.load[i].workload), comp.load[i].available, pct(comp.load[i].util), comp.load[i].delayed, comp.load[i].status]) },
       };
     } },
   { id: "capasrc", title: "CAPA by source", q: "What feeds the CAPA system?", dims: ["owner", "type", "rstatus", "eff", "state"],
