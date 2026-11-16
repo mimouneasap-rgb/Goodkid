@@ -231,8 +231,8 @@ details.changes ul { margin: 8px 0 0; padding-left: 18px; font-size: 13px; max-h
 // <map> — the Scigeniq exports ("allTasks" .xlsx) → change control documents with their actions
 const CC_STAGES = ["Open", "QA Initial Approval", "Under Assessment", "In Review", "Pending Approvals", "Action Implementation", "Closed", "Canceled"];
 const ACT_STAGES = ["Open", "In Progress", "QA Approval", "Completed", "Canceled"];
-const CC_FIELDS = ["title", "stage", "xStatus", "closedOn", "created", "start", "due", "location", "zone", "asset", "owner", "assoc", "createdBy", "cls", "scope", "productCode", "products", "packaging", "category", "subject", "current", "proposed", "justification", "article", "depts", "actionsDone", "tags"];
-const ACT_FIELDS = ["title", "desc", "stage", "xStatus", "closedOn", "created", "start", "due", "owner", "dept", "location", "parentTitle"];
+const CC_FIELDS = ["title", "stage", "closedOn", "created", "start", "due", "location", "zone", "asset", "owner", "assoc", "createdBy", "cls", "scope", "productCode", "products", "packaging", "category", "subject", "current", "proposed", "justification", "article", "depts", "actionsDone", "tags"];
+const ACT_FIELDS = ["title", "desc", "stage", "closedOn", "created", "start", "due", "owner", "dept", "location", "parentTitle"];
 const cl = (v) => {
   if (v == null) return null;
   const s = String(v).replace(/[﻿​]/g, "").replace(/\r/g, "").replace(/[ \t]+/g, " ").trim();
@@ -397,11 +397,22 @@ async function start() {
   if (!db) { S.mode = "local"; localLoad(); S.ready = true; render(); return; }
   const timer = setTimeout(() => { S.stale = true; render(); }, 10000);
   db.collection("ccs").limit(1000).onSnapshot((snap) => {
-    S.ccs = new Map(snap.docs.map((d) => [d.id, d.data()]));
+    // apply only what changed: an import delivers many small snapshots
+    if (!S.ready) S.ccs = new Map(snap.docs.map((d) => [d.id, d.data()]));
+    else for (const ch of snap.docChanges()) { if (ch.type === "removed") S.ccs.delete(ch.doc.id); else S.ccs.set(ch.doc.id, ch.doc.data()); }
     if (!snap.metadata.fromCache) { clearTimeout(timer); S.stale = false; }
-    S.ready = true; render();
+    const first = !S.ready;
+    S.ready = true;
+    if (first) render(); else scheduleRender();
   }, (e) => { clearTimeout(timer); S.ready = true; S.error = e.code; render(); });
   db.doc("meta/imports").onSnapshot((d) => { S.meta = d.exists ? d.data() : null; renderFresh(); }, () => {});
+}
+
+let drawTimer = null;
+/** Redraw soon, once for a burst of changes — and not while an import is writing (its progress bar updates itself). */
+function scheduleRender() {
+  if (S.importing || drawTimer) return;
+  drawTimer = setTimeout(() => { drawTimer = null; render(); }, 150);
 }
 
 /* ── routing ───────────────────────────────────────────── */
@@ -701,10 +712,10 @@ function importView() {
   const hist = S.meta?.log || [];
   return `<section class="panel"><div class="panel-h"><h2>Import from Scigeniq</h2><span class="sub">the allTasks exports “Change Control” and “Change control actions” (.xlsx) — one or several files at once</span></div>
     ${S.canWrite ? `<label class="drop" id="drop"><input type="file" id="files" accept=".xlsx,.xls" multiple hidden><b>Drop the exports here, or choose them</b><span class="muted">Each file is recognised by its content. Nothing changes until you apply the import.</span></label>` : `<div class="note warn">You can view this tracker but not change it — ask its owner for edit access to import.</div>`}
-    ${UI.files.length ? `<div class="files" style="margin-top:12px">${UI.files.map((f) => `<div class="file"><span class="ic ${f.err ? "bad" : f.kind === "act" ? "act" : ""}">${f.err ? "!" : f.kind === "act" ? "ACT" : f.kind === "cc" ? "CC" : "?"}</span><div style="min-width:0"><b>${esc(f.name)}</b><div class="muted" style="font-size:12.5px">${f.err ? esc(f.err) : `${f.cc ? `${f.cc} change controls` : ""}${f.cc && f.act ? " · " : ""}${f.act ? `${f.act} CC actions` : ""}${!f.cc && !f.act ? "no change control or CC action found" : ""}${f.other ? ` · ${f.other} other rows ignored` : ""}${f.generated ? ` · exported ${esc(f.generated)}` : ""}`}</div></div><button class="btn sm ghost" type="button" data-rm="${esc(f.name)}" aria-label="Remove ${esc(f.name)}">✕</button></div>`).join("")}</div>` : ""}
+    ${UI.files.length ? `<div class="files" style="margin-top:12px">${UI.files.map((f) => `<div class="file"><span class="ic ${f.err ? "bad" : f.kind === "act" ? "act" : ""}">${f.err ? "!" : f.kind === "act" ? "ACT" : f.kind === "cc" ? "CC" : "?"}</span><div style="min-width:0"><b>${esc(f.name)}</b><div class="muted" style="font-size:12.5px">${f.err ? esc(f.err) : `${f.cc ? `${f.cc} change controls` : ""}${f.cc && f.act ? " · " : ""}${f.act ? `${f.act} actions (those of change controls are kept)` : ""}${!f.cc && !f.act ? "no change control or CC action found" : ""}${f.other ? ` · ${f.other} other rows ignored` : ""}${f.generated ? ` · exported ${esc(f.generated)}` : ""}`}</div></div><button class="btn sm ghost" type="button" data-rm="${esc(f.name)}" aria-label="Remove ${esc(f.name)}">✕</button></div>`).join("")}</div>` : ""}
     ${p ? `<div style="margin-top:14px;display:grid;gap:12px">
       <div class="plan"><div><b>${p.ccNew}</b><small>new change controls</small></div><div><b>${p.ccUpd}</b><small>change controls updated</small></div><div><b>${p.actNew}</b><small>new actions</small></div><div><b>${p.actUpd}</b><small>actions updated</small></div></div>
-      <div class="muted" style="font-size:13px">${p.ccSame} change controls and ${p.actSame} actions unchanged${p.placeholders ? ` · ${p.placeholders} change controls known only from their actions (added; the Change Control export completes them)` : ""}${p.unmatched ? ` · ${p.unmatched} actions without a parent change control left out` : ""}. Records of the tracker missing from the files are kept. Your notes and actions added in the tracker are kept.</div>
+      <div class="muted" style="font-size:13px">${p.ccSame} change controls and ${p.actSame} actions unchanged${p.placeholders ? ` · ${p.placeholders} change controls known only from their actions (added; the Change Control export completes them)` : ""}${p.unmatched ? ` · ${p.unmatched} actions without a parent change control left out` : ""}${p.ignored ? ` · ${p.ignored} actions of other records (quality events, CAPA…) ignored` : ""}. Records of the tracker missing from the files are kept. Your notes and actions added in the tracker are kept.</div>
       ${p.changes.length ? `<details class="changes"><summary>See the ${p.changes.length} changes</summary><ul>${p.changes.slice(0, 400).map((c) => `<li>${esc(c)}</li>`).join("")}${p.changes.length > 400 ? `<li>… and ${p.changes.length - 400} more</li>` : ""}</ul></details>` : ""}
       <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><button class="btn primary" type="button" id="apply" ${p.writes.length ? "" : "disabled"}>${p.writes.length ? `Apply — write ${p.writes.length} change control${p.writes.length > 1 ? "s" : ""}` : "Already up to date"}</button><div class="progress" style="flex:1;min-width:160px" hidden id="prog"><i style="width:0"></i></div><span class="muted" id="progt" style="font-size:12.5px"></span></div>
     </div>` : ""}
@@ -738,8 +749,31 @@ function wireImport() {
     const bar = $("#prog"), t = $("#progt"); bar.hidden = false;
     let n = 0, failed = 0;
     const work = p.writes.slice();
-    const runOne = async () => { while (work.length) { const [id, doc] = work.shift(); try { await saveDoc(id, { ...doc, ...(p.created.has(id) && !doc.src ? { src: "scigeniq" } : {}), importedAt: new Date().toISOString() }); } catch { failed++; } n++; bar.firstElementChild.style.width = `${(n / p.writes.length) * 100}%`; t.textContent = `${n} / ${p.writes.length}`; } };
-    S.mode === "db" ? await Promise.all([runOne(), runOne(), runOne()]) : await runOne();
+    const stamp = new Date().toISOString(), t0 = Date.now();
+    S.importing = true;
+    const pause = (ms) => new Promise((r) => setTimeout(r, ms));
+    const writeOne = async (id, doc) => {
+      const prev = S.ccs.get(id);
+      const body = { ...doc, ...(p.created.has(id) && !doc.src ? { src: "scigeniq" } : {}), importedAt: stamp, updatedAt: stamp };
+      if (S.mode !== "db") { S.ccs.set(id, body); return; }
+      const ref = db.collection("ccs").doc(id);
+      // only the fields that changed — a change control's actions travel only when one of them changed
+      const keys = prev ? Object.keys(body).filter((k) => JSON.stringify(prev[k]) !== JSON.stringify(body[k])) : null;
+      const removed = prev ? Object.keys(prev).some((k) => !(k in body)) : false;
+      for (let tries = 0; ; tries++) {
+        try {
+          if (!prev || removed) await ref.set(body);
+          else await ref.update(Object.fromEntries(keys.map((k) => [k, body[k]])));
+          return;
+        } catch (e) {
+          if (["resource_exhausted", "unavailable"].includes(e?.code) && tries < 5) { await pause(400 * 2 ** tries + Math.random() * 300); continue; }
+          throw e;
+        }
+      }
+    };
+    const runOne = async () => { while (work.length) { const [id, doc] = work.shift(); try { await writeOne(id, doc); } catch { failed++; } n++; bar.firstElementChild.style.width = `${(n / p.writes.length) * 100}%`; t.textContent = `${n} / ${p.writes.length} · ${Math.round((Date.now() - t0) / 1000)} s`; } };
+    try { await Promise.all(Array.from({ length: S.mode === "db" ? 6 : 1 }, runOne)); } finally { S.importing = false; }
+    if (S.mode !== "db") localSave();
     const gen = UI.files.map((f) => f.generated).filter(Boolean).sort((a, b) => String(sdate(a)).localeCompare(String(sdate(b)))).pop() || null; // the newest export
     const entry = { at: new Date().toISOString(), files: UI.files.filter((f) => f.rows).map((f) => f.name), generated: gen, ccNew: p.ccNew, ccUpd: p.ccUpd, actNew: p.actNew, actUpd: p.actUpd, failed, by: S.uid || null };
     const log = [entry, ...(S.meta?.log || [])].slice(0, 40);
