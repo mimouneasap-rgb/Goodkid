@@ -109,3 +109,46 @@ test("blocked stock repairs date-typed quantities and joins continuation rows", 
   assert.match(flazol.reason, /waiting investigation/);
   assert.ok(flazol.monthsLeft > 12);
 });
+
+test("duplicate tracker rows get distinct row keys", () => {
+  assert.deepEqual(byId("260004").map((b) => b.rowKey), ["260004", "260004@1"]);
+});
+
+test("applyEdits updates, adds and deletes tracker rows without touching the original", () => {
+  const edited = M.applyEdits(workbook, [
+    { kind: "tracker", key: "260003", action: "upsert", values: { product: "Co Tensotel® Comprimé 80/25mg B/30", batch: "260003", cll: "2026-02-01", status: "Released", released: "2026-02-10", remark: "QE-KE-401" } },
+    { kind: "tracker", key: "260004@1", action: "delete" },
+    { kind: "tracker", key: "260099", action: "upsert", isNew: true, values: { product: "Daktazol Gel", batch: "260099", cll: "2026-11-02", status: "Quarantine", released: "", remark: "" } },
+    { kind: "erp", key: "260003", action: "upsert", values: { status: "Released" } },
+    { kind: "erp", key: "260099", action: "upsert", values: { status: "Quarantine" } },
+  ]);
+  const m = M.build(edited, { today: "2026-11-09" });
+  const one = (id) => m.batches.filter((b) => b.id === id);
+  assert.equal(one("260003")[0].status, "Released");
+  assert.equal(one("260003")[0].lead, 9);
+  assert.equal(one("260003")[0].erp, "Released");
+  assert.deepEqual(one("260003")[0].refs, ["QE-KE-401"]);
+  assert.equal(one("260004").length, 1);
+  assert.equal(one("260099")[0].status, "Quarantine");
+  assert.equal(one("260099")[0].erp, "Quarantine");
+  // the new row sits above the Total row, which is still skipped
+  const rows = edited.sheets["CLL vs AX"];
+  assert.equal(rows[rows.length - 1][0], "Total");
+  assert.equal(rows[rows.length - 2][1], 260099);
+  // original workbook unchanged
+  assert.equal(workbook.sheets["CLL vs AX"].length, 8);
+  assert.equal(model.batches.find((b) => b.id === "260003").status, "Quarantine");
+});
+
+test("applyEdits replaces a blocked batch's continued reason and removes blocked rows", () => {
+  const edited = M.applyEdits(workbook, [
+    { kind: "blocked", key: "231580", action: "upsert", values: { product: "Flazol® 500mg", batch: "231580", qty: "40000", expiry: "2027-12-31", reason: "CLL received, waiting QA review" } },
+    { kind: "blocked", key: "240393", action: "delete" },
+    { kind: "blocked", key: "250001", action: "upsert", isNew: true, values: { product: "Zeta® Pommade 2% T/15g", batch: "250001", qty: 1200, expiry: "2027-03-31", reason: "Rejeter RE050-26PF" } },
+  ]);
+  const m = M.build(edited, { today: "2026-11-09" });
+  assert.deepEqual(m.blocked.map((b) => b.batch), ["231580", "250001"]);
+  assert.equal(m.blocked[0].qty, 40000);
+  assert.equal(m.blocked[0].reason, "CLL received, waiting QA review");
+  assert.equal(m.blocked[1].kind, "Rejected");
+});

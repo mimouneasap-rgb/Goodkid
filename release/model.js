@@ -189,28 +189,19 @@
     }
 
     // Main tracker: CLL received vs AX.
-    const main = findSheet(sheets, ["batch", "cll", "status"], /cll/i);
+    const main = trackerLayout(sheets);
     const batches = [];
     if (main) {
       found.tracker = main.name;
-      const hdr = main.rows[main.row].map(norm);
-      const col = (needle, fallback) => {
-        const i = hdr.findIndex((c) => c.includes(needle));
-        return i >= 0 ? i : fallback;
-      };
-      const C = {
-        product: col("product", 0),
-        batch: main.cols[0],
-        cll: main.cols[1],
-        status: main.cols[2],
-        released: col("released date", 4),
-        remark: col("remark", 5),
-      };
+      const C = main.C;
       const seen = new Map();
+      const occ = {};
       main.rows.slice(main.row + 1).forEach((r, i) => {
+        r = r || [];
         const product = text(r[C.product]);
         const id = batchKey(r[C.batch]);
         if (!id || /^total$/i.test(product)) return;
+        const n = (occ[id] = (occ[id] ?? -1) + 1);
         const cllRaw = r[C.cll];
         const relRaw = r[C.released];
         const cll = parseDate(cllRaw);
@@ -221,6 +212,7 @@
         const pk = productKey(product);
         const b = {
           id,
+          rowKey: n ? `${id}@${n}` : id, // stable key for edits; duplicates get @1, @2…
           row: main.row + i + 2, // 1-based Excel row
           product,
           productKey: pk.key,
@@ -264,11 +256,12 @@
 
     // Blocked finished products (Statut PF): product, batch, qty, expiry, reason.
     const blocked = [];
-    const pf = findSheet(sheets, ["product", "batch"], /statut|pf/i);
-    if (pf && /statut|pf/i.test(pf.name)) {
+    const pf = blockedLayout(sheets);
+    if (pf) {
       found.blocked = pf.name;
       let last = null;
-      for (const r of pf.rows.slice(pf.row + 1)) {
+      for (let r of pf.rows.slice(pf.row + 1)) {
+        r = r || [];
         const batch = batchKey(r[1]);
         const reason = text(r[4]).replace(/^-\s*/, "");
         if (!batch) {
@@ -344,6 +337,126 @@
     }
 
     return { name: workbook.name || "Workbook", today, found, warnings, batches, erp, ax, awaitingCll, blocked, posting, requests, physical, stats: stats(batches) };
+  }
+
+  // ---------- sheet layouts (shared by build and applyEdits) ----------
+  function trackerLayout(sheets) {
+    const main = findSheet(sheets, ["batch", "cll", "status"], /cll/i);
+    if (!main) return null;
+    const hdr = main.rows[main.row].map(norm);
+    const col = (needle, fallback) => {
+      const i = hdr.findIndex((c) => c.includes(needle));
+      return i >= 0 ? i : fallback;
+    };
+    main.C = { product: col("product", 0), batch: main.cols[0], cll: main.cols[1], status: main.cols[2], released: col("released date", 4), remark: col("remark", 5) };
+    return main;
+  }
+  function blockedLayout(sheets) {
+    const pf = findSheet(sheets, ["product", "batch"], /statut|pf/i);
+    return pf && /statut|pf/i.test(pf.name) ? pf : null;
+  }
+  function erpLayout(sheets) {
+    for (const [name, rows] of Object.entries(sheets)) {
+      if (!/erp|365|d365/i.test(name)) continue;
+      const h = findHeader(rows, ["batch number", "disposition"], 3);
+      if (h) return { name, rows, ...h };
+    }
+    return null;
+  }
+
+  // Store a batch number as a number when it is one, as the workbook does.
+  const batchCell = (v) => (/^\d+$/.test(text(v)) ? Number(text(v)) : text(v).toUpperCase());
+  const put = (row, i, v) => {
+    while (row.length <= i) row.push(null);
+    row[i] = v === "" || v === undefined ? null : v;
+  };
+
+  // ---------- edits ----------
+  // An edit is { kind: "tracker" | "blocked" | "erp", key, action: "upsert" | "delete", isNew, values }.
+  // Tracker keys are batch rowKeys ("260004", or "260004@1" for a second row of the
+  // same batch); blocked and ERP keys are batch numbers. Edits are applied to a copy
+  // of the raw workbook, so the original stays intact and every edit can be reverted.
+  function applyEdits(workbook, edits) {
+    if (!edits || !edits.length) return workbook;
+    const sheets = {};
+    for (const [n, rows] of Object.entries(workbook.sheets || {})) sheets[n] = rows.map((r) => (r ? r.slice() : []));
+    const of = (kind) => edits.filter((e) => e && e.kind === kind);
+
+    const T = trackerLayout(sheets);
+    if (T && of("tracker").length) {
+      const rows = sheets[T.name];
+      const C = T.C;
+      const index = new Map();
+      const occ = {};
+      for (let i = T.row + 1; i < rows.length; i++) {
+        const id = batchKey(rows[i][C.batch]);
+        if (!id || /^total$/i.test(text(rows[i][C.product]))) continue;
+        const n = (occ[id] = (occ[id] ?? -1) + 1);
+        index.set(n ? `${id}@${n}` : id, i);
+      }
+      const drop = new Set();
+      const added = [];
+      for (const e of of("tracker")) {
+        const i = index.get(e.key);
+        if (e.action === "delete") { if (i !== undefined) drop.add(i); continue; }
+        const v = e.values || {};
+        const row = i !== undefined ? rows[i] : [];
+        put(row, C.product, text(v.product));
+        put(row, C.batch, batchCell(v.batch || e.key.split("@")[0]));
+        put(row, C.cll, v.cll || null);
+        put(row, C.status, v.status || null);
+        put(row, C.released, v.released || null);
+        put(row, C.remark, text(v.remark));
+        if (i === undefined) added.push(row);
+      }
+      // drop deleted rows, then insert new rows above the "Total" row (or at the end)
+      const kept = rows.filter((_, j) => !drop.has(j));
+      const t = kept.findIndex((r, j) => j > T.row && /^total$/i.test(text(r[C.product])));
+      const at = t >= 0 ? t : kept.length;
+      sheets[T.name] = [...kept.slice(0, at), ...added, ...kept.slice(at)];
+    }
+
+    const B = blockedLayout(sheets);
+    if (B && of("blocked").length) {
+      const rows = sheets[B.name];
+      const index = new Map();
+      for (let i = B.row + 1; i < rows.length; i++) {
+        const id = batchKey(rows[i][1]);
+        if (id && !index.has(id)) index.set(id, i);
+      }
+      const drop = new Set();
+      const added = [];
+      for (const e of of("blocked")) {
+        const i = index.get(e.key);
+        // the reason may continue on following rows with no batch number
+        const cont = [];
+        if (i !== undefined) for (let j = i + 1; j < rows.length && !batchKey(rows[j][1]) && text(rows[j][4]); j++) cont.push(j);
+        if (e.action === "delete") { if (i !== undefined) [i, ...cont].forEach((j) => drop.add(j)); continue; }
+        const v = e.values || {};
+        const row = i !== undefined ? rows[i] : [];
+        put(row, 0, text(v.product));
+        put(row, 1, batchCell(v.batch || e.key));
+        put(row, 2, v.qty === "" || v.qty === null || v.qty === undefined ? null : Number(v.qty));
+        put(row, 3, v.expiry || null);
+        put(row, 4, text(v.reason));
+        cont.forEach((j) => drop.add(j));
+        if (i === undefined) added.push(row);
+      }
+      sheets[B.name] = [...rows.filter((_, j) => !drop.has(j)), ...added];
+    }
+
+    const E = erpLayout(sheets);
+    if (E && of("erp").length) {
+      const rows = sheets[E.name];
+      const [cb, cs] = E.cols;
+      for (const e of of("erp")) {
+        const i = rows.findIndex((r, j) => j > E.row && batchKey(r[cb]) === e.key);
+        if (e.action === "delete") { if (i >= 0) rows.splice(i, 1); continue; }
+        if (i >= 0) put(rows[i], cs, e.values?.status || null);
+        else { const r = []; put(r, cb, batchCell(e.key)); put(r, cs, e.values?.status || null); rows.push(r); }
+      }
+    }
+    return { ...workbook, sheets };
   }
 
   function blockKind(reason) {
@@ -492,6 +605,6 @@
     return { name, sheets };
   }
 
-  const api = { build, parseDate, productKey, refsIn, remarkCategory, leadBucket, daysBetween, median, quantile, fromSheetJS, LEAD_BUCKETS, REMARK_CATEGORIES, BLOCK_KINDS };
+  const api = { build, applyEdits, blockKind, parseDate, productKey, refsIn, remarkCategory, leadBucket, daysBetween, median, quantile, fromSheetJS, LEAD_BUCKETS, REMARK_CATEGORIES, BLOCK_KINDS };
   root.ReleaseModel = api;
 })(typeof globalThis !== "undefined" ? globalThis : window);

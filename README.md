@@ -94,7 +94,27 @@ arriving and release in AX, and checks each batch against ERP 365 and AX.
 - **Follow-up.** ERP posting, QA release requests and physical vs system release,
   each checked against today's ERP 365 status.
 
+- **Changes.** Edit the data inside the app. Open a batch to edit its product,
+  dates, tracker status, ERP 365 status or remark, mark a quarantined batch
+  released today, delete a row, or add a new batch (Batches → Add batch). Blocked
+  stock rows can be edited, added and removed the same way. Every change shows an
+  Edited/New/Deleted tag, keeps a short history and can be undone. The Changes
+  page lists them all and exports an updated .xlsx with every change applied.
+
 Sheets are found by their column headings, so renamed tabs still load.
+
+## Where changes are saved
+
+Edits are kept separately from the workbook and applied on top of it, so the
+loaded file is never altered and every change can be undone. Importing a newer
+workbook keeps your edits; once that workbook includes them, clear them on the
+Changes page.
+
+- **Published as a claude.ai Artifact:** changes are saved to the page's shared
+  store. Everyone who opens it sees the same changes live, with who made them.
+  People with view-only access can read and export but not edit.
+- **Anywhere else** (GitHub Pages, `npm start`): changes are saved in that
+  browser only. Use **Export updated workbook** to keep or share them.
 
 ## Loading the workbook
 

@@ -7,14 +7,21 @@
   const SHEETJS = "https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js";
 
   let model = null;
+  let base = null; // the raw workbook {name, sheets}; edits are applied on top of it
   let source = "bundled"; // bundled | imported
+  // Edits: "kind:key" -> { kind, key, action, isNew, values, original, history, at, by }.
+  // Saved in the artifact's shared store when the page runs as a published artifact,
+  // otherwise in this browser.
+  let edits = new Map();
+  const LOCAL_EDITS = "brd.edits.v1";
+  const who = { mode: "local", id: null, canWrite: true, canAdmin: true, user: null, db: null };
   const ui = {
     view: "overview",
     q: "",
     status: "all",
     bucket: "all",
     category: "all",
-    flagged: false,
+    show: "all", // all | issues | changed
     preset: null, // { label, fn }
     sort: { key: "cll", dir: -1 },
     limit: 80,
@@ -40,6 +47,10 @@
     x: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4.2 3.1 3.8 3.8 3.8-3.8 1.1 1.1L9.1 8l3.8 3.8-1.1 1.1L8 9.1l-3.8 3.8-1.1-1.1L6.9 8 3.1 4.2z"/></svg>',
     dash: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 7h10v2H3z"/></svg>',
     warn: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1 15.5 14h-15zm-.9 5v4h1.8V6zm0 5v1.8h1.8V11z"/></svg>',
+    plus: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M7.2 2h1.6v5.2H14v1.6H8.8V14H7.2V8.8H2V7.2h5.2z"/></svg>',
+    edit: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="m10.9 1.9 3.2 3.2L5.7 13.5H2.5v-3.2zm0 2.3L4.1 11v.9H5l6.8-6.8z"/></svg>',
+    undo: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M5.6 3 1.5 7l4.1 4V8h4.1a2.7 2.7 0 0 1 0 5.4H7.5V15h2.2a4.3 4.3 0 0 0 0-8.6H5.6z"/></svg>',
+    download: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M7.2 1h1.6v7.1l2.6-2.6 1.1 1.1L8 11.1 3.5 6.6l1.1-1.1 2.6 2.6zM2 12.5h1.6v1.4h8.8v-1.4H14V15.5H2z"/></svg>',
     search: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6.8 1.5a5.3 5.3 0 0 1 4.2 8.5l3.6 3.6-1.1 1.1-3.6-3.6A5.3 5.3 0 1 1 6.8 1.5zm0 1.6a3.7 3.7 0 1 0 0 7.4 3.7 3.7 0 0 0 0-7.4z"/></svg>',
   };
   function pill(status) {
@@ -78,7 +89,19 @@
       if (raw) { wb = JSON.parse(raw); source = "imported"; }
     } catch { /* storage unavailable */ }
     if (!wb && window.RELEASE_WORKBOOK) { wb = window.RELEASE_WORKBOOK; source = "bundled"; }
-    if (wb) model = M.build(wb);
+    base = wb;
+    try {
+      const raw = localStorage.getItem(LOCAL_EDITS);
+      if (raw) edits = new Map(JSON.parse(raw).map((e) => [editKey(e), e]));
+    } catch { /* storage unavailable */ }
+    rebuild();
+  }
+
+  function rebuild() {
+    model = base ? M.build(M.applyEdits(base, [...edits.values()])) : null;
+    if (!model) return;
+    for (const b of model.batches) b.edit = edits.get("tracker:" + b.rowKey) || null;
+    for (const b of model.blocked) b.edit = edits.get("blocked:" + b.batch) || null;
   }
 
   function loadScript(src) {
@@ -105,12 +128,13 @@
       const raw = M.fromSheetJS(window.XLSX, wb, file.name);
       const next = M.build(raw);
       if (!next.batches.length) return toast("No batches found. The workbook needs a sheet with Product, Batch No, CLL date and Status columns.");
-      model = next;
+      base = raw;
       source = "imported";
+      rebuild();
       try { localStorage.setItem(STORE_KEY, JSON.stringify(raw)); } catch { /* too large or blocked: keep in memory */ }
       resetFilters();
       render();
-      toast(`Loaded ${file.name}: ${plural(next.stats.total, "batch", "batches")}.`);
+      toast(`Loaded ${file.name}: ${plural(next.stats.total, "batch", "batches")}.${edits.size ? ` Your ${plural(edits.size, "change")} still apply on top.` : ""}`);
     } catch (e) {
       toast(e.message || "The workbook could not be read.");
     }
@@ -118,14 +142,15 @@
 
   function resetToBundled() {
     try { localStorage.removeItem(STORE_KEY); } catch { /* ignore */ }
-    model = window.RELEASE_WORKBOOK ? M.build(window.RELEASE_WORKBOOK) : null;
+    base = window.RELEASE_WORKBOOK || null;
     source = "bundled";
+    rebuild();
     resetFilters();
     render();
     toast("Back to the bundled workbook.");
   }
   function resetFilters() {
-    Object.assign(ui, { q: "", status: "all", bucket: "all", category: "all", flagged: false, preset: null, limit: 80 });
+    Object.assign(ui, { q: "", status: "all", bucket: "all", category: "all", show: "all", preset: null, limit: 80 });
   }
 
   // ---------- routing ----------
@@ -136,6 +161,7 @@
     { id: "reconcile", label: "Reconcile", icon: '<svg viewBox="0 0 20 20"><path d="M3 4h5v3H3zm9 0h5v3h-5zM3 13h5v3H3zm9 0h5v3h-5zM8 5h4v1H8zm-1 2.6 5.3 5.3-.8.8L6.2 8.4zM8 14h4v1H8z"/></svg>' },
     { id: "blocked", label: "Blocked stock", icon: '<svg viewBox="0 0 20 20"><path d="M10 2 17 6v8l-7 4-7-4V6zm0 2.3L5.2 7 10 9.7 14.8 7zM5 8.7v4.1l4 2.3v-4.1zm10 0-4 2.3v4.1l4-2.3z"/></svg>' },
     { id: "follow-up", label: "Follow-up", icon: '<svg viewBox="0 0 20 20"><path d="M4 3h9l3 3v11H4zm2 2v10h8V7h-2V5zm1 4h6v1.5H7zm0 3h6v1.5H7z"/></svg>' },
+    { id: "changes", label: "Changes", icon: '<svg viewBox="0 0 20 20"><path d="m13.6 2.6 3.8 3.8L7.8 16H4v-3.8zm0 2.8L6 13v1h1l7.6-7.6zM3 17.5h14V19H3z"/></svg>' },
   ];
   function go(view, preset) {
     if (preset !== undefined) { resetFilters(); Object.assign(ui, preset); }
@@ -151,7 +177,7 @@
   // ---------- shell ----------
   function navHTML(mobile) {
     const s = model?.stats;
-    const counts = s ? { batches: fmtN(s.total), reconcile: fmtN((s.issues["ax-behind"]?.length || 0) + (s.issues["erp-missing"]?.length || 0)), blocked: fmtN(model.blocked.length), "follow-up": fmtN(model.posting.length + model.requests.length + model.physical.length) } : {};
+    const counts = s ? { batches: fmtN(s.total), reconcile: fmtN((s.issues["ax-behind"]?.length || 0) + (s.issues["erp-missing"]?.length || 0)), blocked: fmtN(model.blocked.length), "follow-up": fmtN(model.posting.length + model.requests.length + model.physical.length), changes: edits.size ? fmtN(edits.size) : "" } : {};
     return VIEWS.map((v) => `<a href="#${v.id}" ${ui.view === v.id ? 'aria-current="page"' : ""}>${v.icon}<span>${mobile ? v.label.split(" ")[0] : v.label}</span>${!mobile && counts[v.id] ? `<span class="count ${v.id === "reconcile" ? "alert" : ""}">${counts[v.id]}</span>` : ""}</a>`).join("");
   }
   function themeLabel() {
@@ -166,7 +192,7 @@
     $("#theme-btn span").textContent = themeLabel();
     const s = model?.stats;
     $("#doc").innerHTML = model
-      ? `<div><dt>Workbook</dt><dd>${esc(model.name)}</dd></div><div><dt>Source</dt><dd>${source === "imported" ? "Imported" : "Bundled"}</dd></div><div><dt>CLL dates</dt><dd>${s.firstCll ? fmtDate(s.firstCll).slice(3) + " – " + fmtDate(s.lastCll).slice(3) : "—"}</dd></div><div><dt>Rows read</dt><dd>${fmtN(s.rows)}</dd></div>`
+      ? `<div><dt>Workbook</dt><dd>${esc(model.name)}</dd></div><div><dt>Source</dt><dd>${source === "imported" ? "Imported" : "Bundled"}</dd></div><div><dt>CLL dates</dt><dd>${s.firstCll ? fmtDate(s.firstCll).slice(3) + " – " + fmtDate(s.lastCll).slice(3) : "—"}</dd></div><div><dt>Rows read</dt><dd>${fmtN(s.rows)}</dd></div><div><dt>Changes</dt><dd>${fmtN(edits.size)} · ${who.mode === "shared" ? "shared" : "this browser"}</dd></div>`
       : "";
     $("#reset-btn").hidden = !(source === "imported" && window.RELEASE_WORKBOOK);
     const view = $("#view");
@@ -406,7 +432,8 @@
       if (ui.status !== "all" && (b.status || "none") !== ui.status) return false;
       if (ui.bucket !== "all" && b.bucket !== ui.bucket) return false;
       if (ui.category !== "all" && b.category !== ui.category) return false;
-      if (ui.flagged && !b.issues.length) return false;
+      if (ui.show === "issues" && !b.issues.length) return false;
+      if (ui.show === "changed" && !b.edit) return false;
       if (q && !(b.id.toLowerCase().includes(q) || b.product.toLowerCase().includes(q) || b.remark.toLowerCase().includes(q) || b.refs.some((r) => r.toLowerCase().includes(q)))) return false;
       return true;
     });
@@ -429,7 +456,8 @@
         <select id="f-status" aria-label="Tracker status"><option value="all">All statuses</option>${["Released", "Quarantine"].map((s) => `<option ${ui.status === s ? "selected" : ""}>${s}</option>`).join("")}</select>
         <select id="f-bucket" aria-label="Lead time"><option value="all">Any lead time</option>${M.LEAD_BUCKETS.map((b) => `<option value="${b.id}" ${ui.bucket === b.id ? "selected" : ""}>${b.label}</option>`).join("")}</select>
         <select id="f-cat" aria-label="Remark type"><option value="all">Any remark</option>${cats.map((c) => `<option ${ui.category === c ? "selected" : ""}>${esc(c)}</option>`).join("")}</select>
-        <label style="display:inline-flex;gap:6px;align-items:center;font-size:13px"><input type="checkbox" id="f-flag" ${ui.flagged ? "checked" : ""}> With issues only</label>
+        <select id="f-show" aria-label="Rows to show"><option value="all">All rows</option><option value="issues" ${ui.show === "issues" ? "selected" : ""}>With issues</option><option value="changed" ${ui.show === "changed" ? "selected" : ""}>Changed in this app</option></select>
+        ${who.canWrite ? `<button class="btn" data-act="new-batch">${ICON.plus}Add batch</button>` : ""}
         ${ui.preset ? `<button class="active-filter" data-act="clear-preset"><span>${esc(ui.preset.label)}</span>${ICON.x.replace("<svg", '<svg width="14" height="14" fill="currentColor"')}</button>` : ""}
         <span class="result" id="result"></span>
       </div>
@@ -449,7 +477,7 @@
           const leadW = b.lead === null ? 0 : Math.min(100, Math.max(4, (Math.max(0, b.lead) / 30) * 100));
           const lead = b.lead !== null ? `<span class="leadcell"><span class="num">${b.lead < 0 ? b.lead : b.lead}</span><span class="leadbar" aria-hidden="true"><i style="width:${leadW}%;background:${leadColor(b.lead)}"></i></span></span>` : b.age !== undefined ? `<span class="leadcell" style="color:var(--warn-ink)"><span class="num">${b.age}+</span><span class="leadbar" aria-hidden="true"><i style="width:100%;background:var(--warn)"></i></span></span>` : "—";
           return `<tr data-batch="${esc(b.id)}" tabindex="0">
-            <td class="mono"><b>${esc(b.id)}</b>${b.issues.length ? `<br><span class="flag" title="${esc(b.issues.map((i) => i.text).join("; "))}">${ICON.warn}${b.issues.length}</span>` : ""}</td>
+            <td class="mono"><b>${esc(b.id)}</b>${editChip(b.edit)}${b.issues.length ? `<br><span class="flag" title="${esc(b.issues.map((i) => i.text).join("; "))}">${ICON.warn}${b.issues.length}</span>` : ""}</td>
             <td class="prod">${esc(b.productLabel || b.product)}<small>${esc(b.product)}</small></td>
             <td class="mono date">${fmtDate(b.cll)}</td>
             <td class="mono date">${fmtDate(b.released)}</td>
@@ -652,9 +680,9 @@
       </section>
       <section class="panel">
         <div class="panel-head"><div><h3>Blocked finished products</h3><p>From the Statut PF sheet, with the reason each batch is on hold.</p></div>
-          <div class="tools"><div class="seg" role="group" aria-label="Sort"><button data-bsort="expiry" aria-pressed="${ui.blockedSort === "expiry"}">By expiry</button><button data-bsort="qty" aria-pressed="${ui.blockedSort === "qty"}">By quantity</button></div></div></div>
+          <div class="tools">${who.canWrite ? `<button class="btn" data-act="new-blocked">${ICON.plus}Add blocked batch</button>` : ""}<div class="seg" role="group" aria-label="Sort"><button data-bsort="expiry" aria-pressed="${ui.blockedSort === "expiry"}">By expiry</button><button data-bsort="qty" aria-pressed="${ui.blockedSort === "qty"}">By quantity</button></div></div></div>
         <div class="table-wrap"><table><thead><tr><th>Batch</th><th>Product</th><th class="num">Quantity</th><th>Expiry</th><th>Reason</th></tr></thead><tbody>
-        ${rows.map((b) => { const ml = b.monthsLeft; const tone = ml === null ? "none" : ml < 3 ? "Rejected" : ml <= 6 ? "Quarantine" : "none"; return `<tr data-batch="${esc(b.batch)}" tabindex="0"><td class="mono"><b>${esc(b.batch)}</b></td><td class="prod">${esc(b.productLabel)}<small>${esc(b.product)}</small></td><td class="num mono">${fmtN(b.qty)}</td><td class="mono" style="white-space:nowrap">${fmtDate(b.expiry)}<br><span class="pill ${tone}" style="margin-top:3px">${ml === null ? "—" : ml < 0 ? "expired" : ml < 1 ? "under 1 month left" : Math.floor(ml) === 1 ? "1 month left" : Math.floor(ml) + " months left"}</span></td><td class="remark"><span class="pill none" style="margin-bottom:4px"><span class="dot" style="background:${KIND_COLOR[b.kind]}"></span>${esc(b.kind)}</span><div>${esc(b.reason)}</div></td></tr>`; }).join("")}
+        ${rows.map((b) => { const ml = b.monthsLeft; const tone = ml === null ? "none" : ml < 3 ? "Rejected" : ml <= 6 ? "Quarantine" : "none"; return `<tr data-batch="${esc(b.batch)}" tabindex="0"><td class="mono"><b>${esc(b.batch)}</b>${editChip(b.edit)}</td><td class="prod">${esc(b.productLabel)}<small>${esc(b.product)}</small></td><td class="num mono">${fmtN(b.qty)}</td><td class="mono" style="white-space:nowrap">${fmtDate(b.expiry)}<br><span class="pill ${tone}" style="margin-top:3px">${ml === null ? "—" : ml < 0 ? "expired" : ml < 1 ? "under 1 month left" : Math.floor(ml) === 1 ? "1 month left" : Math.floor(ml) + " months left"}</span></td><td class="remark"><span class="pill none" style="margin-bottom:4px"><span class="dot" style="background:${KIND_COLOR[b.kind]}"></span>${esc(b.kind)}</span><div>${esc(b.reason)}</div></td></tr>`; }).join("")}
         </tbody></table></div>
       </section>`;
   }
@@ -753,8 +781,161 @@
       </div>`;
   }
 
+  // ---------- saving edits ----------
+  const editKey = (e) => `${e.kind}:${e.key}`;
+  const docId = (e) => `${e.kind}-${e.key}`.replace(/[^A-Za-z0-9_\-.~:@+]/g, "_");
+  const todayISO = () => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  };
+  const FIELD = { product: "Product", batch: "Batch", cll: "CLL received", status: "Tracker status", released: "Released", remark: "Remark", erp: "ERP 365 status", qty: "Quantity", expiry: "Expiry", reason: "Reason" };
+  const showVal = (v) => (v === null || v === undefined || v === "" ? "—" : /^\d{4}-\d{2}-\d{2}$/.test(String(v)) ? fmtDate(String(v)) : String(v));
+  const fmtWhen = (iso) => {
+    if (!iso) return "";
+    const d = new Date(iso);
+    return `${String(d.getDate()).padStart(2, "0")} ${MON[d.getMonth()]} ${d.getFullYear()}, ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+  };
+  const names = {};
+  const nameOf = (id) => (who.mode !== "shared" ? "You" : !id ? "Someone" : id === who.id ? "You" : names[id] || "Someone");
+  async function resolveNames(ids) {
+    if (!who.user) return;
+    const missing = [...new Set(ids)].filter((i) => i && i !== who.id && !(i in names));
+    if (!missing.length) return;
+    missing.forEach((i) => (names[i] = ""));
+    try {
+      const ps = await who.user.profiles(missing);
+      missing.forEach((i) => (names[i] = ps[i]?.name || ""));
+      refresh();
+    } catch { /* names stay "Someone" */ }
+  }
+  function editChip(e) {
+    if (!e) return "";
+    const label = e.action === "delete" ? "Deleted" : e.isNew ? "New" : "Edited";
+    return ` <span class="chip-edit ${label.toLowerCase()}" title="${esc(`${label} by ${nameOf(e.by)} · ${fmtWhen(e.at)}`)}">${label}</span>`;
+  }
+
+  function saveLocal() {
+    try { localStorage.setItem(LOCAL_EDITS, JSON.stringify([...edits.values()])); }
+    catch { toast("This browser would not keep your changes. Export the workbook before closing the page."); }
+  }
+  function writeFailed(err) {
+    if (err?.code === "invalid_argument" || err?.code === "revoked") {
+      who.canWrite = false;
+      toast("You can view this page but not change it. Ask the owner for Contributor access.");
+      refresh();
+    } else if (err?.code === "quota_exceeded") toast("The change store is full. Revert or clear some changes, then try again.");
+    else toast("The change was not saved. Check your connection and try again.");
+    return false;
+  }
+  async function putEdit(e) {
+    e.at = new Date().toISOString();
+    e.by = who.id || null;
+    if (who.mode === "shared") {
+      try { await who.db.collection("edits").doc(docId(e)).set(JSON.parse(JSON.stringify(e))); }
+      catch (err) { return writeFailed(err); }
+      return true; // the snapshot listener refreshes the page
+    }
+    edits.set(editKey(e), e);
+    saveLocal();
+    refresh();
+    return true;
+  }
+  async function dropEdit(e) {
+    if (who.mode === "shared") {
+      try { await who.db.collection("edits").doc(docId(e)).delete(); }
+      catch (err) { return writeFailed(err); }
+      return true;
+    }
+    edits.delete(editKey(e));
+    saveLocal();
+    refresh();
+    return true;
+  }
+  // Record a change to one record, keeping its first-seen workbook values and a short history.
+  function recordEdit(kind, key, { action = "upsert", isNew = false, values = null, original = null }, changes) {
+    const prev = edits.get(`${kind}:${key}`);
+    const history = [...(prev?.history || []), { at: new Date().toISOString(), by: who.id || null, action, changes }].slice(-20);
+    return putEdit({ kind, key, action, isNew: prev ? !!prev.isNew : isNew, values, original: prev ? prev.original ?? null : original, history });
+  }
+  function diff(before, after) {
+    const out = {};
+    for (const k of Object.keys(after)) {
+      const a = before[k] ?? "", b = after[k] ?? "";
+      if (String(a) !== String(b)) out[k] = [before[k] ?? null, after[k] ?? null];
+    }
+    return out;
+  }
+  const summarize = (changes) =>
+    Object.entries(changes || {}).map(([k, [a, b]]) => `${FIELD[k] || k}: ${showVal(a)} → ${showVal(b)}`).join(" · ");
+
+  async function connectShared() {
+    if (!window.claude?.use) return;
+    const db = await window.claude.use("db");
+    if (!db) return;
+    const user = await window.claude.use("user");
+    Object.assign(who, { db, user, mode: "shared" });
+    who.id = user ? await user.id() : null;
+    const can = user ? await user.can("data.write") : null;
+    who.canWrite = can !== false;
+    who.canAdmin = user ? await user.canEdit() : false;
+    edits = new Map(); // the shared store replaces browser-only changes
+    refresh();
+    let waiting = setTimeout(() => toast("Shared changes can't be reached yet. Showing the workbook without them."), 10000);
+    db.collection("edits").onSnapshot(
+      (snap) => {
+        if (!snap.metadata.fromCache) clearTimeout(waiting);
+        edits = new Map(snap.docs.map((d) => { const e = d.data(); return [editKey(e), e]; }));
+        refresh();
+        resolveNames([...edits.values()].flatMap((e) => [e.by, ...(e.history || []).map((h) => h.by)]));
+      },
+      (err) => {
+        clearTimeout(waiting);
+        if (err.code === "revoked") who.canWrite = false;
+        toast("Live updates from other people stopped. Reload the page to see their latest changes.");
+      },
+    );
+  }
+
+  // Re-render after data changes, keeping an open drawer in place.
+  function refresh() {
+    rebuild();
+    render();
+    if (!$("#drawer").hidden && drawer.mode === "view") openDrawer(drawer.id, "view");
+  }
+
   // ---------- drawer ----------
-  function openBatch(id) {
+  const drawer = { id: null, mode: "view", key: null };
+  let lastFocus = null;
+
+  function openBatch(id) { openDrawer(id, "view"); }
+
+  function openDrawer(id, mode = "view", opts = {}) {
+    const host = $("#drawer");
+    const wasOpen = !host.hidden;
+    Object.assign(drawer, { id, mode, key: opts.key || null });
+    const body = mode === "view" ? viewHTML(id) : mode === "blocked" ? blockedFormHTML(id, opts) : trackerFormHTML(id, opts);
+    host.innerHTML = `<div class="scrim ${wasOpen ? "still" : ""}" data-act="close"></div><aside class="drawer ${wasOpen ? "still" : ""}" role="dialog" aria-modal="true" aria-labelledby="dr-h">${body}</aside>`;
+    host.hidden = false;
+    if (!wasOpen) lastFocus = document.activeElement;
+    if (mode === "view") $(".x", host).focus();
+    else { fillForm(mode, id, opts); const first = host.querySelector("input:not([readonly]),select,textarea"); first?.focus(); }
+  }
+  function closeDrawer() {
+    const host = $("#drawer");
+    if (host.hidden) return;
+    host.hidden = true;
+    host.innerHTML = "";
+    drawer.mode = "view";
+    lastFocus?.focus?.();
+  }
+  const head = (eyebrow, title, sub) => `<div class="drawer-head"><div><div class="eyebrow" style="color:var(--muted)">${esc(eyebrow)}</div><h2 id="dr-h">${esc(title)}</h2>${sub ? `<p>${esc(sub)}</p>` : ""}</div><button class="x" data-act="close" aria-label="Close">${ICON.x}</button></div>`;
+
+  function historyHTML(e) {
+    if (!e?.history?.length) return "";
+    return `<ol class="history">${[...e.history].reverse().map((h) => `<li><span class="h-when">${esc(fmtWhen(h.at))} · ${esc(nameOf(h.by))}</span><span>${h.action === "delete" ? "Deleted the row" : esc(summarize(h.changes)) || "Saved with no field changes"}</span></li>`).join("")}</ol>`;
+  }
+
+  function viewHTML(id) {
     const rows = model.batches.filter((b) => b.id === id);
     const b = rows[0];
     const bl = model.blocked.find((x) => x.batch === id);
@@ -763,47 +944,290 @@
     const ph = model.physical.find((x) => x.batch === id);
     const erp = b?.erp ?? model.erp.get(id) ?? null;
     const ax = b?.ax ?? model.ax.get(id) ?? null;
-    const product = b?.product || bl?.product || po?.product || rq?.product || ph?.product || "";
+    const deleted = edits.get("tracker:" + id);
+    const product = b?.product || bl?.product || po?.product || rq?.product || ph?.product || deleted?.original?.product || "";
     const prod = b ? model.stats.products.find((p) => p.key === b.productKey) : null;
     const siblings = b ? model.batches.filter((x) => x.productKey === b.productKey && x.id !== id).slice(0, 40) : [];
     const issues = rows.flatMap((r) => r.issues);
+    const erpEdit = edits.get("erp:" + id);
+    const tEdits = rows.map((r) => r.edit).filter(Boolean);
+    const can = who.canWrite;
     const other = [
-      bl && ["Blocked stock (Statut PF)", `${fmtN(bl.qty)} units · expires ${fmtDate(bl.expiry)} · ${bl.reason}`],
       po && ["ERP posting", `${po.status} · QA feedback: ${po.feedback}`],
       rq && ["QA release request", `Answer at the time: ${rq.answer}`],
       ph && ["Physical release", `${ph.physical ? "Physical release done" : "Physical release not done"} · ${ph.system ? "system release done" : "system release not done"}`],
     ].filter(Boolean);
-    const html = `
-      <div class="scrim" data-act="close"></div>
-      <aside class="drawer" role="dialog" aria-modal="true" aria-labelledby="dr-h">
-        <div class="drawer-head"><div><div class="eyebrow" style="color:var(--muted)">Batch</div><h2 id="dr-h">${esc(id)}</h2><p>${esc(product)}</p></div><button class="x" data-act="close" aria-label="Close">${ICON.x}</button></div>
-        <div class="drawer-body">
-          ${b ? `<div><h4>CLL to release</h4><div class="timeline"><div class="end"><b>${fmtDate(b.cll)}</b><span>CLL received</span></div><div class="track"><span style="${b.lead !== null && b.lead < 0 ? "color:var(--bad-ink)" : ""}">${b.lead !== null ? days(b.lead) : b.age !== undefined ? `waiting ${b.age} days` : "—"}</span></div><div class="end"><b>${fmtDate(b.released)}</b><span>${b.released ? "Released in AX" : "Not released"}</span></div></div></div>` : ""}
-          <div><h4>Status in each system</h4><div class="systems">
-            <div class="sys"><span class="k">CLL tracker</span>${pill(b?.status)}</div>
-            <div class="sys"><span class="k">ERP 365</span>${pill(erp)}</div>
-            <div class="sys"><span class="k">AX${ax ? " " + esc(ax.year) : ""}</span>${pill(ax?.status)}</div>
-          </div></div>
-          ${issues.length ? `<div><h4>Issues</h4><ul class="issue-list">${issues.map((i) => `<li>${ICON.warn}<span>${esc(i.text)}</span></li>`).join("")}</ul></div>` : ""}
-          ${b?.remark ? `<div><h4>Remark</h4><p style="margin:0 0 6px">${esc(b.remark)}</p>${refChips(b.refs)}</div>` : ""}
-          ${other.length ? `<div><h4>Also on</h4><dl class="kv">${other.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join("")}</dl></div>` : ""}
-          ${b ? `<div><h4>Tracker row</h4><dl class="kv"><dt>Sheet</dt><dd>${esc(model.found.tracker)}</dd><dt>Row</dt><dd class="mono">${rows.map((r) => r.row).join(", ")}</dd><dt>Remark type</dt><dd>${esc(b.category)}</dd></dl></div>` : ""}
-          ${prod ? `<div><h4>${esc(prod.label)}: ${plural(prod.count, "batch", "batches")}${siblings.length ? "" : " (this one)"}</h4>${prod.median !== null ? `<p style="margin:0 0 8px;color:var(--muted);font-size:12.5px">Median ${days(prod.median)} · 90th percentile ${Math.round(prod.p90)} days · ${pct(prod.sameDay)} same day</p>` : ""}<div class="mini-batches">${siblings.map((s) => `<button data-open="${esc(s.id)}" title="${esc(s.status || "")} · ${s.lead === null ? "" : days(s.lead)}">${esc(s.id)}</button>`).join("")}</div></div>` : ""}
-        </div>
-      </aside>`;
-    const host = $("#drawer");
-    host.innerHTML = html;
-    host.hidden = false;
-    lastFocus = document.activeElement;
-    $(".x", host).focus();
+    const actions = can
+      ? `<div class="drawer-actions">
+          ${b ? `<button class="btn" data-act="edit-tracker" data-key="${esc(b.rowKey)}">${ICON.edit}Edit batch</button>` : deleted?.action === "delete" ? "" : `<button class="btn" data-act="add-to-tracker">${ICON.plus}Add to tracker</button>`}
+          ${b && b.status === "Quarantine" ? `<button class="btn primary" data-act="quick-release" data-key="${esc(b.rowKey)}">${ICON.check}Mark released today</button>` : ""}
+          ${bl ? `<button class="btn" data-act="edit-blocked">${ICON.edit}Edit blocked stock</button>` : b ? `<button class="btn ghost" data-act="block-batch">${ICON.plus}Add to blocked stock</button>` : ""}
+        </div>`
+      : who.mode === "shared" ? `<p class="readonly-note">You can view this batch. Changes need Contributor access to this page.</p>` : "";
+    return `${head("Batch", id, product)}
+      <div class="drawer-body">
+        ${actions}
+        ${!b && deleted?.action === "delete" ? `<div class="change-box"><b>This row was deleted in this app</b>${historyHTML(deleted)}${can ? `<button class="btn" data-act="revert" data-ek="tracker:${esc(id)}">${ICON.undo}Restore row</button>` : ""}</div>` : ""}
+        ${b ? `<div><h4>CLL to release</h4><div class="timeline"><div class="end"><b>${fmtDate(b.cll)}</b><span>CLL received</span></div><div class="track"><span style="${b.lead !== null && b.lead < 0 ? "color:var(--bad-ink)" : ""}">${b.lead !== null ? days(b.lead) : b.age !== undefined ? `waiting ${b.age} days` : "—"}</span></div><div class="end"><b>${fmtDate(b.released)}</b><span>${b.released ? "Released in AX" : "Not released"}</span></div></div></div>` : ""}
+        <div><h4>Status in each system</h4><div class="systems">
+          <div class="sys"><span class="k">CLL tracker</span>${pill(b?.status)}</div>
+          <div class="sys"><span class="k">ERP 365${erpEdit ? editChip(erpEdit) : ""}</span>${pill(erp)}</div>
+          <div class="sys"><span class="k">AX${ax ? " " + esc(ax.year) : ""}</span>${pill(ax?.status)}</div>
+        </div></div>
+        ${tEdits.length || erpEdit ? `<div class="change-box"><h4>Changed in this app</h4>${tEdits.map(historyHTML).join("")}${erpEdit ? historyHTML(erpEdit) : ""}${can ? `<div class="row-actions">${tEdits.filter((e) => !e.isNew).map((e) => `<button class="btn ghost" data-act="revert" data-ek="tracker:${esc(e.key)}">${ICON.undo}Undo tracker changes</button>`).join("")}${erpEdit ? `<button class="btn ghost" data-act="revert" data-ek="erp:${esc(id)}">${ICON.undo}Undo ERP 365 change</button>` : ""}</div>` : ""}</div>` : ""}
+        ${issues.length ? `<div><h4>Issues</h4><ul class="issue-list">${issues.map((i) => `<li>${ICON.warn}<span>${esc(i.text)}</span></li>`).join("")}</ul></div>` : ""}
+        ${b?.remark ? `<div><h4>Remark</h4><p style="margin:0 0 6px">${esc(b.remark)}</p>${refChips(b.refs)}</div>` : ""}
+        ${bl ? `<div><h4>Blocked stock (Statut PF)${editChip(bl.edit)}</h4><dl class="kv"><dt>Quantity</dt><dd class="mono">${fmtN(bl.qty)}</dd><dt>Expiry</dt><dd>${fmtDate(bl.expiry)}</dd><dt>Reason</dt><dd>${esc(bl.reason)}</dd></dl>${bl.edit ? historyHTML(bl.edit) : ""}${bl.edit && can && !bl.edit.isNew ? `<div class="row-actions"><button class="btn ghost" data-act="revert" data-ek="blocked:${esc(id)}">${ICON.undo}Undo blocked stock changes</button></div>` : ""}</div>` : ""}
+        ${other.length ? `<div><h4>Also on</h4><dl class="kv">${other.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join("")}</dl></div>` : ""}
+        ${b ? `<div><h4>Tracker row</h4><dl class="kv"><dt>Sheet</dt><dd>${esc(model.found.tracker)}</dd><dt>Row</dt><dd class="mono">${rows.map((r) => (r.edit?.isNew ? "added in this app" : r.row)).join(", ")}</dd><dt>Remark type</dt><dd>${esc(b.category)}</dd></dl>${can && rows.length > 1 ? `<div class="row-actions">${rows.slice(1).map((r) => `<button class="btn ghost" data-act="edit-tracker" data-key="${esc(r.rowKey)}">${ICON.edit}Edit duplicate row ${r.row}</button>`).join("")}</div>` : ""}</div>` : ""}
+        ${prod ? `<div><h4>${esc(prod.label)}: ${plural(prod.count, "batch", "batches")}${siblings.length ? "" : " (this one)"}</h4>${prod.median !== null ? `<p style="margin:0 0 8px;color:var(--muted);font-size:12.5px">Median ${days(prod.median)} · 90th percentile ${Math.round(prod.p90)} days · ${pct(prod.sameDay)} same day</p>` : ""}<div class="mini-batches">${siblings.map((s) => `<button data-open="${esc(s.id)}" title="${esc(s.status || "")} · ${s.lead === null ? "" : days(s.lead)}">${esc(s.id)}</button>`).join("")}</div></div>` : ""}
+      </div>`;
   }
-  let lastFocus = null;
-  function closeDrawer() {
-    const host = $("#drawer");
-    if (host.hidden) return;
-    host.hidden = true;
-    host.innerHTML = "";
-    lastFocus?.focus?.();
+
+  // ----- tracker form (edit or add) -----
+  function trackerFormHTML(id, opts) {
+    const isNew = !opts.key;
+    const statusOpts = ["Released", "Quarantine", "Rejected"].map((s) => `<option>${s}</option>`).join("");
+    return `${head(isNew ? "Add batch" : "Edit batch", isNew ? "New batch" : id, isNew ? "Adds a row to the CLL vs AX tracker" : "Changes the CLL vs AX tracker row")}
+      <form class="drawer-body edit-form" id="tracker-form" novalidate>
+        <div class="form-grid">
+          <label class="f"><span>Batch number</span><input id="e-batch" autocomplete="off" ${isNew ? "required" : "readonly"} inputmode="text"></label>
+          <label class="f"><span>Tracker status</span><select id="e-status">${statusOpts}</select></label>
+          <label class="f wide"><span>Product</span><input id="e-product" list="product-list" autocomplete="off" required></label>
+          <label class="f"><span>CLL received</span><input type="date" id="e-cll"></label>
+          <label class="f"><span>Released in AX</span><input type="date" id="e-released"></label>
+          <label class="f"><span>ERP 365 status</span><select id="e-erp"><option value="">Not listed</option>${statusOpts}</select></label>
+          <span class="f hint-cell"><span>Lead time</span><b id="e-lead">—</b></span>
+          <label class="f wide"><span>Remark</span><textarea id="e-remark" rows="3" placeholder="e.g. QE-KE-400, Stability, OF/OC not posted"></textarea></label>
+        </div>
+        <datalist id="product-list">${[...new Set(model.batches.map((b) => b.product))].sort().map((p) => `<option value="${esc(p)}"></option>`).join("")}</datalist>
+        <ul class="form-notes" id="e-notes" aria-live="polite"></ul>
+        <div class="form-actions">
+          <button class="btn primary" type="submit">${isNew ? "Add batch" : "Save changes"}</button>
+          <button class="btn ghost" type="button" data-act="cancel-edit">Cancel</button>
+          <span class="spacer"></span>
+          ${isNew ? "" : `<button class="btn danger-ghost" type="button" data-act="ask-delete">Delete row</button>`}
+        </div>
+        <div class="confirm" id="confirm-del" hidden>
+          <p>Delete batch <b>${esc(id)}</b> from the tracker? Its row is removed from the dashboard and the exported workbook. You can restore it from Changes.</p>
+          <div class="form-actions"><button class="btn danger" type="button" data-act="confirm-delete">Delete row</button><button class="btn ghost" type="button" data-act="cancel-delete">Keep it</button></div>
+        </div>
+        <p class="save-note">${who.mode === "shared" ? "Changes are saved to this page for everyone who opens it." : "Changes are saved in this browser. Export the workbook to keep them elsewhere."}</p>
+      </form>`;
+  }
+  function currentTracker(key) {
+    const b = model.batches.find((x) => x.rowKey === key);
+    return b ? { product: b.product, batch: b.id, cll: b.cll, status: b.status, released: b.released, remark: b.remark } : null;
+  }
+  function fillForm(mode, id, opts) {
+    const set = (sel, v) => { const el = $(sel); if (el) el.value = v ?? ""; };
+    if (mode === "tracker") {
+      const cur = opts.key ? currentTracker(opts.key) : { batch: id || "", product: opts.product || "", cll: todayISO(), status: "Quarantine", released: "", remark: "" };
+      set("#e-batch", cur.batch); set("#e-product", cur.product); set("#e-cll", cur.cll); set("#e-status", cur.status || "Quarantine");
+      set("#e-released", cur.released); set("#e-remark", cur.remark);
+      set("#e-erp", (id && (model.erp.get(id) || "")) || "");
+      checkTracker();
+    } else {
+      const bl = model.blocked.find((x) => x.batch === id);
+      const b = model.batches.find((x) => x.id === id);
+      set("#b-batch", id || ""); set("#b-product", bl?.product || b?.product || "");
+      set("#b-qty", bl?.qty ?? ""); set("#b-expiry", bl?.expiry || ""); set("#b-reason", bl?.reason || "");
+      $("#b-kind").textContent = bl?.reason ? M.blockKind(bl.reason) : "—";
+    }
+  }
+  function readTracker() {
+    const v = (sel) => $(sel).value.trim();
+    return { product: v("#e-product"), batch: v("#e-batch").toUpperCase(), cll: v("#e-cll") || null, status: v("#e-status") || null, released: v("#e-released") || null, remark: v("#e-remark") };
+  }
+  // Live notes under the form: lead time, likely mistakes, duplicates.
+  function checkTracker() {
+    if (!$("#tracker-form")) return [];
+    const v = readTracker();
+    const notes = [];
+    const lead = v.cll && v.released ? M.daysBetween(v.cll, v.released) : null;
+    $("#e-lead").textContent = lead === null ? (v.status === "Quarantine" && v.cll ? `waiting ${M.daysBetween(v.cll, todayISO())} days` : "—") : days(lead);
+    if (lead !== null && lead < 0) notes.push(["bad", "The release date is before the CLL date."]);
+    if (v.status === "Released" && !v.released) notes.push(["warn", "Status is Released but there is no release date."]);
+    if (v.status === "Quarantine" && v.released) notes.push(["warn", "Status is Quarantine but a release date is set."]);
+    const erp = $("#e-erp").value;
+    if (erp && v.status && erp !== v.status) notes.push(["warn", `ERP 365 will say ${erp} while the tracker says ${v.status}.`]);
+    if (!drawer.key && v.batch && model.batches.some((b) => b.id === v.batch)) notes.push(["bad", `Batch ${v.batch} is already in the tracker. Open it to edit it instead.`]);
+    $("#e-notes").innerHTML = notes.map(([t, n]) => `<li class="${t}">${ICON.warn}<span>${esc(n)}</span></li>`).join("");
+    return notes;
+  }
+  async function submitTracker() {
+    const v = readTracker();
+    if (!v.batch) return toast("Enter a batch number.");
+    if (!v.product) return toast("Enter a product name.");
+    if (checkTracker().some(([t]) => t === "bad") && !drawer.key) return toast(`Batch ${v.batch} is already in the tracker.`);
+    const key = drawer.key || v.batch;
+    const cur = drawer.key ? currentTracker(drawer.key) : null;
+    const original = cur ? (edits.get("tracker:" + key)?.original ?? cur) : null;
+    const changes = diff(cur || {}, v);
+    const erpNow = model.erp.get(v.batch) || "";
+    const erpNext = $("#e-erp").value;
+    let ok = true;
+    if (Object.keys(changes).length) ok = await recordEdit("tracker", key, { isNew: !cur, values: v, original }, changes);
+    if (ok && erpNext !== erpNow) {
+      const prev = edits.get("erp:" + v.batch);
+      ok = await recordEdit("erp", v.batch, { values: { status: erpNext || null }, original: prev ? prev.original : { status: erpNow || null } }, { erp: [erpNow || null, erpNext || null] });
+    }
+    if (!ok) return;
+    if (!Object.keys(changes).length && erpNext === erpNow) toast("Nothing changed.");
+    else toast(cur ? `Saved changes to ${v.batch}.` : `Added batch ${v.batch}.`);
+    rebuild();
+    openDrawer(v.batch, "view");
+  }
+  async function deleteTracker() {
+    const key = drawer.key;
+    const cur = currentTracker(key);
+    const prev = edits.get("tracker:" + key);
+    if (!cur) return;
+    const ok = prev?.isNew ? await dropEdit(prev) : await recordEdit("tracker", key, { action: "delete", values: null, original: prev?.original ?? cur }, {});
+    if (!ok) return;
+    toast(`Deleted batch ${cur.batch} from the tracker.`);
+    closeDrawer();
+  }
+  async function quickRelease(key) {
+    const cur = currentTracker(key);
+    if (!cur) return;
+    const v = { ...cur, status: "Released", released: todayISO() };
+    const ok = await recordEdit("tracker", key, { values: v, original: edits.get("tracker:" + key)?.original ?? cur }, diff(cur, v));
+    if (ok) toast(`Batch ${cur.batch} marked released today.`);
+  }
+
+  // ----- blocked stock form -----
+  function blockedFormHTML(id, opts) {
+    const exists = !!model.blocked.find((x) => x.batch === id);
+    return `${head(exists ? "Edit blocked stock" : "Add blocked stock", id || "New blocked batch", "Statut PF: blocked finished product")}
+      <form class="drawer-body edit-form" id="blocked-form" novalidate>
+        <div class="form-grid">
+          <label class="f"><span>Batch number</span><input id="b-batch" autocomplete="off" ${exists ? "readonly" : "required"}></label>
+          <label class="f"><span>Quantity (units)</span><input id="b-qty" type="number" min="0" step="1" inputmode="numeric"></label>
+          <label class="f wide"><span>Product</span><input id="b-product" list="bproduct-list" autocomplete="off" required></label>
+          <label class="f"><span>Expiry date</span><input id="b-expiry" type="date"></label>
+          <span class="f hint-cell"><span>Reason type</span><b id="b-kind">—</b></span>
+          <label class="f wide"><span>Reason on hold</span><textarea id="b-reason" rows="4" placeholder="e.g. Rejeter RE050-26PF, CLL non reçu, QE-KE-450 waiting investigation"></textarea></label>
+        </div>
+        <datalist id="bproduct-list">${[...new Set([...model.blocked.map((b) => b.product), ...model.batches.map((b) => b.product)])].sort().map((p) => `<option value="${esc(p)}"></option>`).join("")}</datalist>
+        <div class="form-actions">
+          <button class="btn primary" type="submit">${exists ? "Save changes" : "Add to blocked stock"}</button>
+          <button class="btn ghost" type="button" data-act="cancel-edit">Cancel</button>
+          <span class="spacer"></span>
+          ${exists ? `<button class="btn danger-ghost" type="button" data-act="ask-delete">Remove from list</button>` : ""}
+        </div>
+        <div class="confirm" id="confirm-del" hidden>
+          <p>Remove batch <b>${esc(id)}</b> from blocked stock? Use this when it is released, reprocessed or destroyed. You can restore it from Changes.</p>
+          <div class="form-actions"><button class="btn danger" type="button" data-act="confirm-delete">Remove</button><button class="btn ghost" type="button" data-act="cancel-delete">Keep it</button></div>
+        </div>
+      </form>`;
+  }
+  function readBlocked() {
+    const v = (sel) => $(sel).value.trim();
+    return { product: v("#b-product"), batch: v("#b-batch").toUpperCase(), qty: v("#b-qty") === "" ? null : Number(v("#b-qty")), expiry: v("#b-expiry") || null, reason: v("#b-reason") };
+  }
+  async function submitBlocked() {
+    const v = readBlocked();
+    if (!v.batch) return toast("Enter a batch number.");
+    if (!v.product) return toast("Enter a product name.");
+    const bl = model.blocked.find((x) => x.batch === v.batch);
+    if (bl && !drawer.id) return toast(`Batch ${v.batch} is already in blocked stock.`);
+    const cur = bl ? { product: bl.product, batch: bl.batch, qty: bl.qty, expiry: bl.expiry, reason: bl.reason } : null;
+    const changes = diff(cur || {}, v);
+    if (!Object.keys(changes).length) { toast("Nothing changed."); return openDrawer(v.batch, "view"); }
+    const ok = await recordEdit("blocked", v.batch, { isNew: !cur, values: v, original: edits.get("blocked:" + v.batch)?.original ?? cur }, changes);
+    if (!ok) return;
+    toast(cur ? `Saved blocked stock for ${v.batch}.` : `Added ${v.batch} to blocked stock.`);
+    rebuild();
+    openDrawer(v.batch, "view");
+  }
+  async function deleteBlocked() {
+    const bl = model.blocked.find((x) => x.batch === drawer.id);
+    if (!bl) return;
+    const prev = edits.get("blocked:" + bl.batch);
+    const ok = prev?.isNew ? await dropEdit(prev) : await recordEdit("blocked", bl.batch, { action: "delete", original: prev?.original ?? { product: bl.product, batch: bl.batch, qty: bl.qty, expiry: bl.expiry, reason: bl.reason } }, {});
+    if (!ok) return;
+    toast(`Removed ${bl.batch} from blocked stock.`);
+    closeDrawer();
+  }
+
+  // ---------- CHANGES view ----------
+  function changes() {
+    const list = [...edits.values()].sort((a, b) => String(b.at).localeCompare(String(a.at)));
+    const n = (f) => list.filter(f).length;
+    const activity = list.flatMap((e) => (e.history || []).map((h) => ({ e, h }))).sort((a, b) => String(b.h.at).localeCompare(String(a.h.at))).slice(0, 40);
+    const kindLabel = { tracker: "Tracker", blocked: "Blocked stock", erp: "ERP 365 status" };
+    const what = (e) => (e.action === "delete" ? (e.kind === "blocked" ? "Removed from blocked stock" : "Row deleted") : e.isNew ? `Added: ${showVal(e.values?.product)}` : summarize(Object.fromEntries(Object.keys(e.values || {}).filter((k) => String(e.values[k] ?? "") !== String(e.original?.[k] ?? "")).map((k) => [e.kind === "erp" ? "erp" : k, [e.original?.[k] ?? null, e.values[k]]]))) || "Back to the workbook values");
+    const where = who.mode === "shared" ? "Saved to this page. Everyone who opens it sees the same changes." : "Saved in this browser only. Export the workbook to keep or share them.";
+    return `
+      <div class="tiles">
+        ${tile("Changed records", fmtN(n((e) => e.action !== "delete" && !e.isNew)), "edited values", "var(--accent)")}
+        ${tile("Added", fmtN(n((e) => e.isNew && e.action !== "delete")), "new tracker or blocked rows", "var(--good)")}
+        ${tile("Deleted", fmtN(n((e) => e.action === "delete")), "rows removed", "var(--bad)")}
+        ${tile("Where they live", who.mode === "shared" ? "Shared" : "Browser", where, "var(--k-other)")}
+      </div>
+      <section class="panel">
+        <div class="panel-head"><div><h3>Changes made in this app</h3><p>Edits sit on top of the loaded workbook (${esc(model.name)}); the file itself is never changed. Export to get an .xlsx with every change applied, then load it here and clear these changes.</p></div>
+          <div class="tools">
+            <button class="btn primary" data-act="export" ${list.length ? "" : "disabled"}>${ICON.download}Export updated workbook</button>
+            ${list.length && (who.mode !== "shared" || who.canAdmin) ? `<button class="btn ghost" data-act="ask-clear">Clear all</button>` : ""}
+          </div></div>
+        <div class="confirm" id="confirm-clear" hidden style="margin:0 18px 12px">
+          <p>Clear all ${plural(list.length, "change")}? ${who.mode === "shared" ? "This removes them for everyone. " : ""}Export the workbook first if you still need them.</p>
+          <div class="form-actions"><button class="btn danger" data-act="confirm-clear">Clear all changes</button><button class="btn ghost" data-act="cancel-clear">Keep them</button></div>
+        </div>
+        ${list.length
+          ? `<div class="table-wrap"><table><thead><tr><th>Batch</th><th>Where</th><th>What changed</th><th>Last change</th><th></th></tr></thead><tbody>
+            ${list.map((e) => `<tr data-batch="${esc(e.key.split("@")[0])}" tabindex="0"><td class="mono"><b>${esc(e.key.split("@")[0])}</b>${editChip(e)}</td><td>${kindLabel[e.kind] || e.kind}</td><td class="remark">${esc(what(e))}</td><td class="date"><span class="mono">${esc(fmtWhen(e.at))}</span><small style="display:block;color:var(--muted)">${esc(nameOf(e.by))}</small></td><td>${who.canWrite ? `<button class="btn ghost small" data-act="revert" data-ek="${esc(editKey(e))}">${ICON.undo}${e.isNew ? "Remove" : e.action === "delete" ? "Restore" : "Undo"}</button>` : ""}</td></tr>`).join("")}
+            </tbody></table></div>`
+          : `<div class="empty"><p style="margin:0 0 12px">No changes yet. Open any batch and choose <b>Edit batch</b>, or add one from the Batches page.</p>${who.canWrite ? `<button class="btn" data-act="new-batch">${ICON.plus}Add batch</button>` : ""}</div>`}
+      </section>
+      ${activity.length ? `<section class="panel"><div class="panel-head"><div><h3>Activity</h3><p>The latest ${activity.length} saves, newest first.</p></div></div><div class="panel-body"><ol class="history">${activity.map(({ e, h }) => `<li><span class="h-when">${esc(fmtWhen(h.at))} · ${esc(nameOf(h.by))} · <button class="linkish" data-open="${esc(e.key.split("@")[0])}">${esc(e.key.split("@")[0])}</button></span><span>${h.action === "delete" ? "Deleted" : esc(summarize(h.changes)) || "Saved"}</span></li>`).join("")}</ol></div></section>` : ""}`;
+  }
+
+  async function revert(ek) {
+    const e = edits.get(ek);
+    if (!e) return;
+    if (await dropEdit(e)) toast(e.isNew ? `Removed the added ${e.key.split("@")[0]}.` : `Restored ${e.key.split("@")[0]} to the workbook values.`);
+  }
+  async function clearAll() {
+    const all = [...edits.values()];
+    for (const e of all) if (!(await dropEdit(e))) return;
+    toast(`Cleared ${plural(all.length, "change")}.`);
+  }
+
+  // ---------- export ----------
+  async function exportWorkbook() {
+    toast("Preparing the workbook…");
+    try {
+      await loadScript(SHEETJS);
+      const X = window.XLSX;
+      const out = X.utils.book_new();
+      const edited = M.applyEdits(base, [...edits.values()]);
+      for (const [name, rows] of Object.entries(edited.sheets)) {
+        const aoa = rows.map((r) => (r || []).map((v) => (typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v) ? new Date(+v.slice(0, 4), +v.slice(5, 7) - 1, +v.slice(8, 10)) : v)));
+        X.utils.book_append_sheet(out, X.utils.aoa_to_sheet(aoa, { cellDates: true, dateNF: "dd/mm/yyyy" }), name.slice(0, 31));
+      }
+      const bytes = X.write(out, { type: "array", bookType: "xlsx" });
+      const filename = `${(base.name || "CLL vs AX").replace(/\.xls[xm]?$/i, "")} (updated ${todayISO()}).xlsx`;
+      const dl = window.claude?.use ? await window.claude.use("downloads") : null;
+      if (dl) {
+        try { await dl.save({ filename, data: bytes }); toast(`Saved ${filename}.`); }
+        catch (err) { if (err?.code !== "declined") toast("The workbook could not be saved here. Try again in a moment."); }
+        return;
+      }
+      const url = URL.createObjectURL(new Blob([bytes], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }));
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
+      toast(`Saved ${filename}.`);
+    } catch (e) {
+      toast(e.message || "The workbook could not be exported.");
+    }
   }
 
   // ---------- tooltip ----------
@@ -834,7 +1258,7 @@
   }
 
   // ---------- events ----------
-  const RENDER = { overview, batches, "lead-time": leadTime, reconcile, blocked, "follow-up": followUp };
+  const RENDER = { overview, batches, "lead-time": leadTime, reconcile, blocked, "follow-up": followUp, changes };
   const AFTER = {
     overview: () => { drawFlow(); drawCalendar(); drawTrend(); },
     batches: drawRows,
@@ -866,6 +1290,24 @@
         if (a === "flow-chart" || a === "flow-table") { ui.flowTable = a === "flow-table"; return render(); }
         if (a.startsWith("go-")) return go(a.slice(3));
         if (PRESETS[a]) return go("batches", PRESETS[a]);
+        // editing
+        const confirmBox = (id, show) => { const c = $(id); if (c) { c.hidden = !show; if (show) c.querySelector(".danger")?.focus(); } };
+        if (a === "new-batch") return openDrawer("", "tracker");
+        if (a === "new-blocked") return openDrawer("", "blocked");
+        if (a === "edit-tracker") return openDrawer(drawer.id || d.key.split("@")[0], "tracker", { key: d.key });
+        if (a === "add-to-tracker") { const id = drawer.id; const p = model.blocked.find((x) => x.batch === id)?.product || model.posting.find((x) => x.batch === id)?.product || ""; return openDrawer(id, "tracker", { product: p }); }
+        if (a === "quick-release") return quickRelease(d.key);
+        if (a === "edit-blocked" || a === "block-batch") return openDrawer(drawer.id, "blocked");
+        if (a === "cancel-edit") return drawer.id ? openDrawer(drawer.id, "view") : closeDrawer();
+        if (a === "ask-delete") return confirmBox("#confirm-del", true);
+        if (a === "cancel-delete") return confirmBox("#confirm-del", false);
+        if (a === "confirm-delete") return drawer.mode === "blocked" ? deleteBlocked() : deleteTracker();
+        if (a === "revert") return revert(d.ek);
+        if (a === "export") return exportWorkbook();
+        if (a === "ask-clear") return confirmBox("#confirm-clear", true);
+        if (a === "cancel-clear") return confirmBox("#confirm-clear", false);
+        if (a === "confirm-clear") return clearAll();
+        return;
       }
       if (d.open) return openBatch(d.open);
       if (d.batch) return openBatch(d.batch);
@@ -883,13 +1325,24 @@
       if (d.bsort) { ui.blockedSort = d.bsort; return render(); }
       if (d.aw) return openBatch(d.aw);
     });
+    document.addEventListener("submit", (e) => {
+      e.preventDefault();
+      if (e.target.id === "tracker-form") submitTracker();
+      if (e.target.id === "blocked-form") submitBlocked();
+    });
     document.addEventListener("keydown", (e) => {
-      if (e.key === "Escape") { closeDrawer(); closeTip(); }
+      if (e.key === "Escape") {
+        closeTip();
+        if (!$("#drawer").hidden && drawer.mode !== "view" && drawer.id) openDrawer(drawer.id, "view");
+        else closeDrawer();
+      }
       if ((e.key === "Enter" || e.key === " ") && e.target.matches("tr[data-batch], .seg-b")) { e.preventDefault(); e.target.click(); }
       if (e.key === "/" && !e.target.matches("input,select,textarea")) { const q = $("#q"); if (q) { e.preventDefault(); q.focus(); } }
     });
     document.addEventListener("input", (e) => {
       if (e.target.id === "q") { ui.q = e.target.value; ui.limit = 80; drawRows(); }
+      if (e.target.closest?.("#tracker-form")) checkTracker();
+      if (e.target.id === "b-reason") $("#b-kind").textContent = e.target.value.trim() ? M.blockKind(e.target.value) : "—";
       if (e.target.id === "aw-q") {
         const v = e.target.value.trim().toUpperCase();
         document.querySelectorAll("[data-aw]").forEach((s) => (s.hidden = v && !s.dataset.aw.includes(v)));
@@ -900,7 +1353,7 @@
       if (id === "f-status") ui.status = e.target.value;
       else if (id === "f-bucket") ui.bucket = e.target.value;
       else if (id === "f-cat") ui.category = e.target.value;
-      else if (id === "f-flag") ui.flagged = e.target.checked;
+      else if (id === "f-show") ui.show = e.target.value;
       else if (id === "file") { importFile(e.target.files[0]); e.target.value = ""; return; }
       else return;
       ui.limit = 80;
@@ -916,7 +1369,7 @@
       if (t) { const r = t.getBoundingClientRect(); showTip(t, r.left + r.width / 2, r.bottom); }
     });
     document.addEventListener("scroll", closeTip, { passive: true, capture: true });
-    window.addEventListener("hashchange", render);
+    window.addEventListener("hashchange", () => { closeDrawer(); render(); });
     let rz;
     window.addEventListener("resize", () => { clearTimeout(rz); rz = setTimeout(() => AFTER[ui.view]?.(), 150); });
     // drag & drop import
@@ -948,6 +1401,7 @@
     loadInitial();
     bind();
     render();
+    connectShared(); // lights up shared editing when the page runs as a published artifact
   }
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);
   else boot();
