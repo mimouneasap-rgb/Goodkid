@@ -374,15 +374,20 @@ const queue = new Map();
 function saveDoc(id, data) {
   const run = async () => {
     const body = { ...data, updatedAt: new Date().toISOString() };
-    if (S.mode === "db") await db.collection("ccs").doc(id).set(body);
+    if (S.mode === "db") await db.collection("ccs").doc(id).set(body).catch(refused);
     else { S.ccs.set(id, body); localSave(); render(); }
   };
   const p = (queue.get(id) || Promise.resolve()).then(run, run);
   queue.set(id, p.catch(() => {}));
   return p;
 }
+/** The shared database refused a write: this visitor can view only — switch the page to read-only and say why. */
+function refused(e) {
+  if (e?.code === "invalid_argument" && S.canWrite) { S.canWrite = false; closeModal(); toast("Your access lets you view only — nothing was saved"); scheduleRender(); }
+  throw e;
+}
 async function deleteDoc(id) {
-  if (S.mode === "db") await db.collection("ccs").doc(id).delete();
+  if (S.mode === "db") await db.collection("ccs").doc(id).delete().catch(refused);
   else { S.ccs.delete(id); localSave(); render(); }
 }
 function localSave() { try { localStorage.setItem("cct.local", JSON.stringify({ ccs: [...S.ccs], meta: S.meta })); } catch {} }
@@ -711,7 +716,7 @@ function importView() {
   const p = UI.plan;
   const hist = S.meta?.log || [];
   return `<section class="panel"><div class="panel-h"><h2>Import from Scigeniq</h2><span class="sub">the allTasks exports “Change Control” and “Change control actions” (.xlsx) — one or several files at once</span></div>
-    ${S.canWrite ? `<label class="drop" id="drop"><input type="file" id="files" accept=".xlsx,.xls" multiple hidden><b>Drop the exports here, or choose them</b><span class="muted">Each file is recognised by its content. Nothing changes until you apply the import.</span></label>` : `<div class="note warn">You can view this tracker but not change it — ask its owner for edit access to import.</div>`}
+    ${S.canWrite ? `<label class="drop" id="drop"><input type="file" id="files" accept=".xlsx,.xls" multiple hidden><b>Drop the exports here, or choose them</b><span class="muted">Each file is recognised by its content. Nothing changes until you apply the import.</span></label>` : `<div class="note warn"><b>Your access lets you view this tracker, not change it.</b> Importing and editing are open to the people its owner gives edit rights to: invited by e-mail as an Editor (with the public link turned off), or — on a Team or Enterprise plan — members of the organisation given Contributor access. Visitors from outside who come through a public link can only view.</div>`}
     ${UI.files.length ? `<div class="files" style="margin-top:12px">${UI.files.map((f) => `<div class="file"><span class="ic ${f.err ? "bad" : f.kind === "act" ? "act" : ""}">${f.err ? "!" : f.kind === "act" ? "ACT" : f.kind === "cc" ? "CC" : "?"}</span><div style="min-width:0"><b>${esc(f.name)}</b><div class="muted" style="font-size:12.5px">${f.err ? esc(f.err) : `${f.cc ? `${f.cc} change controls` : ""}${f.cc && f.act ? " · " : ""}${f.act ? `${f.act} actions (those of change controls are kept)` : ""}${!f.cc && !f.act ? "no change control or CC action found" : ""}${f.other ? ` · ${f.other} other rows ignored` : ""}${f.generated ? ` · exported ${esc(f.generated)}` : ""}`}</div></div><button class="btn sm ghost" type="button" data-rm="${esc(f.name)}" aria-label="Remove ${esc(f.name)}">✕</button></div>`).join("")}</div>` : ""}
     ${p ? `<div style="margin-top:14px;display:grid;gap:12px">
       <div class="plan"><div><b>${p.ccNew}</b><small>new change controls</small></div><div><b>${p.ccUpd}</b><small>change controls updated</small></div><div><b>${p.actNew}</b><small>new actions</small></div><div><b>${p.actUpd}</b><small>actions updated</small></div></div>
@@ -767,6 +772,7 @@ function wireImport() {
           return;
         } catch (e) {
           if (["resource_exhausted", "unavailable"].includes(e?.code) && tries < 5) { await pause(400 * 2 ** tries + Math.random() * 300); continue; }
+          if (e?.code === "invalid_argument" && !n) { work.length = 0; S.canWrite = false; S.refused = true; } // a view-only visitor: stop at the first refusal
           throw e;
         }
       }
@@ -777,6 +783,7 @@ function wireImport() {
     const gen = UI.files.map((f) => f.generated).filter(Boolean).sort((a, b) => String(sdate(a)).localeCompare(String(sdate(b)))).pop() || null; // the newest export
     const entry = { at: new Date().toISOString(), files: UI.files.filter((f) => f.rows).map((f) => f.name), generated: gen, ccNew: p.ccNew, ccUpd: p.ccUpd, actNew: p.actNew, actUpd: p.actUpd, failed, by: S.uid || null };
     const log = [entry, ...(S.meta?.log || [])].slice(0, 40);
+    if (S.refused) { toast("Your access lets you view only — nothing was imported"); UI.files = []; UI.plan = null; render(); return; }
     try { if (S.mode === "db") await db.doc("meta/imports").set({ log }); else { S.meta = { log }; localSave(); } } catch {}
     toast(failed ? `Import done with ${failed} write(s) refused — check your access` : `Import applied: ${p.writes.length} change controls written`);
     UI.files = []; UI.plan = null; render();
